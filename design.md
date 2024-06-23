@@ -63,7 +63,17 @@ Aggregate types are exactly as long as the number of specified byte likenesses, 
 
 ------
 
-BBAE's grammar is designed to be easy to parse line-by-line. Newlines are significant. Whitespace is a universal token boundary, with tabs and spaces being treated identically. The grammar is never recursive or ambiguous. There are no strings or characters. The only literals are integer and float literals. Integer literals can be hex (with a 0x prefix) or decimal.
+BBAE's grammar is designed to be easy to parse line-by-line. Newlines are significant. Spaces are a universal token boundary, with tabs and spaces being treated identically. The grammar is never recursive or ambiguous. There are no strings or characters. The only literals are integer and float literals. Integer literals can be hex (with a 0x prefix) or decimal.
+
+A given token cannot be more than 4095 characters long.
+
+BBAE source files are parsed line-by-line. Lines are separated by any number of linefeeds. A linefeed is either `\n` or `\r\n`.
+
+With only two exceptions, each line is a sequence of tokens, separated by one or more space characters, followed by an end-of-line. A space character is either '` `' (0x20) or `\t`. An end-of-line is either a linefeed, the end of the file, or the beginning of a comment. The beginning of a comment is either `//` or `#`, after which all text is ignored until a linefeed or the end of the file. Lines that contain only a comment are considered to be blank.
+
+There are three types of tokens: symbol tokens, numeric tokens, and text tokens. Numeric tokens are all tokens that are not symbol tokens but begin with a . or - or digit. A digit is any character out of `1234567890`. Symbol tokens are tokens that exactly match `=`, `{`, `}`, or `<-`. text tokens are all other tokens.
+
+The two exceptions are lines that begin with an `asm_clobber` or `asm` token. In the `asm_clobber` case, the sequence of characters between the first `<-` and last `<-` on the line are arbitrary text, and are not even subject to comment detection. In the `asm` case, all characters after the `asm` token until the end of the line are considered arbitrary text, and are not even subject to comment detection.
 
 ------
 
@@ -430,7 +440,7 @@ bytes_clobber <- <-
 
 ------
 
-The asm instruction, which is optional and implementations do not need to support it, is the same as the bytes instruction, except it takes an arbitrary string of text (which may contain spaces) that is passed to an assembler. The assembly language, assembly flavor, and all other context is implementation-specified, as well as the error cases. Decorators, if any are present, are handled by the implementation, and might not follow the same rules as normal decorators.
+The asm instruction, which is optional and implementations do not need to support it, is the same as the bytes instruction, except it takes an arbitrary string of text (which may contain spaces) that is passed to an assembler. The assembly language, assembly flavor, and all other context is implementation-specified, as well as the error cases. Decorators, if any are present, are handled by the implementation, and might not follow the same rules as normal decorators. The given assembly must remain on a single line, but the implementation may specify ways to put mutliple assembly instructions onto a single line.
 
 ```rs
 asm int3
@@ -438,9 +448,11 @@ asm int3
 
 ------
 
-The asm_clobber instruction, which is also optional, is the same as the bytes_clobber instruction, except taking assembly instead of raw bytes. The assembly starts at the first <- and ends at the last <-.
+The asm_clobber instruction, which is also optional, is the same as the bytes_clobber instruction, except taking assembly instead of raw bytes. The assembly starts at the first `<-` and ends at the last `<-`. The given assembly must remain on a single line, but the implementation may specify ways to put mutliple assembly instructions onto a single line.
 
+```rs
 asm_clobber div_out 0 rem_out 2 <- div rdx <- num 0 denom 2
+```
 
 ------
 
@@ -559,4 +571,3 @@ The compiler is allowed to know that a and b are only aliased for operations lar
 Special functions:
 
 The special function `_global_init`, if defined, must have zero arguments and no return type. A given file may only have a single `_global_init` function. Linkers must append it to any other static initialization functions during linking, rather than generating a redefinition error or picking one over the other. It should be run during program startup, at the same time as a C program would run global initializers. This is analogous to LLVM's `@llvm.global_ctors`.
-
