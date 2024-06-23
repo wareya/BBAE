@@ -6,15 +6,9 @@ Single BBAE files are analogous to single C translation units. They contain glob
 
 8 types:
 
-- `i8`
-- `i16`
-- `i32`
-- `i64`
-
-- `f32`
-- `f64`
-
-- `agg`
+- i8, i16, i32, i64
+- f32, f64
+- agg
 
 The alignment requirements of the first 6 types (i.e. excluding aggregates) are implementation-defined. Integers have no signedness. Floats are IEEE.
 
