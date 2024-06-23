@@ -1,0 +1,6 @@
+
+func main returns i32
+    arg argc i64
+    arg argv i64
+    return 0i32
+endfunc
