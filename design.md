@@ -57,7 +57,7 @@ Aggregate types are exactly as long as the number of specified byte likenesses, 
 
 ------
 
-BBAE's grammar is designed to be easy to parse line-by-line. Newlines are significant. Spaces are a universal token boundary, with tabs and spaces being treated identically. The grammar is never recursive or ambiguous. There are no strings or characters. The only literals are integer and float literals. Integer literals can be hex (with a 0x prefix) or decimal.
+BBAE's grammar is designed to be easy to parse line-by-line. Newlines are significant. Spaces are a universal token boundary, with tabs and spaces being treated identically. The grammar is never recursive or ambiguous. There are no strings or characters. The only literals are integer and float literals. Integer literals can be hex (with a `0x` or `-0x` prefix) or decimal.
 
 A given token cannot be more than 4095 characters long.
 
