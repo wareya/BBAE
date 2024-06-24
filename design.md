@@ -10,7 +10,7 @@ Single BBAE files are analogous to single C translation units. They contain glob
 - floats: `f32`, `f64`
 - aggregates
 
-The alignment requirements of the first 6 types (i.e. excluding aggregates) are implementation-defined. Integers have no signedness. Floats are IEEE.
+The alignment requirements of the first 6 types (i.e. excluding aggregates) are implementation-defined. Integers have no signedness. Floats are binary IEEE 754 floats.
 
 Pointers are either i32 or i64, depending on the target platform. In this document, iptr refers to this pointer-sized integer type, but iptr is not an actual type.
 
