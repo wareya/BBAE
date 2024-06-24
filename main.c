@@ -17,6 +17,15 @@ union CMaxAlignT
     uint8_t * i;
 };
 
+uint8_t ** alloc_get_prev_ptr(uint8_t * alloc)
+{
+     return ((uint8_t **)alloc) + 1;
+}
+uint8_t ** alloc_get_next_ptr(uint8_t * alloc)
+{
+     return (uint8_t **)alloc;
+}
+
 void * alloc_list = 0;
 void * zero_alloc(size_t n)
 {
@@ -25,27 +34,32 @@ void * zero_alloc(size_t n)
         prefix_size *= 2;
     n += prefix_size;
     
-    uint8_t * alloc = (uint8_t *)calloc(1, n);
+    uint8_t * alloc = (uint8_t *)realloc(0, n);
     assert(alloc);
     
-    uint8_t ** alloc_next = (uint8_t **)alloc;
-    *alloc_next = alloc_list;
-    uint8_t ** alloc_prev = ((uint8_t **)alloc_list) + 1;
-    *alloc_prev = alloc;
+    *alloc_get_next_ptr(alloc) = alloc_list;
+    *alloc_get_prev_ptr(alloc_list) = alloc;
     
     alloc_list = alloc;
     uint8_t * ret = alloc + prefix_size;
     return ret;
 }
-void * zero_realloc(void * buf, size_t n)
+void * zero_realloc(uint8_t * buf, size_t n)
 {
     size_t prefix_size = sizeof(union CMaxAlignT);
     if (prefix_size < 2 * sizeof(uint8_t **))
         prefix_size *= 2;
     
-    void * raw_buf = (void *)(((uint8_t *)buf) - prefix_size);
+    uint8_t * raw_buf = ((uint8_t *)buf) - prefix_size;
+    uint8_t * new_buf = (uint8_t *)realloc(raw_buf, n);
+    assert(new_buf);
     
-    // FIXME/TODO
+    uint8_t * prev_buf = *alloc_get_prev_ptr(new_buf);
+    *alloc_get_next_ptr(prev_buf) = new_buf;
+    uint8_t * next_buf = *alloc_get_next_ptr(new_buf);
+    *alloc_get_prev_ptr(next_buf) = new_buf;
+    
+    return new_buf;
 }
 void free_all_compiler_allocs(void)
 {

@@ -4,11 +4,11 @@ Single BBAE files are analogous to single C translation units. They contain glob
 
 ------
 
-8 types:
+3 kinds of types:
 
-- i8, i16, i32, i64
-- f32, f64
-- agg
+- integers: `i8`, `i16`, `i32`, `i64`
+- floats: `f32`, `f64`
+- aggregates
 
 The alignment requirements of the first 6 types (i.e. excluding aggregates) are implementation-defined. Integers have no signedness. Floats are IEEE.
 
@@ -65,7 +65,7 @@ BBAE source files are parsed line-by-line. Lines are separated by any number of 
 
 With only two exceptions, each line is a sequence of tokens, separated by one or more space characters, followed by an end-of-line. A space character is either '` `' (0x20) or `\t`. An end-of-line is either a linefeed, the end of the file, or the beginning of a comment. The beginning of a comment is either `//` or `#`, after which all text is ignored until a linefeed or the end of the file. Lines that contain only a comment are considered to be blank.
 
-There are three types of tokens: symbol tokens, numeric tokens, and text tokens. Numeric tokens are all tokens that are not symbol tokens but begin with a . or - or digit. A digit is any character out of `1234567890`. Symbol tokens are tokens that exactly match `=`, `{`, `}`, or `<-`. text tokens are all other tokens.
+There are three types of tokens: symbol tokens, numeric tokens, and text tokens. Numeric tokens are all tokens that are not symbol tokens but begin with a `.` or `-` or digit. A digit is any character out of `1234567890`. Symbol tokens are tokens that exactly match `=`, `{`, `}`, or `<-`. Text tokens are all other tokens.
 
 The two exceptions are lines that begin with an `asm_clobber` or `asm` token. In the `asm_clobber` case, the sequence of characters between the first `<-` and last `<-` on the line are arbitrary text, and are not even subject to comment detection. In the `asm` case, all characters after the `asm` token until the end of the line are considered arbitrary text, and are not even subject to comment detection.
 
@@ -95,7 +95,9 @@ endfunc
 
 This specifies at least 16 bytes of storage for the stack slot `a`, and creates a SSA variable a, and stores an i64 pointer to that stack slot in that SSA variable. The pointer is assumed to not alias any other memory and cannot be used to access any data outside of its own stack slot. The storage will remain valid exactly until the function exits or the compiler knows that it cannot be legally accessed any more.
 
-For spec language purposes, stack slot names are treated like arguments. They are visible to all blocks even if the block does not take them as an argument.
+Stack slots are analogous to LLVM's alloca.
+
+For spec language purposes, stack slot names are treated like arguments. They are visible to all blocks even if the block does not take them as an argument. They evaluate to their pointer, not to their stored value.
 
 Stack slot directive can only occur at the start of a function, after arguments and before any blocks or statements.
 
