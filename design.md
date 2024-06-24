@@ -322,16 +322,20 @@ mulf f f
 divf f f
 remf f f
 
-trim <type> i // cast integer to given type, which must be the same size or smaller.
+trim <type> i // cast integer to given type, which must be the same size or smaller. bitwise truncation.
 zext <type> i // zero-extend integer into the given type, which must be the same size or larger
 sext <type> i // sign-extend integer into the given type, which must be the same size or larger
 
 f32_to_f64 f32 // convert float by value
 f64_to_f32 f64
 
-float_to_int <type> f // type must be i8, i16, i32, or i64. out-of-range values are clamped.
-float_to_int_unsafe <type> f // type must be i8, i16, i32, or i64. out-of-range values are implementation-defined behavior.
-int_to_float <type> i // type must be f32 or f64.
+float_to_uint <type> f // type must be i8, i16, i32, or i64. out-of-range values are clamped.
+float_to_uint_unsafe <type> f // type must be i8, i16, i32, or i64. out-of-range values are implementation-defined behavior.
+uint_to_float <type> i // type must be f32 or f64.
+
+float_to_sint <type> f // signed variants of the above
+float_to_sint_unsafe <type> f
+sint_to_float <type> i
 
 bitcast <type> any // reinterpret the bits of any value as belonging to another type. mainly useful for int <-> float conversions, but can also be used to pun small aggregates as ints/floats, or vice versa, or to convert between different aggregate types of the same size.
 
