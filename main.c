@@ -117,10 +117,10 @@ Block new_block(void)
 {
     Block block;
     memset(&block, 0, sizeof(Block));
-    block.args = zero_alloc(0);
-    block.edges_in = zero_alloc(0);
-    block.edges_out = zero_alloc(0);
-    block.statements = zero_alloc(0);
+    block.args = (Variable *)zero_alloc(0);
+    block.edges_in = (Statement **)zero_alloc(0);
+    block.edges_out = (Statement **)zero_alloc(0);
+    block.statements = (Statement **)zero_alloc(0);
     return block;
 }
 
@@ -146,10 +146,10 @@ Function new_func(void)
 {
     Function func;
     memset(&func, 0, sizeof(Function));
-    puts("allocating args...");
-    func.args = zero_alloc(0);
-    puts("allocating blocks...");
-    func.blocks = zero_alloc(0);
+    func.args = (Variable *)zero_alloc(0);
+    func.stack_slots = (StackSlot *)zero_alloc(0);
+    func.blocks = (Block **)zero_alloc(0);
+    func.statements = (Statement **)zero_alloc(0);
     return func;
 }
 

@@ -31,7 +31,7 @@ uint8_t * alloc_data_loc(void * alloc)
     return ((uint8_t *)alloc) + ALLOC_PREFIX_SIZE;
 }
 
-void * alloc_list = 0;
+uint8_t * alloc_list = 0;
 void * zero_alloc(size_t n)
 {
     n += ALLOC_PREFIX_SIZE;
@@ -48,22 +48,16 @@ void * zero_alloc(size_t n)
     
     alloc_list = alloc;
     
-    //printf("returning base addr %p\n", alloc);
-    //printf("allocation %p\n", alloc_data_loc(alloc));
     return alloc_data_loc(alloc);
 }
 void * zero_realloc(uint8_t * buf, size_t n)
 {
-    //printf("reallocating allocation %p\n", buf);
-    //printf("base addr %p\n", alloc_base_loc(buf));
     n += ALLOC_PREFIX_SIZE;
     
     uint8_t * new_alloc = (uint8_t *)realloc(alloc_base_loc(buf), n);
     assert(new_alloc);
     
     uint64_t prev_n = (*alloc_get_size(new_alloc)) + ALLOC_PREFIX_SIZE;
-    //printf("-- pre-realloc size: %zu\n", prev_n);
-    //printf("-- post-realloc size: %zu\n", n);
     if (n > prev_n)
         memset(new_alloc + prev_n, 0, n - prev_n);
     
@@ -75,9 +69,6 @@ void * zero_realloc(uint8_t * buf, size_t n)
     uint8_t * next_alloc = *alloc_get_next_ptr(new_alloc);
     if (next_alloc)
         *alloc_get_prev_ptr(next_alloc) = new_alloc;
-    
-    //printf("new allocation %p\n", alloc_data_loc(new_alloc));
-    //printf("base addr %p\n", new_alloc);
     
     return alloc_data_loc(new_alloc);
 }
@@ -101,7 +92,7 @@ void free_all_compiler_allocs(void)
 
 
 // Returns a pointer to a buffer with len+1 bytes reserved, and at least one null terminator.
-char * strcpy_len(char * str, size_t len)
+char * strcpy_len(const char * str, size_t len)
 {
     if (!str)
         return (char *)zero_alloc(1);
@@ -113,13 +104,13 @@ char * strcpy_len(char * str, size_t len)
         *ret_copy++ = c;
     return ret;
 }
-char * strcpy_z(char * str)
+char * strcpy_z(const char * str)
 {
     size_t len = strlen(str);
     return strcpy_len(str, len);
 }
 
-uint8_t str_ends_with(char * a, char * b)
+uint8_t str_ends_with(const char * a, const char * b)
 {
     size_t len_a = strlen(a);
     size_t len_b = strlen(b);
@@ -131,7 +122,7 @@ uint8_t str_ends_with(char * a, char * b)
     a += len_a - len_b;
     return strncmp(a, b, len_b) == 0;
 }
-uint8_t str_begins_with(char * a, char * b)
+uint8_t str_begins_with(const char * a, const char * b)
 {
     size_t len_a = strlen(a);
     size_t len_b = strlen(b);
@@ -146,12 +137,12 @@ uint8_t is_space(char c)
 {
     return c == ' ' || c == '\t';
 }
-void skip_space(char ** b)
+void skip_space(const char ** b)
 {
     while (is_space(**b))
         *b += 1;
 }
-void to_space(char ** b)
+void to_space(const char ** b)
 {
     while (!is_space(**b))
         *b += 1;
@@ -160,7 +151,7 @@ uint8_t is_newline(char c)
 {
     return c == '\r' || c == '\n';
 }
-uint8_t is_comment(char * b)
+uint8_t is_comment(const char * b)
 {
     if (b == 0 || b[0] == 0)
         return 0;
@@ -171,12 +162,12 @@ uint8_t is_comment(char * b)
     return 0;
 }
 
-void skip_newline(char ** b)
+void skip_newline(const char ** b)
 {
     while (is_newline(**b))
         *b += 1;
 }
-void to_newline(char ** b)
+void to_newline(const char ** b)
 {
     while (!is_newline(**b))
         *b += 1;
