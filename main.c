@@ -4,132 +4,10 @@
 #include <string.h>
 #include <assert.h>
 
-union CMaxAlignT
-{
-    int a;
-    long b;
-    long * c;
-    long long d;
-    void * e;
-    void (*f)(void);
-    long double (*g)(long double, long double);
-    long double h;
-    uint8_t * i;
-};
+#include "memory.h"
 
-uint8_t ** alloc_get_prev_ptr(uint8_t * alloc)
-{
-     return ((uint8_t **)alloc) + 1;
-}
-uint8_t ** alloc_get_next_ptr(uint8_t * alloc)
-{
-     return (uint8_t **)alloc;
-}
-
-void * alloc_list = 0;
-void * zero_alloc(size_t n)
-{
-    size_t prefix_size = sizeof(union CMaxAlignT);
-    if (prefix_size < 2 * sizeof(uint8_t **))
-        prefix_size *= 2;
-    n += prefix_size;
-    
-    uint8_t * alloc = (uint8_t *)realloc(0, n);
-    assert(alloc);
-    
-    *alloc_get_next_ptr(alloc) = alloc_list;
-    *alloc_get_prev_ptr(alloc_list) = alloc;
-    
-    alloc_list = alloc;
-    uint8_t * ret = alloc + prefix_size;
-    return ret;
-}
-void * zero_realloc(uint8_t * buf, size_t n)
-{
-    size_t prefix_size = sizeof(union CMaxAlignT);
-    if (prefix_size < 2 * sizeof(uint8_t **))
-        prefix_size *= 2;
-    
-    uint8_t * raw_buf = ((uint8_t *)buf) - prefix_size;
-    uint8_t * new_buf = (uint8_t *)realloc(raw_buf, n);
-    assert(new_buf);
-    
-    uint8_t * prev_buf = *alloc_get_prev_ptr(new_buf);
-    *alloc_get_next_ptr(prev_buf) = new_buf;
-    uint8_t * next_buf = *alloc_get_next_ptr(new_buf);
-    *alloc_get_prev_ptr(next_buf) = new_buf;
-    
-    return new_buf;
-}
-void free_all_compiler_allocs(void)
-{
-    while (alloc_list)
-    {
-        uint8_t * alloc_next = *(uint8_t **)alloc_list;
-        free(alloc_list);
-        alloc_list = alloc_next;
-    }
-}
-// Returns a pointer to a buffer with N+1 bytes reserved, and at least one null terminator.
-char * strcpy_len(char * str, size_t len)
-{
-    if (!str)
-        return (char *)zero_alloc(1);
-    char * ret = (char *)zero_alloc(len + 1);
-    assert(ret);
-    char * ret_copy = ret;
-    char c = 0;
-    while ((c = *str++) && len-- > 0)
-        *ret_copy++ = c;
-    return ret;
-}
-char * strcpy_n(char * str)
-{
-    size_t len = strlen(str);
-    return strcpy_len(str, len);
-}
-
-uint8_t is_space(char c)
-{
-    return c == '\r' || c == '\n';
-}
-void skip_space(char ** b)
-{
-    while (is_space(**b))
-        *b += 1;
-}
-void to_space(char ** b)
-{
-    while (!is_space(**b))
-        *b += 1;
-}
-uint8_t is_newline(char c)
-{
-    return c == '\r' || c == '\n';
-}
-void skip_newline(char ** b)
-{
-    while (is_newline(**b))
-        *b += 1;
-}
-void to_newline(char ** b)
-{
-    while (!is_newline(**b))
-        *b += 1;
-}
-
-uint8_t is_comment(char * b)
-{
-    if (b == 0 || b[0] == 0)
-        return 0;
-    if (b[0] == '/' && b[1] == '/')
-        return 1;
-    if (b[0] == '#')
-        return 1;
-    return 0;
-}
 // read the next token on the current line, return 0 if none
-// thrashes any previously-returned token
+// thrashes any previously-returned token. make copies!
 char token[4096];
 size_t token_len;
 char * find_next_token(char ** b)
@@ -213,18 +91,134 @@ typedef struct _Global {
     struct _Global * next;
 } Global;
 
+typedef struct _Variable {
+    Type type;
+    char * name;
+} Variable;
+
+typedef struct _Statement {
+    // TODO/FIXME
+    uint8_t z;
+} Statement;
+
+typedef struct _Block {
+    char * name;
+    // block args (array)
+    Variable * args;
+    // statements that enter into this block (array)
+    Statement ** edges_in;
+    // statements that transfer control flow away from themselves
+    Statement ** edges_out;
+    // statements within the block (array)
+    Statement ** statements;
+} Block;
+
+Block new_block(void)
+{
+    Block block;
+    memset(&block, 0, sizeof(Block));
+    block.args = zero_alloc(0);
+    block.edges_in = zero_alloc(0);
+    block.edges_out = zero_alloc(0);
+    block.statements = zero_alloc(0);
+    return block;
+}
+
+typedef struct _StackSlot {
+    char * name;
+    size_t size;
+} StackSlot;
+
 typedef struct _Function {
+    char * name;
     Type return_type;
-    size_t arg_count;
-    Type * args;
-    uint8_t n;
+    // args (array)
+    Variable * args;
+    // stack slots (array)
+    StackSlot * stack_slots;
+    // blocks, in order of declaration (array)
+    Block ** blocks;
+    // statements within the block (array)
+    Statement ** statements;
 } Function;
+
+Function new_func(void)
+{
+    Function func;
+    memset(&func, 0, sizeof(Function));
+    puts("allocating args...");
+    func.args = zero_alloc(0);
+    puts("allocating blocks...");
+    func.blocks = zero_alloc(0);
+    return func;
+}
 
 typedef struct _Program {
     Function * functions;
     //Global * globals;
     //Static * statics;
 } Program;
+
+uint64_t parse_int_bare(const char * n)
+{
+    size_t len = strlen(n);
+    
+    int base = 10;
+    if (len > 2 && n[0] == '0' && n[1] == 'x')
+        base = 16;
+    
+    char * end = 0;
+    uint64_t ret = (uint64_t)strtoll(n, &end, base);
+    
+    assert(("bare integer literal has trailing characters", (uint64_t)(end - n) == len));
+    
+    return ret;
+}
+
+Type parse_type(char ** b)
+{
+    Type type;
+    memset(&type, 0, sizeof(Type));
+    char * token = find_next_token(b);
+    assert(token);
+    if (strcmp(token, "i8") == 0)
+        type.variant = TYPE_I8;
+    else if (strcmp(token, "i16") == 0)
+        type.variant = TYPE_I16;
+    else if (strcmp(token, "i32") == 0)
+        type.variant = TYPE_I32;
+    else if (strcmp(token, "i64") == 0)
+        type.variant = TYPE_I64;
+    else if (strcmp(token, "f32") == 0)
+        type.variant = TYPE_F32;
+    else if (strcmp(token, "f64") == 0)
+        type.variant = TYPE_F64;
+    else if (strcmp(token, "{") == 0)
+    {
+        uint8_t is_packed = 0;
+        token = find_next_token(b);
+        if (strcmp(token, "packed") == 0)
+        {
+            is_packed = 1;
+            token = find_next_token(b);
+        }
+        if (str_begins_with(token, "align."))
+        {
+            uint64_t align = parse_int_bare(token + 6);
+            token = find_next_token(b);
+        }
+        else
+            assert(("missing alignment in aggregate type spec", 0));
+        
+        assert(("TODO: properly parse struct types", 0));
+    }
+    else
+    {
+        assert(("invalid type", 0));
+    }
+    
+    return type;
+}
 
 enum {
     PARSER_STATE_ROOT,
@@ -239,17 +233,24 @@ int parse(char * cursor)
     int state = PARSER_STATE_ROOT;
     char * token = find_next_token_anywhere(&cursor);
     
+    Function current_func = new_func();
+    
     while (token)
     {
         if (state == PARSER_STATE_ROOT)
         {
             if (strcmp(token, "func") == 0)
             {
-                char * token = find_next_token(&cursor);
-                assert(token);
-                char * name = strcpy_n(token);
                 token = find_next_token(&cursor);
-                //if (token && strcmp(token, "returns"))
+                assert(token);
+                
+                current_func.name = strcpy_z(token);
+                
+                token = find_next_token(&cursor);
+                if (token && strcmp(token, "returns"))
+                    current_func.return_type = parse_type(&cursor);
+                
+                state = PARSER_STATE_FUNCARGS;
             }
             else if (strcmp(token, "global") == 0)
             {
@@ -259,8 +260,92 @@ int parse(char * cursor)
             {
                 assert(("TODO static", 0));
             }
+            else
+            {
+                printf("culprit: %s\n", token);
+                assert(("unknown directive name", 0));
+            }
         }
+        else if (state == PARSER_STATE_BLOCKARGS)
+        {
+            if (strcmp(token, "arg") == 0)
+            {
+                puts("found block args");
+                
+                token = find_next_token(&cursor);
+                assert(token);
+                char * name = strcpy_z(token);
+                Type type = parse_type(&cursor);
+            }
+            else
+            {
+                state = PARSER_STATE_FUNCSLOTS;
+                continue;
+            }
+        }
+        else if (state == PARSER_STATE_FUNCARGS)
+        {
+            if (strcmp(token, "arg") == 0)
+            {
+                puts("found func args");
+                
+                token = find_next_token(&cursor);
+                assert(token);
+                char * name = strcpy_z(token);
+                size_t name_len = strlen(name);
+                assert(name_len < 4096);
+                Type type = parse_type(&cursor);
+                
+                Variable arg = {type, name};
+                array_push(current_func.args, Variable, arg);
+                printf("---- arg count: %zu\n", array_len(current_func.args, Variable));
+                for (uint64_t i = 0; i < array_len(current_func.args, Variable); i++)
+                    printf("arg name: %s\n", current_func.args[0].name);
+                
+                printf("pushed `%s`\n", name);
+            }
+            else
+            {
+                printf("token --- %s\n", token);
+                state = PARSER_STATE_FUNCSLOTS;
+                continue;
+            }
+        }
+        else if (state == PARSER_STATE_FUNCSLOTS)
+        {
+            if (strcmp(token, "stack_slot") == 0)
+            {
+                puts("asdpoaopg");
+                assert(0);
+            }
+            else
+            {
+                printf("token ~~~ %s\n", token);
+                state = PARSER_STATE_BLOCK;
+                continue;
+            }
+        }
+        else if (state == PARSER_STATE_BLOCK)
+        {
+            if (strcmp(token, "block") != 0)
+            {
+                puts("agflkh9");
+                assert(0);
+            }
+            else // new block
+            {
+                puts("784525746341");
+                assert(0);
+                state = PARSER_STATE_BLOCKARGS;
+            }
+        }
+        
+        find_end_of_line(&cursor);
+        token = find_next_token_anywhere(&cursor);
     }
+    
+    puts("091308y4h3qjwtrkjt");
+    assert(0);
     
     return 0;
 }

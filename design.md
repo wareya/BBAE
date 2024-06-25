@@ -1,3 +1,4 @@
+
 BBAE (Basic Block Analysis Enabler) Design:
 
 Single BBAE files are analogous to single C translation units. They contain globals, statics, and functions, and may be linked with other BBAE files or C translation units or anything else; the specifics of linking is entirely implementation-specified.
@@ -81,7 +82,7 @@ func my_func returns i8
 endfunc
 ```
 
-Return type is optional (if missing, function does not return a value). Arguments are optional. Implementations may place a limit on the number of allowed arguments, but it must be at least 127.
+Return type (i.e. the entire `returns <type>` bit) is optional (if missing, function does not return a value). Arguments are optional. Implementations may place a limit on the number of allowed arguments, but it must be at least 127.
 
 ------
 
@@ -103,7 +104,7 @@ Stack slot directive can only occur at the start of a function, after arguments 
 
 The alignment of stack slots is derived from the size of the stack slot and implementation-defined. The standard alignment is the lowest power of 2 greater than or equal to the stack slot size with a maximum of 64, i.e. a slot of size 16 has 16-byte alignment but a slot of size 17 has 32-byte alignment. This can be overridden to a smaller value with the !align decorator, explained later.
 
-Stack slots can be reordered, padded, or stored in different places (non-contiguously). For example, b in the following example could be padded to 16 bytes, or moved after the a. It may also, on windows, place the b storage in the "shadow stack space" belonging to the parent function, while putting the a storage in the current function's own stack space, or vice versa. Stack slots may even be allocated on the heap instead of the stack.
+Stack slots can be reordered, padded, or stored in different places (non-contiguously). For example, `b` in the following example could be padded to 16 bytes, or moved after `a`. It may also, on windows, place the `b` storage in the "shadow space" on the stack belonging to the parent function, while putting the `a` storage in the current function's own stack space, or vice versa. Stack slots may even be allocated on the heap instead of the stack.
 
 ```rs
 func my_func
@@ -363,7 +364,7 @@ Instructions:
 ```rs
 goto <label> any* // zero or more instances of any value as block arguments
 if i goto <label> any* // zero or more instances of any value as block arguments
-return <any> // return any value
+return <any>? // return any value, or none if the function doesn't return a value
 
 call <type> i any* // zero or more instances of any value as function arguments
 
@@ -393,11 +394,16 @@ return r
 
 There is a similar symbol_lookup, which gives the returned iptr an associated aliasing region.
 
+```rs
+info_ptr = symbol_lookup info 8
+actual_info = load u8 info_ptr
+return actual_info
+```
 Symbol lookup gives priority to symbols defined in the current file. No two symbols in the current file can have the same name.
 
 ------
 
-The second exception is a pseudo-instruction `bytes`, which embeds a series of raw byte literals into the instruction stream. It is considered to be a potentially-externally-visible instruction. Byte literals of any integer type are allowed (including mixed), but only the bottom eight bits are considered. Because it only allows literals, not variables, it is a syntax exception.
+The second exception is a pseudo-instruction `bytes`, which embeds a series of raw byte literals into the instruction stream. It is considered to be a potentially-externally-visible instruction. Byte literals must be untyped, but only the bottom eight bits are considered. Because it only allows untyped literals, not arbitrary values, it is a syntax exception.
 
 ```rs
 call i8 my_funcptr // assume that my_funcptr can't be inlined or internally analyzed
@@ -546,10 +552,10 @@ In the above, pointers that alias each other are considered captured if at least
 
 Pointer aliasing:
 
-- Pointers of unknown origin are assumed to be able to alias any pointer that they capture.
-- Pointers derived from stack_slot are assumed to alias only pointers derived from the same stack slot.
-- Pointers derived from symbol_lookup_unsized are assumed to alias any other pointer derived from symbol_lookup_unsized, including other symbols.
-- Pointers derived from symbol_lookup are assumed to alias only other pointers derived from the same symbol. Additionally, only accesses to the defined region can be derived from the pointer. Accesses outside the defined region are UB.
+- Pointers of unknown origin are assumed to be able to alias any pointer that they capture or may capture, including all other pointers of unknown origin.
+- Pointers derived from `stack_slot` are assumed to alias only pointers derived from the same stack slot.
+- Pointers derived from `symbol_lookup_unsized` are assumed to alias any other pointer derived from `symbol_lookup_unsized`, including other symbols.
+- Pointers derived from `symbol_lookup` are assumed to alias only other pointers derived from the same symbol. Additionally, only accesses to the defined region can be derived from the pointer. Accesses outside the defined region are UB.
 - Pointers derived from anything else are assumed to alias any pointer whose value they derive from in any way, except for null checks.
 - Blessed pointers (via ptralias_bless), and all pointers derived from them, are assumed to alias absolutely all pointers.
 
@@ -570,4 +576,4 @@ The compiler is allowed to know that a and b are only aliased for operations lar
 
 Special functions:
 
-The special function `_global_init`, if defined, must have zero arguments and no return type. A given file may only have a single `_global_init` function. Linkers must append it to any other static initialization functions during linking, rather than generating a redefinition error or picking one over the other. It should be run during program startup, at the same time as a C program would run global initializers. This is analogous to LLVM's `@llvm.global_ctors`.
+The special function `_global_init`, if defined, must have zero arguments and no return type. A given file may only have exactly zero or one `_global_init` functions. Linkers must append it to any other static initialization functions during linking, rather than generating a redefinition error or picking one over the other. It should be run during program startup, at the same time as a C program would run global initializers. This is analogous to LLVM's `@llvm.global_ctors`.
