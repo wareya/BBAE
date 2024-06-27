@@ -1,7 +1,7 @@
 
 BBAE (Basic Block Analysis Enabler) Design:
 
-Single BBAE files are analogous to single C translation units. They contain globals, statics, and functions, and may be linked with other BBAE files or C translation units or anything else; the specifics of linking is entirely implementation-specified.
+Single BBAE files are analogous to single C translation units. They contain globals, statics (immutable global constants), and functions, and may be linked with other BBAE files or C translation units or anything else; the specifics of linking are entirely implementation-specified.
 
 ------
 
@@ -188,7 +188,7 @@ Block fall-through is not allowed, even if the target block has no arguments. Th
 
 ------
 
-Blocks continue after the else case of conditional gotos. This is different from LLVM, where conditional gotos have true and false target blocks.
+Blocks continue after the else case of conditional gotos. This is different from LLVM, where conditional gotos have true and false target blocks. BBAE blocks, as written in BBAE code, are a limited form of "extended" basic blocks rather than true basic blocks. However, implementations are free to split them into true basic blocks at compile time, or likewise combine them into non-limited extended basic blocks.
 
 ```rs
 func my_func

@@ -5,6 +5,7 @@
 #include <assert.h>
 
 #include "memory.h"
+#include "emitter.h"
 
 // read the next token on the current line, return 0 if none
 // thrashes any previously-returned token. make copies!
@@ -85,22 +86,68 @@ typedef struct _Type {
     AggData aggdata;
 } Type;
 
+Type basic_type(int x)
+{
+    Type ret;
+    memset(&ret, 0, sizeof(Type));
+    ret.variant = x;
+    return ret;
+}
+
 typedef struct _Global {
     char * name;
     Type type;
     struct _Global * next;
 } Global;
 
-typedef struct _Variable {
+enum {
+    VALUE_NONE,
+    VALUE_CONST,
+    VALUE_SSA,
+    VALUE_ARG,
+};
+
+struct _Statement;
+typedef struct _Value {
+    int variant; // values can be constants, SSA values produced by operations, or func/block arguments
     Type type;
+    uint64_t constant; // is a pointer if type is aggregate. otherwise is bits of value
+    struct _Statement * ssa;
+    char * arg;
+} Value;
+
+typedef struct _Variable {
     char * name;
+    Type type;
 } Variable;
 
+typedef union _Operand {
+    Type type;
+    Value value;
+    char * text;
+} Operand;
+
+struct _Block;
 typedef struct _Statement {
-    // TODO/FIXME
-    uint8_t z;
+    char * output_name; // if null, instruction. else, operation.
+    char * statement_name;
+    struct _Block * block;
+    // array
+    Operand * args;
+    // array
+    struct _Statement ** edges_in;
+    // array
+    struct _Statement ** edges_out;
 } Statement;
 
+Statement * new_statement(void)
+{
+    Statement * statement = (Statement *)zero_alloc(sizeof(Statement));
+    statement->args = (Operand *)zero_alloc(0);
+    statement->edges_in = (Statement **)zero_alloc(0);
+    statement->edges_out = (Statement **)zero_alloc(0);
+    return statement;
+}
 typedef struct _Block {
     char * name;
     // block args (array)
@@ -113,14 +160,13 @@ typedef struct _Block {
     Statement ** statements;
 } Block;
 
-Block new_block(void)
+Block * new_block(void)
 {
-    Block block;
-    memset(&block, 0, sizeof(Block));
-    block.args = (Variable *)zero_alloc(0);
-    block.edges_in = (Statement **)zero_alloc(0);
-    block.edges_out = (Statement **)zero_alloc(0);
-    block.statements = (Statement **)zero_alloc(0);
+    Block * block = zero_alloc(sizeof(Block));
+    block->args = (Variable *)zero_alloc(0);
+    block->edges_in = (Statement **)zero_alloc(0);
+    block->edges_out = (Statement **)zero_alloc(0);
+    block->statements = (Statement **)zero_alloc(0);
     return block;
 }
 
@@ -138,8 +184,8 @@ typedef struct _Function {
     StackSlot * stack_slots;
     // blocks, in order of declaration (array)
     Block ** blocks;
-    // statements within the block (array)
-    Statement ** statements;
+    // explicit pointer to entry block so that it doesn't get lost
+    Block * entry_block;
 } Function;
 
 Function new_func(void)
@@ -149,29 +195,73 @@ Function new_func(void)
     func.args = (Variable *)zero_alloc(0);
     func.stack_slots = (StackSlot *)zero_alloc(0);
     func.blocks = (Block **)zero_alloc(0);
-    func.statements = (Statement **)zero_alloc(0);
     return func;
 }
 
 typedef struct _Program {
+    // array
     Function * functions;
     //Global * globals;
     //Static * statics;
 } Program;
 
+int char_value(const char c)
+{
+    if (c >= '0' && c <= '9')
+        return c - '0';
+    else if (c >= 'A' && c <= 'Z')
+        return c - 'A' + 10;
+    else if (c >= 'a' && c <= 'z')
+        return c - 'a' + 10;
+    else
+        return -1;
+}
+
+// truncating instead of clamping (discards upper bits); does not set errno
+uint64_t my_strtoull(const char * str, const char ** endptr)
+{
+    uint8_t negative = 0;
+    if (str[0] == '-')
+    {
+        negative = 1;
+    }
+    
+    int radix = 10;
+    if (str[0] == '0' && str[1] == 'x')
+    {
+        str += 2;
+        radix = 16;
+    }
+    
+    uint64_t out = 0;
+    while (*str != 0 && char_value(*str) >= 0 && char_value(*str) < radix)
+    {
+        out *= radix;
+        out += char_value(*str);
+        str++;
+    }
+    
+    if (endptr)
+        *endptr = str;
+    
+    return negative ? -out : out;
+}
+
 uint64_t parse_int_bare(const char * n)
 {
     size_t len = strlen(n);
     
-    int base = 10;
-    if (len > 2 && n[0] == '0' && n[1] == 'x')
-        base = 16;
-    
-    char * end = 0;
-    uint64_t ret = (uint64_t)strtoll(n, &end, base);
-    
+    const char * end = 0;
+    uint64_t ret = (uint64_t)my_strtoull(n, &end);
     assert(("bare integer literal has trailing characters", (uint64_t)(end - n) == len));
     
+    return ret;
+}
+
+uint64_t parse_int_nonbare(const char * n)
+{
+    const char * end = 0;
+    uint64_t ret = (uint64_t)my_strtoull(n, &end);
     return ret;
 }
 
@@ -228,12 +318,157 @@ enum {
     PARSER_STATE_BLOCK,
 };
 
-int parse(char * cursor)
+Program program;
+Function current_func;
+Block * current_block = 0;
+
+Value parse_value(char * token)
+{
+    Value ret;
+    memset(&ret, 0, sizeof(Value));
+    
+    /*
+typedef struct _Value {
+    int variant; // values can be constants, SSA values produced by operations, or func/block arguments
+    Type type;
+    uint64_t constant; // is a pointer if type is aggregate. otherwise is bits of value
+    struct _Statement * ssa;
+    char * arg;
+} Value;
+    */
+
+    assert(token);
+    // tokens
+    assert(strcmp(token, "=") != 0);
+    assert(strcmp(token, "{") != 0);
+    assert(strcmp(token, "}") != 0);
+    assert(strcmp(token, "<=") != 0);
+    
+    if ((token[0] >= '0' && token[0] <= '9')
+        || token[0] == '-'|| token[0] == '.')
+    {
+        if (str_ends_with(token, "f32"))
+        {
+            char * end = 0;
+            float f = strtof(token, &end);
+            assert(("invalid float literal", strlen(token) - (size_t)(end - token) == 3));
+            ret.variant = VALUE_CONST;
+            ret.type = basic_type(TYPE_F32);
+            memcpy(&ret.constant, &f, 4);
+        }
+        else if (str_ends_with(token, "f64"))
+        {
+            char * end = 0;
+            double f = strtod(token, &end);
+            assert(("invalid float literal", strlen(token) - (size_t)(end - token) == 3));
+            ret.variant = VALUE_CONST;
+            ret.type = basic_type(TYPE_F64);
+            memcpy(&ret.constant, &f, 8);
+        }
+        else if (str_ends_with(token, "i8") || str_ends_with(token, "i16")
+                 || str_ends_with(token, "i32") || str_ends_with(token, "i64"))
+        {
+            uint8_t suffix_len = str_ends_with(token, "i8") ? 2 : 3;
+            uint64_t n = parse_int_nonbare(token);
+        }
+        else
+        {
+            assert(("unknown type of literal value", 0));
+        }
+    }
+    
+    return ret;
+}
+
+uint8_t op_is_v_v(char * opname)
+{
+    const char * ops[] = {
+        "add", "sub", "mul", "imul", "div", "idiv", "rem", "irem", "div_unsafe", "idiv_unsafe", "rem_unsafe", "irem_unsafe",
+        "shl", "shr", "shr_unsafe", "sar", "sar_unsafe", "and", "or", "xor",
+        "cmp_eq", "cmp_ne", "cmp_ge", "cmp_le", "cmp_g", "cmp_l",
+        "icmp_ge", "icmp_le", "icmp_g", "icmp_l",
+        "fcmp_eq", "fcmp_ne", "fcmp_ge", "fcmp_le", "fcmp_g", "fcmp_l",
+        "addf", "subf", "mulf", "divf", "remf",
+        "ptralias", "ptralias_merge", "ptralias_disjoint",
+    };
+    for (size_t i = 0; i < sizeof(ops)/sizeof(char *); i++)
+    {
+        if (strcmp(opname, ops[i]) == 0)
+            return 1;
+    }
+    return 0;
+}
+uint8_t op_is_v_v_v(char * opname)
+{
+    const char * ops[] = {
+        "ternary", "inject"
+    };
+    for (size_t i = 0; i < sizeof(ops)/sizeof(char *); i++)
+    {
+        if (strcmp(opname, ops[i]) == 0)
+            return 1;
+    }
+    return 0;
+}
+
+Statement * parse_statement(char ** cursor)
+{
+    Statement * ret = new_statement();
+    char * token = strcpy_z(find_next_token(cursor));
+    char * cursor_before_token2 = *cursor;
+    char * token2 = find_next_token(cursor);
+    
+    if (token2 && strcmp("=", token2) == 0)
+    {
+        ret->output_name = token;
+        ret->statement_name = strcpy_z(find_next_token(cursor));
+        
+        if (op_is_v_v(ret->statement_name))
+        {
+            char * op1 = strcpy_z(find_next_token(cursor));
+            char * op2 = strcpy_z(find_next_token(cursor));
+        }
+        assert(("glfy39", 0));
+    }
+    else
+    {
+        *cursor = cursor_before_token2;
+        
+        ret->statement_name = token;
+        
+        if (strcmp(ret->statement_name, "return") == 0)
+        {
+            if (token2)
+            {
+                Operand op;
+                op.value = parse_value(find_next_token(cursor));
+                array_push(ret->args, Operand, op);
+            }
+        }
+        else
+        {
+            printf("culprit: %s\n", ret->statement_name);
+            assert(("unknown instruction", 0));
+        }
+    }
+    
+    //Operand * args;
+    //struct _Block * block;
+    //// array
+    //struct _Statement ** edges_in;
+    //// array
+    //struct _Statement ** edges_out;
+    
+    return ret;
+}
+
+int parse_file(char * cursor)
 {
     int state = PARSER_STATE_ROOT;
     char * token = find_next_token_anywhere(&cursor);
     
-    Function current_func = new_func();
+    program.functions = (Function *)zero_alloc(0);
+    current_func = new_func();
     
     while (token)
     {
@@ -287,26 +522,16 @@ int parse(char * cursor)
         {
             if (strcmp(token, "arg") == 0)
             {
-                puts("found func args");
-                
                 token = find_next_token(&cursor);
                 assert(token);
                 char * name = strcpy_z(token);
-                size_t name_len = strlen(name);
-                assert(name_len < 4096);
                 Type type = parse_type(&cursor);
                 
-                Variable arg = {type, name};
+                Variable arg = {name, type};
                 array_push(current_func.args, Variable, arg);
-                printf("---- arg count: %zu\n", array_len(current_func.args, Variable));
-                for (uint64_t i = 0; i < array_len(current_func.args, Variable); i++)
-                    printf("arg name: %s\n", current_func.args[0].name);
-                
-                printf("pushed `%s`\n", name);
             }
             else
             {
-                printf("token --- %s\n", token);
                 state = PARSER_STATE_FUNCSLOTS;
                 continue;
             }
@@ -315,28 +540,46 @@ int parse(char * cursor)
         {
             if (strcmp(token, "stack_slot") == 0)
             {
-                puts("asdpoaopg");
-                assert(0);
+                token = find_next_token(&cursor);
+                assert(token);
+                char * name = strcpy_z(token);
+                
+                token = find_next_token(&cursor);
+                uint64_t size = parse_int_bare(token);
+                
+                StackSlot slot = {name, size};
+                array_push(current_func.stack_slots, StackSlot, slot);
             }
             else
             {
-                printf("token ~~~ %s\n", token);
+                current_block = new_block();
+                array_push(current_func.blocks, Block *, current_block);
+                current_func.entry_block = current_block;
+                
                 state = PARSER_STATE_BLOCK;
                 continue;
             }
         }
         else if (state == PARSER_STATE_BLOCK)
         {
-            if (strcmp(token, "block") != 0)
+            if (strcmp(token, "block") != 0 && strcmp(token, "endfunc") != 0)
             {
-                puts("agflkh9");
-                assert(0);
+                cursor -= strlen(token);
+                Statement * statement = parse_statement(&cursor);
+                array_push(current_block->statements, Statement *, statement);
             }
-            else // new block
+            else if (strcmp(token, "block") == 0)
             {
+                // new block
                 puts("784525746341");
                 assert(0);
                 state = PARSER_STATE_BLOCKARGS;
+            }
+            else
+            {
+                array_push(program.functions, Function, current_func);
+                current_func = new_func();
+                // end of function
             }
         }
         
@@ -344,8 +587,7 @@ int parse(char * cursor)
         token = find_next_token_anywhere(&cursor);
     }
     
-    puts("091308y4h3qjwtrkjt");
-    assert(0);
+    puts("finished parsing program!");
     
     return 0;
 }
@@ -370,7 +612,7 @@ int main(int argc, char ** argv)
     buffer[length] = 0;
     fclose(f);
     
-    parse(buffer);
+    parse_file(buffer);
     
     return 0;
 }

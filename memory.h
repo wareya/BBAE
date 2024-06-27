@@ -106,6 +106,7 @@ char * strcpy_len(const char * str, size_t len)
 }
 char * strcpy_z(const char * str)
 {
+    assert(str);
     size_t len = strlen(str);
     return strcpy_len(str, len);
 }

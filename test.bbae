@@ -2,5 +2,7 @@
 func main returns i32
     arg argc i64
     arg argv i64
+	stack_slot a 1
+	stack_slot b 16
     return 0i32
 endfunc
