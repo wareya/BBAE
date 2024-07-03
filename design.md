@@ -237,11 +237,15 @@ A statement can either be a temporary variable declaration or an instruction.
 
 A temporary variable declaration looks like:
 
+```rs
 <varname> = <operation> <operation arguments>
+```
 
 An instruction looks like:
 
+```rs
 <instruction> <instruction arguments>
+```
 
 An argument can only ever be a literal, a variable name, a label name, or a type. Where you're allowed to put which kind of argument is determined by the operation or instruction. Variable names and literals are allowed in exactly the same argument slots.
 

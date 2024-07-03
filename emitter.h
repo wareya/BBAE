@@ -45,6 +45,7 @@ enum Register {
     REG_XMM14,
     REG_XMM15,
 };
+
 /*
 enum Segment {
     SEG_ES,

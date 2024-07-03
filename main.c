@@ -114,11 +114,15 @@ typedef struct _Value {
     uint64_t constant; // is a pointer if type is aggregate. otherwise is bits of value
     struct _Statement * ssa;
     char * arg;
+    
+    uint8_t regalloced;
+    uint64_t regalloc; // if highest bit set: on stack. else: register id from abi.h.
 } Value;
 
 typedef struct _Variable {
     char * name;
     Type type;
+    struct _Statement ** edges_out;
 } Variable;
 
 typedef union _Operand {
@@ -134,6 +138,9 @@ typedef struct _Statement {
     struct _Block * block;
     // array
     Operand * args;
+    // secondary args -- ONLY for if and if-else.
+    Operand * args_a;
+    Operand * args_b;
     // array
     struct _Statement ** edges_in;
     // array
@@ -428,6 +435,7 @@ Statement * parse_statement(char ** cursor)
             char * op1 = strcpy_z(find_next_token(cursor));
             char * op2 = strcpy_z(find_next_token(cursor));
         }
+        // TODO: operators
         assert(("glfy39", 0));
     }
     else
@@ -445,19 +453,13 @@ Statement * parse_statement(char ** cursor)
                 array_push(ret->args, Operand, op);
             }
         }
+        // TODO: other statements
         else
         {
             printf("culprit: %s\n", ret->statement_name);
             assert(("unknown instruction", 0));
         }
     }
-    
-    //Operand * args;
-    //struct _Block * block;
-    //// array
-    //struct _Statement ** edges_in;
-    //// array
-    //struct _Statement ** edges_out;
     
     return ret;
 }
@@ -527,7 +529,7 @@ int parse_file(char * cursor)
                 char * name = strcpy_z(token);
                 Type type = parse_type(&cursor);
                 
-                Variable arg = {name, type};
+                Variable arg = {name, type, 0};
                 array_push(current_func.args, Variable, arg);
             }
             else
@@ -575,11 +577,16 @@ int parse_file(char * cursor)
                 assert(0);
                 state = PARSER_STATE_BLOCKARGS;
             }
-            else
+            else if (strcmp(token, "endfunc") == 0)
             {
                 array_push(program.functions, Function, current_func);
                 current_func = new_func();
                 // end of function
+            }
+            else
+            {
+                printf("culprit: %s\n", token);
+                assert(("unknown statement or directive", 0));
             }
         }
         
@@ -590,6 +597,12 @@ int parse_file(char * cursor)
     puts("finished parsing program!");
     
     return 0;
+}
+
+byte_buffer * code;
+void compile_file(void)
+{
+    
 }
 
 int main(int argc, char ** argv)
