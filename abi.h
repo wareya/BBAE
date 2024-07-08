@@ -117,7 +117,7 @@ void abi_reset_state(void)
 // Later stack-spill arguments always have higher offsets, e.g. the first may be +48, second may be +56, etc.
 // This is true both on sysv and windows.
 //
-uint64_t abi_get_next_arg_basic(uint8_t word_is_float)
+int64_t abi_get_next_arg_basic(uint8_t word_is_float)
 {
     if (abi == ABI_WIN)
     {
@@ -172,6 +172,15 @@ uint64_t abi_get_next_arg_basic(uint8_t word_is_float)
         }
     }
 }
+
+// eightwords_info points to at least count bytes, 0 = not floatlike, 1 = floatlike
+// out points to at least count elements
+/*
+void abi_get_next_args_struct(uint8_t * eightwords_info, uint64_t * out, size_t count)
+{
+    
+}
+*/
 
 int64_t abi_get_min_stack_size(void)
 {

@@ -84,6 +84,8 @@ endfunc
 
 Return type (i.e. the entire `returns <type>` bit) is optional (if missing, function does not return a value). Arguments are optional. Implementations may place a limit on the number of allowed arguments, but it must be at least 127.
 
+Function arguments are only visible to the implicit initial block. To access them from other blocks, they must either be stored in stack slots and loaded later, or passed as block arguments when jumping to the other block.
+
 ------
 
 Local stack space for stack variables is defined like:
@@ -98,7 +100,7 @@ This specifies at least 16 bytes of storage for the stack slot `a`, and creates 
 
 Stack slots are analogous to LLVM's alloca.
 
-For spec language purposes, stack slot names are treated like arguments. They are visible to all blocks even if the block does not take them as an argument. They evaluate to their pointer, not to their stored value.
+Stack slot names are visible to all blocks even if the block does not take them as an argument. They evaluate to their pointer, not to their stored value. (This is possible because stack slot access doesn't require doing any register allocation.)
 
 Stack slot directive can only occur at the start of a function, after arguments and before any blocks or statements.
 
@@ -124,7 +126,7 @@ block label
 endfunc
 ```
 
-Functions consist of a series of basic blocks, each of which only have access to variables declared within themselves or their block arguments. Each block in a given function has the function's arguments as implicit arguments.
+Functions consist of a series of basic blocks, each of which only have access to temporary variables declared within themselves or their block arguments.
 
 ------
 
@@ -152,7 +154,7 @@ block label
 endfunc
 ```
 
-This stores an 8-bit integer with the value '5' into the first byte of stack slot a. In x86_64 assembly, the store instruction would compile down to something like `mov byte ptr [rbp-16], 5` or `mov byte ptr [rsp+0], 5`. The type of a load is determined by a type written between the load instruction and its offset. The type of a store is determined by the type of its second argument.
+This stores an 8-bit integer with the value '5' into the first byte of stack slot a. In x86_64 assembly, the store instruction would compile down to something like `mov byte ptr [rbp-16], 5` or `mov byte ptr [rsp+0], 5`. The type of a load is determined by a type written between the load instruction and its offset. The type of a store is determined by the type of its second operand.
 
 ------
 
@@ -238,16 +240,16 @@ A statement can either be a temporary variable declaration or an instruction.
 A temporary variable declaration looks like:
 
 ```rs
-<varname> = <operation> <operation arguments>
+<varname> = <operation> <operands>
 ```
 
 An instruction looks like:
 
 ```rs
-<instruction> <instruction arguments>
+<instruction> <operands>
 ```
 
-An argument can only ever be a literal, a variable name, a label name, or a type. Where you're allowed to put which kind of argument is determined by the operation or instruction. Variable names and literals are allowed in exactly the same argument slots.
+An operand can only ever be a literal, a variable name, a label name, or a type. Where you're allowed to put which kind of operand is determined by the operation or instruction. Variable names and literals are allowed in exactly the same operand slots.
 
 ------
 
@@ -387,7 +389,7 @@ For statements, there are five exceptions to the above syntax.
 
 ------
 
-The first exception is a pseudo-operation `symbol_lookup_unsized` which returns an iptr but takes an arbitrary string of characters (with no whitespace or newline etc) as its one argument. Normal operations can only do this with label names or variables names. This is what makes this pseudo-operation have exceptional syntax.
+The first exception is a pseudo-operation `symbol_lookup_unsized` which returns an iptr but takes an arbitrary string of characters (with no whitespace or newline etc) as its one operand. Normal operations can only do this with label names or variables names. This is what makes this pseudo-operation have exceptional syntax.
 
 ```rs
 sin = symbol_lookup_unsized sinf
@@ -580,4 +582,4 @@ The compiler is allowed to know that a and b are only aliased for operations lar
 
 Special functions:
 
-The special function `_global_init`, if defined, must have zero arguments and no return type. A given file may only have exactly zero or one `_global_init` functions. Linkers must append it to any other static initialization functions during linking, rather than generating a redefinition error or picking one over the other. It should be run during program startup, at the same time as a C program would run global initializers. This is analogous to LLVM's `@llvm.global_ctors`.
+The special function `_global_init`, if defined, must have zero arguments and no return type. A given file may only have exactly zero or one `_global_init` functions. Linkers must append it to any other static initialization functions (or vice versa) during linking, rather than generating a redefinition error or picking one over the other. It should be run during program startup, at the same time as a C program would run global initializers. This is analogous to LLVM's `@llvm.global_ctors`.

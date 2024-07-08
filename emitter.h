@@ -4,7 +4,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <assert.h>
-#include <Zydis/Zydis.h>
+#include "thirdparty/zydis/Zydis.h"
+#include "thirdparty/zydis/Zydis.c"
 
 #include "buffers.h"
 

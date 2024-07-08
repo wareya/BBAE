@@ -6,6 +6,7 @@
 
 #include "memory.h"
 #include "emitter.h"
+#include "abi.h"
 
 // read the next token on the current line, return 0 if none
 // thrashes any previously-returned token. make copies!
@@ -94,6 +95,19 @@ Type basic_type(int x)
     return ret;
 }
 
+uint8_t type_is_basic(Type type)
+{
+    return type.variant >= TYPE_I8 && type.variant <= TYPE_F64;
+}
+uint8_t type_is_int(Type type)
+{
+    return type.variant >= TYPE_I8 && type.variant <= TYPE_I64;
+}
+uint8_t type_is_float(Type type)
+{
+    return type.variant >= TYPE_F32 && type.variant <= TYPE_F64;
+}
+
 typedef struct _Global {
     char * name;
     Type type;
@@ -115,19 +129,25 @@ typedef struct _Value {
     struct _Statement * ssa;
     char * arg;
     
-    uint8_t regalloced;
-    uint64_t regalloc; // if highest bit set: on stack. else: register id from abi.h.
+    struct _Statement ** edges_out;
+    
+    uint8_t regalloced; // 1 if regalloced already, 0 otherwise
+    // if highest bit set: on stack, lower bits are stack slot id
+    // else: register id from abi.h
+    // if -1: no allocation, literal
+    uint64_t regalloc;
 } Value;
 
-typedef struct _Variable {
-    char * name;
-    Type type;
-    struct _Statement ** edges_out;
-} Variable;
+enum {
+    OP_KIND_TYPE,
+    OP_KIND_VALUE,
+    OP_KIND_TEXT,
+};
 
-typedef union _Operand {
+typedef struct _Operand {
+    uint8_t variant;
     Type type;
-    Value value;
+    Value * value;
     char * text;
 } Operand;
 
@@ -138,27 +158,24 @@ typedef struct _Statement {
     struct _Block * block;
     // array
     Operand * args;
-    // secondary args -- ONLY for if and if-else.
+    // arrays of secondary args -- ONLY for if and if-else.
     Operand * args_a;
     Operand * args_b;
     // array
-    struct _Statement ** edges_in;
-    // array
-    struct _Statement ** edges_out;
+    Value ** edges_in;
 } Statement;
 
 Statement * new_statement(void)
 {
     Statement * statement = (Statement *)zero_alloc(sizeof(Statement));
     statement->args = (Operand *)zero_alloc(0);
-    statement->edges_in = (Statement **)zero_alloc(0);
-    statement->edges_out = (Statement **)zero_alloc(0);
+    statement->edges_in = (Value **)zero_alloc(0);
     return statement;
 }
 typedef struct _Block {
     char * name;
     // block args (array)
-    Variable * args;
+    Value ** args;
     // statements that enter into this block (array)
     Statement ** edges_in;
     // statements that transfer control flow away from themselves
@@ -170,7 +187,7 @@ typedef struct _Block {
 Block * new_block(void)
 {
     Block * block = zero_alloc(sizeof(Block));
-    block->args = (Variable *)zero_alloc(0);
+    block->args = (Value **)zero_alloc(0);
     block->edges_in = (Statement **)zero_alloc(0);
     block->edges_out = (Statement **)zero_alloc(0);
     block->statements = (Statement **)zero_alloc(0);
@@ -186,7 +203,7 @@ typedef struct _Function {
     char * name;
     Type return_type;
     // args (array)
-    Variable * args;
+    Value ** args;
     // stack slots (array)
     StackSlot * stack_slots;
     // blocks, in order of declaration (array)
@@ -199,7 +216,7 @@ Function new_func(void)
 {
     Function func;
     memset(&func, 0, sizeof(Function));
-    func.args = (Variable *)zero_alloc(0);
+    func.args = (Value **)zero_alloc(0);
     func.stack_slots = (StackSlot *)zero_alloc(0);
     func.blocks = (Block **)zero_alloc(0);
     return func;
@@ -329,21 +346,11 @@ Program program;
 Function current_func;
 Block * current_block = 0;
 
-Value parse_value(char * token)
+Value * parse_value(char * token)
 {
-    Value ret;
-    memset(&ret, 0, sizeof(Value));
+    Value * ret = (Value *)zero_alloc(sizeof(Value));
+    ret->edges_out = (Statement **)zero_alloc(sizeof(Statement *));
     
-    /*
-typedef struct _Value {
-    int variant; // values can be constants, SSA values produced by operations, or func/block arguments
-    Type type;
-    uint64_t constant; // is a pointer if type is aggregate. otherwise is bits of value
-    struct _Statement * ssa;
-    char * arg;
-} Value;
-    */
-
     assert(token);
     // tokens
     assert(strcmp(token, "=") != 0);
@@ -359,18 +366,18 @@ typedef struct _Value {
             char * end = 0;
             float f = strtof(token, &end);
             assert(("invalid float literal", strlen(token) - (size_t)(end - token) == 3));
-            ret.variant = VALUE_CONST;
-            ret.type = basic_type(TYPE_F32);
-            memcpy(&ret.constant, &f, 4);
+            ret->variant = VALUE_CONST;
+            ret->type = basic_type(TYPE_F32);
+            memcpy(&ret->constant, &f, 4);
         }
         else if (str_ends_with(token, "f64"))
         {
             char * end = 0;
             double f = strtod(token, &end);
             assert(("invalid float literal", strlen(token) - (size_t)(end - token) == 3));
-            ret.variant = VALUE_CONST;
-            ret.type = basic_type(TYPE_F64);
-            memcpy(&ret.constant, &f, 8);
+            ret->variant = VALUE_CONST;
+            ret->type = basic_type(TYPE_F64);
+            memcpy(&ret->constant, &f, 8);
         }
         else if (str_ends_with(token, "i8") || str_ends_with(token, "i16")
                  || str_ends_with(token, "i32") || str_ends_with(token, "i64"))
@@ -386,6 +393,7 @@ typedef struct _Value {
     
     return ret;
 }
+
 
 uint8_t op_is_v_v(char * opname)
 {
@@ -405,6 +413,7 @@ uint8_t op_is_v_v(char * opname)
     }
     return 0;
 }
+
 uint8_t op_is_v_v_v(char * opname)
 {
     const char * ops[] = {
@@ -449,6 +458,7 @@ Statement * parse_statement(char ** cursor)
             if (token2)
             {
                 Operand op;
+                op.variant = OP_KIND_VALUE;
                 op.value = parse_value(find_next_token(cursor));
                 array_push(ret->args, Operand, op);
             }
@@ -513,6 +523,8 @@ int parse_file(char * cursor)
                 assert(token);
                 char * name = strcpy_z(token);
                 Type type = parse_type(&cursor);
+                
+                assert(("todo", 0));
             }
             else
             {
@@ -529,8 +541,12 @@ int parse_file(char * cursor)
                 char * name = strcpy_z(token);
                 Type type = parse_type(&cursor);
                 
-                Variable arg = {name, type, 0};
-                array_push(current_func.args, Variable, arg);
+                Value * value = (Value *)zero_alloc(sizeof(Value));
+                value->variant = VALUE_ARG;
+                value->arg = name;
+                value->type = type;
+                value->edges_out = (Statement **)zero_alloc(sizeof(Statement *));
+                array_push(current_func.args, Value *, value);
             }
             else
             {
@@ -597,6 +613,95 @@ int parse_file(char * cursor)
     puts("finished parsing program!");
     
     return 0;
+}
+
+void connect_statement_to_operand(Statement * statement, Operand op)
+{
+    if (op.variant == OP_KIND_VALUE)
+    {
+        Value * val = op.value;
+        
+        if (val->variant == VALUE_ARG || val->variant == VALUE_SSA)
+        {
+            array_push(statement->edges_in, Value *, val);
+            array_push(val->edges_out, Statement *, statement);
+        }
+    }
+}
+
+void connect_graphs(void)
+{
+    for (size_t f = 0; f < array_len(program.functions, Function); f++)
+    {
+        Function * func = &program.functions[f];
+        for (size_t b = 0; b < array_len(func->blocks, Block *); b++)
+        {
+            Block * block = func->blocks[b];
+            for (size_t i = 0; i < array_len(block->statements, Statement *); i++)
+            {
+                Statement * statement = block->statements[i];
+                for (size_t n = 0; n < array_len(statement->args, Operand); n++)
+                    connect_statement_to_operand(statement, statement->args[n]);
+                for (size_t n = 0; n < array_len(statement->args_a, Operand); n++)
+                    connect_statement_to_operand(statement, statement->args[n]);
+                for (size_t n = 0; n < array_len(statement->args_b, Operand); n++)
+                    connect_statement_to_operand(statement, statement->args[n]);
+                
+                if (array_len(statement->args_a, Operand) > 0)
+                {
+                    assert(("TODO: block lookup and connect blocks together", 0));
+                }
+            }
+        }
+    }
+}
+
+uint8_t reg_int_alloced[16];
+uint8_t reg_float_alloced[16];
+
+typedef struct _ArgWhere {
+    char * name;
+    uint64_t where;
+} ArgWhere;
+
+void do_regalloc_block(Function * func, Block * block)
+{
+    memset(reg_int_alloced, 0, 16 * sizeof(uint8_t));
+    reg_int_alloced[REG_RSP] = 1;
+    reg_int_alloced[REG_RBP] = 1;
+    memset(reg_float_alloced, 0, 16 * sizeof(uint8_t));
+    
+    ArgWhere * allocs = (ArgWhere *)zero_alloc(0);
+    
+    if (block == func->entry_block)
+    {
+        // special case for arguments
+        abi_reset_state();
+        for (size_t i = 0; i < array_len(func->args, Value *); i++)
+        {
+            if (array_len(func->args[i]->edges_out, Statement *) == 0)
+                continue;
+            if (type_is_basic(func->args[i]->type))
+            {
+                int64_t where = abi_get_next_arg_basic(type_is_float(func->args[i]->type));
+                assert(("arg reg spill not yet supported", where >= 0));
+                if (where >= _ABI_XMM0)
+                    reg_float_alloced[where - _ABI_XMM0] = 1;
+                else 
+                    reg_int_alloced[where] = 1;
+                
+                ArgWhere info = {func->args[i]->arg, where};
+                array_push(allocs, ArgWhere, info);
+            }
+            else
+                assert(("aggregate args not yet supported", 0));
+        }
+    }
+    else
+    {
+        // TODO: allocate based on output allocation of entry blocks
+        assert(("TODO later block regalloc", 0));
+    }
 }
 
 byte_buffer * code;

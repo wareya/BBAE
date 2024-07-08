@@ -1,0 +1,20 @@
+{
+    "configurations": [
+        {
+            "name": "msys2-ucrt64",
+            "compilerPath": "C:/msys64/ucrt64/bin/clang.exe",
+            //"intelliSenseMode": "windows-msvc-x64",
+            "includePath": [
+                "C:\\msys64\\ucrt64\\include"
+            ],
+            //"defines": ["${myDefines}", "_WINDOWS"],
+            "cStandard": "c99",
+            "browse": {
+                "path": [
+                    "${workspaceFolder}"
+                ]
+            }
+        }
+    ],
+    "version": 4
+}
