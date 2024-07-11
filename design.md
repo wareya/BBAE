@@ -318,7 +318,8 @@ fcmp_le i i // <=
 fcmp_g i i // >
 fcmp_l i i // <
 
-bnot i // flips each bit in the input value and returns a new value of the same type
+bnot i // flips each bit in the input value and produces a new value of the same type
+neg i // produces the arithmetic negative of the input value
 
 not i  // produces 1i8 for 0, 0i8 otherwise.
 bool i // produces 0i8 for 0, 1i8 otherwise.

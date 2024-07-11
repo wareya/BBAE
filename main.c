@@ -223,8 +223,6 @@ typedef struct _Block {
     char * name;
     // block args (array)
     Value ** args;
-    // array
-    SlotAllocInfo * slot_allocs;
     // statements that enter into this block (array)
     Statement ** edges_in;
     // statements that transfer control flow away from themselves
@@ -237,7 +235,6 @@ Block * new_block(void)
 {
     Block * block = zero_alloc(sizeof(Block));
     block->args = (Value **)zero_alloc(0);
-    block->slot_allocs = (SlotAllocInfo *)zero_alloc(0);
     block->edges_in = (Statement **)zero_alloc(0);
     block->edges_out = (Statement **)zero_alloc(0);
     block->statements = (Statement **)zero_alloc(0);
@@ -257,7 +254,7 @@ typedef struct _Function {
     // args (array)
     Value ** args;
     // stack slots (array)
-    StackSlot ** stack_slots;
+    Value ** stack_slots;
     // blocks, in order of declaration (array)
     Block ** blocks;
     // explicit pointer to entry block so that it doesn't get lost
@@ -269,7 +266,7 @@ Function new_func(void)
     Function func;
     memset(&func, 0, sizeof(Function));
     func.args = (Value **)zero_alloc(0);
-    func.stack_slots = (StackSlot **)zero_alloc(0);
+    func.stack_slots = (Value **)zero_alloc(0);
     func.blocks = (Block **)zero_alloc(0);
     return func;
 }
@@ -495,24 +492,15 @@ Value * parse_value(char * token)
                 return val;
         }
         
-        for (size_t i = 0; i < array_len(current_func.stack_slots, StackSlot *); i++)
+        for (size_t i = 0; i < array_len(current_func.stack_slots, Value *); i++)
         {
-            StackSlot * slot = current_func.stack_slots[i];
+            Value * value = current_func.stack_slots[i];
+            assert(value->variant == VALUE_STACKADDR);
+            StackSlot * slot = value->slotinfo;
             if (strcmp(slot->name, token) == 0)
-            {
-                for (size_t n = 0; n < array_len(current_block->slot_allocs, SlotAllocInfo); n++)
-                {
-                    SlotAllocInfo info = current_block->slot_allocs[n];
-                    if (info.value->slotinfo == slot)
-                        return info.value;
-                }
-                
-                Value * value = make_stackslot_value(slot);
-                SlotAllocInfo info = {value, 0};
-                array_push(current_block->slot_allocs, SlotAllocInfo, info);
                 return value;
-            }
         }
+        
         for (size_t i = 0; i < array_len(current_block->statements, Statement *); i++)
         {
             Statement * statement = current_block->statements[i];
@@ -532,6 +520,19 @@ Value * parse_value(char * token)
     }
 }
 
+
+uint8_t op_is_v(char * opname)
+{
+    const char * ops[] = {
+        "bnot", "not", "bool", "neg", "f32_to_f64", "f64_to_f32", "freeze", "ptralias_bless", "stack_addr"
+    };
+    for (size_t i = 0; i < sizeof(ops)/sizeof(char *); i++)
+    {
+        if (strcmp(opname, ops[i]) == 0)
+            return 1;
+    }
+    return 0;
+}
 
 uint8_t op_is_v_v(char * opname)
 {
@@ -598,6 +599,13 @@ Statement * parse_statement(char ** cursor)
             
             return ret;
         }
+        else if (op_is_v(ret->statement_name))
+        {
+            char * op1_text = strcpy_z(find_next_token(cursor));
+            Operand op1 = parse_op_val(&op1_text);
+            array_push(ret->args, Operand, op1);
+            return ret;
+        }
         else
         {
             assert(("glfy39", 0));
@@ -630,11 +638,23 @@ Statement * parse_statement(char ** cursor)
     return ret;
 }
 
+uint64_t temp_ctr = 0;
+
+char * make_temp_var(void)
+{
+    size_t len = snprintf(0, 0, "__bbae_temp_%llu", temp_ctr);
+    char * str = zero_alloc(len + 1);
+    snprintf(str, len, "__bbae_temp_%llu", temp_ctr);
+    return str;
+}
+
 void add_statement_output(Statement * statement)
 {
     if (statement->output_name)
     {
-        if (strcmp(statement->statement_name, "add") == 0)
+        if (strcmp(statement->statement_name, "add") == 0 ||
+            strcmp(statement->statement_name, "sub") == 0 ||
+            strcmp(statement->statement_name, "stack_addr") == 0)
         {
             assert(statement->args[0].variant == OP_KIND_VALUE);
             statement->output = make_value(statement->args[0].value->type);
@@ -642,6 +662,54 @@ void add_statement_output(Statement * statement)
         }
         else
             assert(("TODO", 0));
+    }
+}
+
+void fix_last_statement_stack_slot_addr_usage(void)
+{
+    size_t end = array_len(current_block->statements, Statement *);
+    if (end == 0)
+        return;
+    Statement * statement = current_block->statements[end - 1];
+    // pre-process any stack slot address arguments into explicit address access instructions
+    if (strcmp(statement->statement_name, "load") != 0 &&
+        strcmp(statement->statement_name, "store") != 0 &&
+        strcmp(statement->statement_name, "stack_addr") != 0)
+    {
+        for (size_t i = 0; i < array_len(statement->args, Operand); i++)
+        {
+            Value * value = statement->args[i].value;
+            if (!value)
+                continue;
+            if (value->variant == VALUE_STACKADDR)
+            {
+                Statement * s = new_statement();
+                char * str = make_temp_var();
+                s->output_name = str;
+                s->statement_name = strcpy_z("stack_addr");
+                
+                // move around args
+                array_push(s->args, Operand, statement->args[i]);
+                
+                add_statement_output(s);
+                Operand op;
+                op.variant = OP_KIND_VALUE;
+                op.value = s->output;
+                statement->args[i] = op;
+                
+                // swap IDs
+                uint64_t temp_id = s->id;
+                s->id = statement->id;
+                statement->id = temp_id;
+                
+                // swap locations
+                current_block->statements[end - 1] = s;
+                array_push(current_block->statements, Statement *, statement);
+                
+                // update "end"
+                end = array_len(current_block->statements, Statement *);
+            }
+        }
     }
 }
 
@@ -737,7 +805,10 @@ int parse_file(char * cursor)
                 StackSlot _slot = {name, size, 0, 0};
                 StackSlot * slot = (StackSlot *)zero_alloc(sizeof(StackSlot));
                 *slot = _slot;
-                array_push(current_func.stack_slots, StackSlot *, slot);
+                
+                Value * val = make_stackslot_value(slot);
+                
+                array_push(current_func.stack_slots, Value *, val);
             }
             else
             {
@@ -755,10 +826,9 @@ int parse_file(char * cursor)
             {
                 cursor -= strlen(token);
                 Statement * statement = parse_statement(&cursor);
-                
                 add_statement_output(statement);
-                
                 array_push(current_block->statements, Statement *, statement);
+                fix_last_statement_stack_slot_addr_usage();
             }
             else if (strcmp(token, "block") == 0)
             {
@@ -798,15 +868,15 @@ void connect_statement_to_operand(Statement * statement, Operand op)
         if (val->variant == VALUE_ARG || val->variant == VALUE_SSA || val->variant == VALUE_STACKADDR)
         {
             if (val->slotinfo)
-                printf("connecting %s (%p) to statement %d\n", val->slotinfo->name, val, statement->id);
+                printf("connecting %s (%p) to statement %llu\n", val->slotinfo->name, (void *)val, statement->id);
             else if (val->ssa)
-                printf("connecting %s to statement %d\n", val->ssa->output_name, statement->id);
+                printf("connecting %s to statement %llu\n", val->ssa->output_name, statement->id);
             
             array_push(statement->edges_in, Value *, val);
             array_push(val->edges_out, Statement *, statement);
             
             val->last_edge = statement;
-            printf("%d ???\n", val->last_edge->id);
+            printf("%llu ???\n", val->last_edge->id);
             //if (!val->last_edge || val->last_edge->id < statement->id)
             //    val->last_edge = statement;
         }
@@ -875,9 +945,10 @@ void allocate_stack_slots(void)
     {
         Function * func = &program.functions[f];
         uint64_t offset = 0;
-        for (size_t s = 0; s < array_len(func->stack_slots, StackSlot *); s++)
+        for (size_t s = 0; s < array_len(func->stack_slots, Value *); s++)
         {
-            StackSlot * slot = func->stack_slots[s];
+            assert(func->stack_slots[s]->variant == VALUE_STACKADDR);
+            StackSlot * slot = func->stack_slots[s]->slotinfo;
             uint64_t align = size_guess_align(slot->size);
             offset += slot->size;
             while (offset % align)
@@ -929,7 +1000,7 @@ void do_regalloc_block(Function * func, Block * block)
                 else 
                     reg_int_alloced[where] = 1;
                 
-                printf("allocated register %d to arg %s\n", where, value->arg);
+                printf("allocated register %lld to arg %s\n", where, value->arg);
                 
                 value->regalloc = where;
                 value->regalloced = 1;
@@ -943,50 +1014,9 @@ void do_regalloc_block(Function * func, Block * block)
         // TODO: allocate based on output allocation of entry blocks
         assert(("TODO later block regalloc", 0));
     }
-    
     for (size_t i = 0; i < array_len(block->statements, Statement *); i++)
     {
         Statement * statement = block->statements[i];
-        
-        for (size_t j = 0; j < array_len(statement->edges_in, Value *); j++)
-        {
-            Value * value = statement->edges_in[j];
-            
-            if (value->variant == VALUE_STACKADDR)
-            {
-                int64_t found = -1;
-                for (size_t n = 0; n < array_len(block->slot_allocs, SlotAllocInfo); n++)
-                {
-                    SlotAllocInfo info = block->slot_allocs[n];
-                    if (info.value == value && !info.value->regalloced)
-                    {
-                        found = n;
-                        break;
-                    }
-                }
-                if (found >= 0)
-                {
-                    SlotAllocInfo info = block->slot_allocs[found];
-                    //printf("adding new reg for slot %s\n", value->slotinfo->name);
-                    
-                    int64_t where = first_empty(reg_int_alloced, 16);
-                    if (where < 0)
-                        assert(("TODO: spilling not yet supported", 0));
-                    
-                    if (where >= _ABI_XMM0)
-                        reg_float_alloced[where - _ABI_XMM0] = 1;
-                    else 
-                        reg_int_alloced[where] = 1;
-                    
-                    printf("allocated register %d to stack slot address %s\n", where, value->slotinfo->name);
-                    
-                    value->regalloc = where;
-                    value->regalloced = 1;
-                }
-                else
-                    puts("found stack slot, all ok!!!");
-            }
-        }
         
         if (!statement->output)
             continue;
@@ -996,11 +1026,11 @@ void do_regalloc_block(Function * func, Block * block)
         for (size_t j = 0; j < array_len(statement->args, Operand); j++)
         {
             Value * arg = statement->args[j].value;
-            printf("qq %d %d %d\n", arg->last_edge->id, statement->id, arg->regalloced);
+            printf("qq %llu %llu %d\n", arg->last_edge->id, statement->id, arg->regalloced);
             if (arg && arg->regalloced
                 && arg->last_edge && arg->last_edge->id == statement->id)
             {
-                printf("reusing operand %d (ptr %p) in statement id %d...\n", j, arg, statement->id);
+                printf("reusing operand %lld (ptr %p) in statement id %llu...\n", j, (void *)arg, statement->id);
                 statement->output->regalloc = arg->regalloc;
                 statement->output->regalloced = 1;
                 goto early_cont;
@@ -1021,7 +1051,7 @@ void do_regalloc_block(Function * func, Block * block)
         else 
             reg_int_alloced[where] = 1;
         
-        printf("allocating %d to statement %d (assigns to %s)\n", where, statement->id, statement->output_name);
+        printf("allocating %lld to statement %llu (assigns to %s)\n", where, statement->id, statement->output_name);
         
         statement->output->regalloc = where;
         statement->output->regalloced = 1;
@@ -1043,7 +1073,7 @@ void do_regalloc(void)
 
 byte_buffer * code;
 
-EncOperand get_basic_encoperand(Block * block, Value * value)
+EncOperand get_basic_encoperand(Value * value)
 {
     assert(value->variant == VALUE_CONST || value->variant == VALUE_STACKADDR || value->regalloced);
     if (value->variant == VALUE_CONST)
@@ -1051,30 +1081,7 @@ EncOperand get_basic_encoperand(Block * block, Value * value)
     else if (value->variant == VALUE_SSA || value->variant == VALUE_ARG)
         return zy_reg(value->regalloc, type_size(value->type));
     else if (value->variant == VALUE_STACKADDR)
-    {
-        int64_t found = -1;
-        for (size_t n = 0; n < array_len(block->slot_allocs, SlotAllocInfo); n++)
-        {
-            SlotAllocInfo info = block->slot_allocs[n];
-            if (info.value == value)
-            {
-                found = n;
-                break;
-            }
-        }
-        assert(found >= 0);
-        SlotAllocInfo info = block->slot_allocs[found];
-        
-        EncOperand op0 = zy_reg(info.value->regalloc, 8);
-        if (info.used)
-            return op0;
-        block->slot_allocs[found].used = 1;
-        
-        EncOperand op1 = zy_mem(REG_RBP, -value->slotinfo->offset, type_size(value->type));
-        zy_emit_2(code, INST_LEA, op0, op1);
-        
-        return op0;
-    }
+        return zy_mem(REG_RBP, -value->slotinfo->offset, type_size(value->type));
     else
         assert(("TODO", 0));
 }
@@ -1100,7 +1107,7 @@ void compile_file(void)
                     assert(op.variant == OP_KIND_VALUE);
                     
                     EncOperand op1 = zy_reg(REG_RAX, 8);
-                    EncOperand op2 = get_basic_encoperand(block, op.value);
+                    EncOperand op2 = get_basic_encoperand(op.value);
                     if (!encops_equal(op1, op2))
                         zy_emit_2(code, INST_MOV, op1, op2);
                     zy_emit_0(code, INST_RET);
@@ -1115,9 +1122,9 @@ void compile_file(void)
                     assert(statement->output);
                     assert(statement->output->regalloced);
                     
-                    EncOperand op0 = get_basic_encoperand(block, statement->output);
-                    EncOperand op1 = get_basic_encoperand(block, op1_op.value);
-                    EncOperand op2 = get_basic_encoperand(block, op2_op.value);
+                    EncOperand op0 = get_basic_encoperand(statement->output);
+                    EncOperand op1 = get_basic_encoperand(op1_op.value);
+                    EncOperand op2 = get_basic_encoperand(op2_op.value);
                     if (encops_equal(op0, op2))
                     {
                         EncOperand temp = op1;
@@ -1127,6 +1134,19 @@ void compile_file(void)
                     if (!encops_equal(op0, op1))
                         zy_emit_2(code, INST_MOV, op0, op1);
                     zy_emit_2(code, INST_ADD, op0, op2);
+                }
+                else if (strcmp(statement->statement_name, "stack_addr") == 0)
+                {
+                    Operand op1_op = statement->args[0];
+                    assert(op1_op.variant == OP_KIND_VALUE);
+                    
+                    assert(statement->output);
+                    assert(statement->output->regalloced);
+                    
+                    EncOperand op0 = get_basic_encoperand(statement->output);
+                    EncOperand op1 = get_basic_encoperand(op1_op.value);
+                    
+                    zy_emit_2(code, INST_LEA, op0, op1);
                 }
                 else
                 {
@@ -1160,8 +1180,8 @@ int main(int argc, char ** argv)
     
     parse_file(buffer);
     connect_graphs();
-    allocate_stack_slots();
     do_regalloc();
+    allocate_stack_slots();
     
     compile_file();
     
