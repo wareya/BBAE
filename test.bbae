@@ -4,5 +4,7 @@ func main returns i32
     arg argv i64
 	stack_slot a 1
 	stack_slot b 16
-    return 15i32
+    c = add a b
+    d = add c a
+    return d
 endfunc

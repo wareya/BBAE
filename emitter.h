@@ -7,6 +7,13 @@
 #include "thirdparty/zydis/Zydis.h"
 #include "thirdparty/zydis/Zydis.c"
 
+typedef ZydisEncoderOperand EncOperand;
+
+uint8_t encops_equal(EncOperand a, EncOperand b)
+{
+    return memcmp(&a, &b, sizeof(EncOperand)) == 0;
+}
+
 #include "buffers.h"
 
 enum Register {
@@ -45,6 +52,8 @@ enum Register {
     REG_XMM13,
     REG_XMM14,
     REG_XMM15,
+    
+    REG_NONE,
 };
 
 /*
@@ -392,6 +401,9 @@ int name_to_mnemonic(int name)
 
 int reg_unsized_to_sized(enum Register reg, int size)
 {
+    if (reg == REG_NONE)
+        return ZYDIS_REGISTER_NONE;
+    
     assert(size == 1 || size == 2 || size == 4 || size == 8);
     if (reg >= REG_XMM0)
         assert(size == 8);
@@ -410,7 +422,6 @@ int reg_unsized_to_sized(enum Register reg, int size)
         return ZYDIS_REGISTER_AL + (int)reg + 4;
     else
         assert(("unknown register!\n", 0));
-    
 }
 
 ZydisEncoderOperand zy_reg(enum Register reg, int size)
@@ -426,7 +437,7 @@ ZydisEncoderOperand zy_reg(enum Register reg, int size)
 }
 ZydisEncoderOperand zy_mem_full(enum Register base_reg, enum Register index_reg, int index_scale, int64_t offset, int word_size)
 {
-    assert(index_scale == 1 || index_scale == 2 || index_scale == 4 || index_scale == 8);
+    assert(index_scale == 0 || index_scale == 1 || index_scale == 2 || index_scale == 4 || index_scale == 8);
     
     ZydisEncoderOperand ret;
     memset(&ret, 0, sizeof(ret)); 
@@ -443,7 +454,7 @@ ZydisEncoderOperand zy_mem_full(enum Register base_reg, enum Register index_reg,
 }
 ZydisEncoderOperand zy_mem(enum Register base_reg, int64_t offset, int word_size)
 {
-    return zy_mem_full(base_reg, 0, 0, offset, word_size);
+    return zy_mem_full(base_reg, REG_NONE, 0, offset, word_size);
 }
 /*
 ZydisEncoderOperand zy_ptr(enum Segment segment, int64_t offset, int word_size)

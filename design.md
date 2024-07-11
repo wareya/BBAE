@@ -62,7 +62,7 @@ BBAE's grammar is designed to be easy to parse line-by-line. Newlines are signif
 
 A given token cannot be more than 4095 characters long.
 
-BBAE source files are parsed line-by-line. Lines are separated by any number of linefeeds. A linefeed is either `\n` or `\r\n`.
+BBAE source files are parsed line-by-line. Lines are separated by any number of linefeeds. A linefeed is either `\n` or `\r\n`. Files with mixed linefeed types are allowed.
 
 With only two exceptions, each line is a sequence of tokens, separated by one or more space characters, followed by an end-of-line. A space character is either '` `' (0x20) or `\t`. An end-of-line is either a linefeed, the end of the file, or the beginning of a comment. The beginning of a comment is either `//` or `#`, after which all text is ignored until a linefeed or the end of the file. Lines that contain only a comment are considered to be blank.
 
@@ -104,7 +104,7 @@ Stack slot names are visible to all blocks even if the block does not take them 
 
 Stack slot directive can only occur at the start of a function, after arguments and before any blocks or statements.
 
-The alignment of stack slots is derived from the size of the stack slot and implementation-defined. The standard alignment is the lowest power of 2 greater than or equal to the stack slot size with a maximum of 64, i.e. a slot of size 16 has 16-byte alignment but a slot of size 17 has 32-byte alignment. This can be overridden to a smaller value with the !align decorator, explained later.
+The implicit alignment of stack slots is derived from the size of the stack slot and implementation-defined. The standard alignment is the lowest power of 2 greater than or equal to the stack slot size with a maximum of 64, i.e. a slot of size 16 has 16-byte alignment but a slot of size 17 has 32-byte alignment. This can be overridden to a smaller value with the !align decorator, explained later. Because implicit alignment is implementation-defined, implementations are allowed to use different alignments than the standard alignment.
 
 Stack slots can be reordered, padded, or stored in different places (non-contiguously). For example, `b` in the following example could be padded to 16 bytes, or moved after `a`. It may also, on windows, place the `b` storage in the "shadow space" on the stack belonging to the parent function, while putting the `a` storage in the current function's own stack space, or vice versa. Stack slots may even be allocated on the heap instead of the stack.
 
@@ -190,7 +190,7 @@ Block fall-through is not allowed, even if the target block has no arguments. Th
 
 ------
 
-Blocks continue after the else case of conditional gotos. This is different from LLVM, where conditional gotos have true and false target blocks. BBAE blocks, as written in BBAE code, are a limited form of "extended" basic blocks rather than true basic blocks. However, implementations are free to split them into true basic blocks at compile time, or likewise combine them into non-limited extended basic blocks.
+Blocks continue after the else case of conditional gotos. This is different from LLVM, where conditional gotos have true and false target blocks. BBAE blocks, as written in BBAE code, are a limited form of "extended" basic blocks rather than true basic blocks. However, they are designed in a way that makes it trivial to split them into true basic blocks at compile time, enabling basic block analysis without encumbering the user with their limitations.
 
 ```rs
 func my_func
