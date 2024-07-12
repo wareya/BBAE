@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
@@ -54,8 +55,12 @@ void * zero_realloc(uint8_t * buf, size_t n)
 {
     n += ALLOC_PREFIX_SIZE;
     
-    uint8_t * new_alloc = (uint8_t *)realloc(alloc_base_loc(buf), n);
+    uint8_t * old_alloc = alloc_base_loc(buf);
+    uint8_t * new_alloc = (uint8_t *)realloc(old_alloc, n);
     assert(new_alloc);
+    
+    if (alloc_list == old_alloc)
+        alloc_list = new_alloc;
     
     uint64_t prev_n = (*alloc_get_size(new_alloc)) + ALLOC_PREFIX_SIZE;
     if (n > prev_n)
@@ -66,6 +71,7 @@ void * zero_realloc(uint8_t * buf, size_t n)
     uint8_t * prev_alloc = *alloc_get_prev_ptr(new_alloc);
     if (prev_alloc)
         *alloc_get_next_ptr(prev_alloc) = new_alloc;
+    
     uint8_t * next_alloc = *alloc_get_next_ptr(new_alloc);
     if (next_alloc)
         *alloc_get_prev_ptr(next_alloc) = new_alloc;
@@ -94,7 +100,7 @@ void array_erase_impl(uint8_t ** array, size_t item_size, size_t index)
 {
     size_t size = *alloc_get_size(alloc_base_loc(*array));
     size_t start = item_size * index;
-    memmove(*array + start, *array + start + item_size, size - start);
+    memmove(*array + start, *array + start + item_size, size - start - item_size);
     
     *array = zero_realloc(*array, size - item_size);
 }
@@ -114,6 +120,30 @@ void array_insert_impl(uint8_t ** array, size_t item_size, size_t index)
     (array_insert_impl((uint8_t **)(&(ARRAY)), sizeof(TYPE), (INDEX)), \
      ((TYPE *)(ARRAY))[(INDEX)] = (VAL) \
     )
+
+size_t ptr_array_find_impl(void ** array, void * ptr)
+{
+    for (size_t i = 0; i < array_len(array, void *); i++)
+    {
+        if (array[i] == ptr)
+            return (ptrdiff_t)i;
+    }
+    return -1;
+}
+
+#define ptr_array_find(ARRAY, VAL) (ptr_array_find_impl((void*)(ARRAY), (VAL)))
+
+size_t array_find_impl(void * array, size_t item_size, void * ptr)
+{
+    for (size_t i = 0; i < array_len(array, void *); i++)
+    {
+        if (memcmp((uint8_t *)array + i*item_size, ptr, item_size) == 0)
+            return (ptrdiff_t)i;
+    }
+    return -1;
+}
+
+#define array_find(ARRAY, TYPE, VAL) (array_find_impl((void*)(ARRAY), sizeof(TYPE), &(VAL)))
 
 // Returns a pointer to a buffer with len+1 bytes reserved, and at least one null terminator.
 char * strcpy_len(const char * str, size_t len)

@@ -1,28 +1,13 @@
 
 func main returns i32
-    arg argc i64
-    arg argv i64
+    arg var_a i32
+    arg var_b i32
     stack_slot a 1
     stack_slot b 16
-    c = add a b
-    d = add c a
-    e = add d c
-    f = add d e
-    g = add d f
-    h = add d g
-    i = add d g
-    j = add d g
-    k = add d g
-    l = add d g
-    m = add d g
-    n = add d g
-    o = add d g
-    p = add d g
-    q = add d g
-    r = add d g
-    s = add d g
-    t = add d g
-    u = add d g
-    v = add d g
-    return g
+    c = add var_a var_b
+    d = add 5i32 c
+    e = add c 2i32
+    f = add e d
+    g = add f -1i32
+    return e
 endfunc
