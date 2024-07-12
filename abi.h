@@ -1,5 +1,5 @@
-#ifndef _BBAE_ABI_H
-#define _BBAE_ABI_H
+#ifndef BBAE_ABI_H
+#define BBAE_ABI_H
 
 #include <stdint.h>
 
@@ -213,4 +213,4 @@ uint64_t abi_get_clobbered_regs(void)
     }
 }
 
-#endif // _BBAE_ABI_H
+#endif // BBAE_ABI_H

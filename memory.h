@@ -131,7 +131,7 @@ size_t ptr_array_find_impl(void ** array, void * ptr)
     return -1;
 }
 
-#define ptr_array_find(ARRAY, VAL) (ptr_array_find_impl((void*)(ARRAY), (VAL)))
+#define ptr_array_find(ARRAY, VAL) (ptr_array_find_impl((void**)(ARRAY), (VAL)))
 
 size_t array_find_impl(void * array, size_t item_size, void * ptr)
 {
