@@ -161,13 +161,21 @@ typedef struct _Value {
     struct _StackSlot * slotinfo;
     
     struct _Statement ** edges_out;
-    struct _Statement * last_edge;
+    //struct _Statement * last_edge;
+    
+    // number of outward edges that have been used
+    // used during register allocation to estimate live range
+    size_t alloced_use_count;
     
     uint8_t regalloced; // 1 if regalloced already, 0 otherwise
     // if highest bit set: on stack, lower bits are stack slot id
     // else: register id from abi.h
     // if -1: no allocation, literal
     uint64_t regalloc;
+    // regalloced and regalloc are set once and never changed
+    
+    struct _StackSlot * spilled; // set if currently spilled, null otherwise
+    // set once when spilled. when unspilling, Value needs to be duplicated, modified, and injected into descendants.
 } Value;
 
 enum BBAE_OP_VARIANT {
@@ -183,8 +191,6 @@ typedef struct _Operand {
     char * text;
 } Operand;
 
-uint64_t id_counter = 1;
-
 struct _Block;
 typedef struct _Statement {
     char * output_name; // if null, instruction. else, operation.
@@ -192,7 +198,8 @@ typedef struct _Statement {
     char * statement_name;
     struct _Block * block;
     
-    uint64_t id;
+    uint64_t num; // only used during register allocation; zero until then
+    
     // array
     Operand * args;
     // arrays of secondary args -- ONLY for if and if-else.
@@ -209,7 +216,6 @@ Statement * new_statement(void)
     statement->args_a = (Operand *)zero_alloc(0);
     statement->args_b = (Operand *)zero_alloc(0);
     statement->edges_in = (Value **)zero_alloc(0);
-    statement->id = id_counter++;
     return statement;
 }
 
@@ -398,7 +404,7 @@ Block * current_block = 0;
 Value * make_value(Type type)
 {
     Value * ret = (Value *)zero_alloc(sizeof(Value));
-    ret->edges_out = (Statement **)zero_alloc(sizeof(Statement *));
+    ret->edges_out = (Statement **)zero_alloc(0);
     ret->type = type;
     return ret;
 }
@@ -566,12 +572,16 @@ uint8_t op_is_v_v_v(char * opname)
     return 0;
 }
 
-Operand parse_op_val(char ** cursor)
+Operand new_op_val(Value * val)
 {
     Operand op;
     op.variant = OP_KIND_VALUE;
-    op.value = parse_value(find_next_token(cursor));
+    op.value = val;
     return op;
+}
+Operand parse_op_val(char ** cursor)
+{
+    return new_op_val(parse_value(find_next_token(cursor)));
 }
     
 Statement * parse_statement(char ** cursor)
@@ -640,7 +650,7 @@ Statement * parse_statement(char ** cursor)
 
 uint64_t temp_ctr = 0;
 
-char * make_temp_var(void)
+char * make_temp_var_name(void)
 {
     size_t len = snprintf(0, 0, "__bbae_temp_%llu", temp_ctr);
     char * str = zero_alloc(len + 1);
@@ -684,7 +694,7 @@ void fix_last_statement_stack_slot_addr_usage(void)
             if (value->variant == VALUE_STACKADDR)
             {
                 Statement * s = new_statement();
-                char * str = make_temp_var();
+                char * str = make_temp_var_name();
                 s->output_name = str;
                 s->statement_name = strcpy_z("stack_addr");
                 
@@ -698,9 +708,11 @@ void fix_last_statement_stack_slot_addr_usage(void)
                 statement->args[i] = op;
                 
                 // swap IDs
+                /*
                 uint64_t temp_id = s->id;
                 s->id = statement->id;
                 statement->id = temp_id;
+                */
                 
                 // swap locations
                 current_block->statements[end - 1] = s;
@@ -711,6 +723,16 @@ void fix_last_statement_stack_slot_addr_usage(void)
             }
         }
     }
+}
+
+Value * add_stack_slot(Function * func, char * name, uint64_t size)
+{            
+    StackSlot _slot = {name, size, 0, 0};
+    StackSlot * slot = (StackSlot *)zero_alloc(sizeof(StackSlot));
+    *slot = _slot;
+    Value * val = make_stackslot_value(slot);
+    array_push(func->stack_slots, Value *, val);
+    return val;
 }
 
 int parse_file(char * cursor)
@@ -802,13 +824,7 @@ int parse_file(char * cursor)
                 token = find_next_token(&cursor);
                 uint64_t size = parse_int_bare(token);
                 
-                StackSlot _slot = {name, size, 0, 0};
-                StackSlot * slot = (StackSlot *)zero_alloc(sizeof(StackSlot));
-                *slot = _slot;
-                
-                Value * val = make_stackslot_value(slot);
-                
-                array_push(current_func.stack_slots, Value *, val);
+                add_stack_slot(&current_func, name, size);
             }
             else
             {
@@ -867,16 +883,17 @@ void connect_statement_to_operand(Statement * statement, Operand op)
         
         if (val->variant == VALUE_ARG || val->variant == VALUE_SSA || val->variant == VALUE_STACKADDR)
         {
+            /*
             if (val->slotinfo)
                 printf("connecting %s (%p) to statement %llu\n", val->slotinfo->name, (void *)val, statement->id);
             else if (val->ssa)
                 printf("connecting %s to statement %llu\n", val->ssa->output_name, statement->id);
-            
+            */
             array_push(statement->edges_in, Value *, val);
             array_push(val->edges_out, Statement *, statement);
             
-            val->last_edge = statement;
-            printf("%llu ???\n", val->last_edge->id);
+            //val->last_edge = statement;
+            //printf("%llu ???\n", val->last_edge->id);
             //if (!val->last_edge || val->last_edge->id < statement->id)
             //    val->last_edge = statement;
         }
@@ -958,7 +975,7 @@ void allocate_stack_slots(void)
     }
 }
 
-int64_t first_empty(uint8_t * array, size_t len)
+int64_t first_empty(Value ** array, size_t len)
 {
     int64_t found = -1;
     for (size_t n = 0; n < len; n++)
@@ -974,13 +991,13 @@ int64_t first_empty(uint8_t * array, size_t len)
 
 void do_regalloc_block(Function * func, Block * block)
 {
-    uint8_t reg_int_alloced[16];
-    uint8_t reg_float_alloced[16];
+    Value * reg_int_alloced[16];
+    Value * reg_float_alloced[16];
     
-    memset(reg_int_alloced, 0, 16 * sizeof(uint8_t));
-    reg_int_alloced[REG_RSP] = 1;
-    reg_int_alloced[REG_RBP] = 1;
-    memset(reg_float_alloced, 0, 16 * sizeof(uint8_t));
+    memset(reg_int_alloced, 0, 16 * sizeof(Value *));
+    reg_int_alloced[REG_RSP] = (Value *)-1;
+    reg_int_alloced[REG_RBP] = (Value *)-1;
+    memset(reg_float_alloced, 0, 16 * sizeof(Value *));
     
     if (block == func->entry_block)
     {
@@ -996,9 +1013,9 @@ void do_regalloc_block(Function * func, Block * block)
                 int64_t where = abi_get_next_arg_basic(type_is_float(value->type));
                 assert(("arg reg spill not yet supported", where >= 0));
                 if (where >= _ABI_XMM0)
-                    reg_float_alloced[where - _ABI_XMM0] = 1;
+                    reg_float_alloced[where - _ABI_XMM0] = value;
                 else 
-                    reg_int_alloced[where] = 1;
+                    reg_int_alloced[where] = value;
                 
                 printf("allocated register %lld to arg %s\n", where, value->arg);
                 
@@ -1014,25 +1031,75 @@ void do_regalloc_block(Function * func, Block * block)
         // TODO: allocate based on output allocation of entry blocks
         assert(("TODO later block regalloc", 0));
     }
+    
+    // give statements numbers for regalloc reasons
+    for (size_t i = 0; i < array_len(block->statements, Statement *); i++)
+        block->statements[i]->num = i;
+    
     for (size_t i = 0; i < array_len(block->statements, Statement *); i++)
     {
         Statement * statement = block->statements[i];
+        
+        // free no-longer-used registers, except for RSP/RBP
+        // commented out to implement spilling
+        /*
+        for (size_t n = 0; n < 16; n++)
+        {
+            if (reg_int_alloced[n] && reg_int_alloced[n] != (Value *)-1 && n != REG_RSP && n != REG_RBP)
+            {
+                Value * value = reg_int_alloced[n];
+                assert(value->alloced_use_count <= array_len(value->edges_out, Value *));
+                if (value->alloced_use_count == array_len(value->edges_out, Value *))
+                {
+                    printf("freeing int register %llu... %llu vs %llu\n", n, value->alloced_use_count, array_len(value->edges_out, Value *));
+                    reg_int_alloced[n] = 0;
+                }
+            }
+            if (reg_float_alloced[n] && reg_float_alloced[n] != (Value *)-1)
+            {
+                Value * value = reg_float_alloced[n];
+                assert(value->alloced_use_count <= array_len(value->edges_out, Value *));
+                if (value->alloced_use_count == array_len(value->edges_out, Value *))
+                {
+                    printf("freeing float register %llu...\n", n);
+                    reg_float_alloced[n] = 0;
+                }
+            }
+        }
+        */
+        
+        for (size_t j = 0; j < array_len(statement->args, Operand); j++)
+        {
+            Value * arg = statement->args[j].value;
+            if (arg)
+            {
+                arg->alloced_use_count += 1;
+                assert(arg->alloced_use_count <= array_len(arg->edges_out, Value *));
+            }
+        }
         
         if (!statement->output)
             continue;
         
         assert(("TODO", type_is_int(statement->output->type)));
         
+        // reuse an operand register if possible
         for (size_t j = 0; j < array_len(statement->args, Operand); j++)
         {
             Value * arg = statement->args[j].value;
-            printf("qq %llu %llu %d\n", arg->last_edge->id, statement->id, arg->regalloced);
             if (arg && arg->regalloced
-                && arg->last_edge && arg->last_edge->id == statement->id)
+                && arg->alloced_use_count == array_len(arg->edges_out, Value *))
             {
-                printf("reusing operand %lld (ptr %p) in statement id %llu...\n", j, (void *)arg, statement->id);
                 statement->output->regalloc = arg->regalloc;
                 statement->output->regalloced = 1;
+                
+                int64_t where = arg->regalloc;
+                
+                if (where >= _ABI_XMM0)
+                    reg_float_alloced[where - _ABI_XMM0] = statement->output;
+                else 
+                    reg_int_alloced[where] = statement->output;
+                
                 goto early_cont;
             }
         }
@@ -1044,14 +1111,77 @@ void do_regalloc_block(Function * func, Block * block)
         
         int64_t where = first_empty(reg_int_alloced, 16);
         if (where < 0)
-            assert(("TODO: spilling not yet supported", 0));
+        {
+            // pick the register whose next use is the furthest into the future
+            int64_t to_spill = -1;
+            uint64_t to_spill_num = 0;
+            for (size_t n = 0; n < 16; n++)
+            {
+                if (!(reg_int_alloced[n] && reg_int_alloced[n] != (Value *)-1 && n != REG_RSP && n != REG_RBP))
+                    continue;
+                
+                Value * candidate = reg_int_alloced[n];
+                
+                // check if spill candidate is an input. skip if it is.
+                for (size_t j = 0; j < array_len(statement->args, Operand); j++)
+                {
+                    if (statement->args[j].value == candidate)
+                        goto force_skip;
+                }
+                if (0)
+                {
+                    force_skip:
+                    continue;
+                }
+                
+                uint64_t candidate_last_num = 0;
+                for (size_t i = 0; i < array_len(candidate->edges_out, Value *); i++)
+                {
+                    uint64_t temp = candidate->edges_out[i]->num;
+                    candidate_last_num = temp > candidate_last_num ? temp : candidate_last_num;
+                }
+                
+                if (to_spill == -1 || candidate_last_num > to_spill_num)
+                {
+                    to_spill = n;
+                    to_spill_num = candidate_last_num;
+                    continue;
+                }
+            }
+            assert(to_spill >= 0);
+            
+            printf("want to spill reg %llu\n", to_spill);
+            Value * spillee = reg_int_alloced[to_spill];
+            
+            assert(spillee->regalloced);
+            assert(spillee->regalloc >= 0);
+            assert(!spillee->spilled);
+            
+            // spill statements don't need to be numbered because they're never an outward edge of an SSA value
+            
+            Value * spill_slot = add_stack_slot(func, make_temp_var_name(), type_size(statement->output->type));
+            
+            spillee->spilled = spill_slot->slotinfo;
+            
+            Statement * inst = new_statement();
+            inst->statement_name = strcpy_z("store");
+            array_push(inst->args, Operand, new_op_val(spill_slot));
+            array_push(inst->args, Operand, new_op_val(spillee));
+            
+            array_insert(block->statements, Statement *, i, inst);
+            i += 1;
+            
+            where = spillee->regalloc;
+            
+            // TODO: figure out unspilling
+        }
         
         if (where >= _ABI_XMM0)
-            reg_float_alloced[where - _ABI_XMM0] = 1;
+            reg_float_alloced[where - _ABI_XMM0] = statement->output;
         else 
-            reg_int_alloced[where] = 1;
+            reg_int_alloced[where] = statement->output;
         
-        printf("allocating %lld to statement %llu (assigns to %s)\n", where, statement->id, statement->output_name);
+        //printf("allocating %lld to statement %llu (assigns to %s)\n", where, statement->id, statement->output_name);
         
         statement->output->regalloc = where;
         statement->output->regalloced = 1;
@@ -1148,6 +1278,18 @@ void compile_file(void)
                     
                     zy_emit_2(code, INST_LEA, op0, op1);
                 }
+                else if (strcmp(statement->statement_name, "store") == 0)
+                {
+                    Operand op1_op = statement->args[0];
+                    assert(op1_op.variant == OP_KIND_VALUE);
+                    Operand op2_op = statement->args[1];
+                    assert(op2_op.variant == OP_KIND_VALUE);
+                    
+                    EncOperand op1 = get_basic_encoperand(op1_op.value);
+                    EncOperand op2 = get_basic_encoperand(op2_op.value);
+                    
+                    zy_emit_2(code, INST_MOV, op1, op2);
+                }
                 else
                 {
                     printf("culprit: %s\n", statement->statement_name);
@@ -1160,6 +1302,29 @@ void compile_file(void)
 
 int main(int argc, char ** argv)
 {
+    // array insert/erase test code
+    /*
+    uint8_t * test_array = (uint8_t *)zero_alloc(0);
+    
+    array_push(test_array, uint8_t, 0);
+    array_push(test_array, uint8_t, 1);
+    array_push(test_array, uint8_t, 2);
+    array_push(test_array, uint8_t, 3);
+    array_push(test_array, uint8_t, 4);
+    array_push(test_array, uint8_t, 5);
+    
+    array_insert(test_array, uint8_t, 2, 121);
+    
+    for (size_t i = 0; i < array_len(test_array, uint8_t); i++)
+        printf("%d...%d\n", i, test_array[i]);
+    
+    array_erase(test_array, uint8_t, 5);
+    array_erase(test_array, uint8_t, 0);
+    
+    for (size_t i = 0; i < array_len(test_array, uint8_t); i++)
+        printf("%d...%d\n", i, test_array[i]);
+    */
+   
     if (argc < 2)
         return puts("please provide file"), 0;
     

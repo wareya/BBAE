@@ -90,6 +90,30 @@ void free_all_compiler_allocs(void)
      ((TYPE *)(ARRAY))[array_len((uint8_t *)(ARRAY), TYPE) - 1] = (VAL) \
     )
 
+void array_erase_impl(uint8_t ** array, size_t item_size, size_t index)
+{
+    size_t size = *alloc_get_size(alloc_base_loc(*array));
+    size_t start = item_size * index;
+    memmove(*array + start, *array + start + item_size, size - start);
+    
+    *array = zero_realloc(*array, size - item_size);
+}
+#define array_erase(ARRAY, TYPE, INDEX) \
+    (array_erase_impl((uint8_t **)(&(ARRAY)), sizeof(TYPE), INDEX))
+
+void array_insert_impl(uint8_t ** array, size_t item_size, size_t index)
+{
+    size_t size = *alloc_get_size(alloc_base_loc(*array)) + item_size;
+    *array = zero_realloc(*array, size);
+    
+    size_t start = item_size * index;
+    memmove(*array + start + item_size, *array + start, size - start - item_size);
+}
+
+#define array_insert(ARRAY, TYPE, INDEX, VAL) \
+    (array_insert_impl((uint8_t **)(&(ARRAY)), sizeof(TYPE), (INDEX)), \
+     ((TYPE *)(ARRAY))[(INDEX)] = (VAL) \
+    )
 
 // Returns a pointer to a buffer with len+1 bytes reserved, and at least one null terminator.
 char * strcpy_len(const char * str, size_t len)

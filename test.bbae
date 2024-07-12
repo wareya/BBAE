@@ -6,5 +6,23 @@ func main returns i32
     stack_slot b 16
     c = add a b
     d = add c a
-    return d
+    e = add d c
+    f = add d e
+    g = add d f
+    h = add d g
+    i = add d g
+    j = add d g
+    k = add d g
+    l = add d g
+    m = add d g
+    n = add d g
+    o = add d g
+    p = add d g
+    q = add d g
+    r = add d g
+    s = add d g
+    t = add d g
+    u = add d g
+    v = add d g
+    return g
 endfunc
