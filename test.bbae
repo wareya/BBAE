@@ -10,7 +10,5 @@ func main returns i32
     f = add e d
     g = add f -1i32
     h = add var_a var_b
-    i = add c d
-    j = add e f
     return e
 endfunc

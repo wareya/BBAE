@@ -11,8 +11,6 @@
 #include "memory.h"
 #include "compiler_common.h"
 
-#define BBAE_DEBUG_SPILLS
-
 #define BBAE_REGISTER_CAPACITY (16)
 #ifdef BBAE_DEBUG_SPILLS
 #define BBAE_REGISTER_COUNT (3)
@@ -255,12 +253,9 @@ static void do_regalloc_block(Function * func, Block * block)
                     assert(unspill->output);
                     assert(unspill->output->edges_out);
                     
-                    // there is an edges_out entry for each edges_in entry, even if two instructions are connected twice
+                    // there is an args entry for each edges_in entry, even if two instructions are connected twice
                     // e.g. a = load ...; c = add a a
                     // so we don't need to loop here
-                    
-                    //ptrdiff_t in_index = ptr_array_find(st->edges_in, spill_candidate);
-                    //st->edges_in[in_index] = unspill->output;
                     
                     Operand temp_op = new_op_val(spillee);
                     ptrdiff_t in_arg_index = array_find(st->args, Operand, temp_op);

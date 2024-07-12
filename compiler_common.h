@@ -251,8 +251,6 @@ typedef struct _Statement {
     // arrays of secondary args -- ONLY for if and if-else.
     Operand * args_a;
     Operand * args_b;
-    // array
-    //Value ** edges_in;
 } Statement;
 
 static Statement * new_statement(void)
@@ -261,7 +259,6 @@ static Statement * new_statement(void)
     statement->args = (Operand *)zero_alloc(0);
     statement->args_a = (Operand *)zero_alloc(0);
     statement->args_b = (Operand *)zero_alloc(0);
-    //statement->edges_in = (Value **)zero_alloc(0);
     return statement;
 }
 
@@ -276,7 +273,7 @@ typedef struct _Block {
     // block args (array)
     Value ** args;
     // statements that enter into this block (array)
-    //Statement ** edges_in;
+    Statement ** edges_in;
     // statements that transfer control flow away from themselves
     Statement ** edges_out;
     // statements within the block (array)
@@ -287,7 +284,7 @@ static Block * new_block(void)
 {
     Block * block = zero_alloc(sizeof(Block));
     block->args = (Value **)zero_alloc(0);
-    //block->edges_in = (Statement **)zero_alloc(0);
+    block->edges_in = (Statement **)zero_alloc(0);
     block->edges_out = (Statement **)zero_alloc(0);
     block->statements = (Statement **)zero_alloc(0);
     return block;
@@ -469,21 +466,7 @@ static void connect_statement_to_operand(Statement * statement, Operand op)
         Value * val = op.value;
         
         if (val->variant == VALUE_ARG || val->variant == VALUE_SSA || val->variant == VALUE_STACKADDR)
-        {
-            /*
-            if (val->slotinfo)
-                printf("connecting %s (%p) to statement %llu\n", val->slotinfo->name, (void *)val, statement->id);
-            else if (val->ssa)
-                printf("connecting %s to statement %llu\n", val->ssa->output_name, statement->id);
-            */
-            //array_push(statement->edges_in, Value *, val);
             array_push(val->edges_out, Statement *, statement);
-            
-            //val->last_edge = statement;
-            //printf("%llu ???\n", val->last_edge->id);
-            //if (!val->last_edge || val->last_edge->id < statement->id)
-            //    val->last_edge = statement;
-        }
     }
 }
 
