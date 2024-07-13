@@ -14,7 +14,7 @@
 // thrashes any previously-returned token. make copies!
 static char token[4096];
 static size_t token_len;
-static char * find_next_token(char ** b)
+static char * find_next_token(const char ** b)
 {
     memset(token, 0, 4096);
     
@@ -45,7 +45,7 @@ static char * find_next_token(char ** b)
 }
 // find the next token even if it's on a different line
 // thrashes any previously-returned token
-static char * find_next_token_anywhere(char ** b)
+static char * find_next_token_anywhere(const char ** b)
 {
     while ((is_newline(**b) || is_space(**b)) && **b != 0)
     {
@@ -60,7 +60,7 @@ static char * find_next_token_anywhere(char ** b)
     return find_next_token(b);
 }
 // TODO: emit a warning or error if other tokens are encountered
-static void find_end_of_line(char ** b)
+static void find_end_of_line(const char ** b)
 {
     while (!is_newline(**b) && **b != 0)
         *b += 1;
@@ -347,7 +347,7 @@ static uint64_t parse_int_nonbare(const char * n)
     return ret;
 }
 
-static Type parse_type(char ** b)
+static Type parse_type(const char ** b)
 {
     Type type;
     memset(&type, 0, sizeof(Type));
