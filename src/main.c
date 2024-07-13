@@ -52,14 +52,8 @@ int main(int argc, char ** argv)
     fclose(f);
     
     Program * program = parse(buffer);
-    
-    // parsing and configuration
-    // TODO: optimization goes here
-    
-    // lowering
-    do_regalloc(program);
-    allocate_stack_slots(program);
-    byte_buffer * code = compile_file(program);
+    do_optimization(program);
+    byte_buffer * code = do_lowering(program);
     
     for (size_t i = 0; i < code->len; i++)
         printf("%02X ", code->data[i]);

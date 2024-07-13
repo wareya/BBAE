@@ -11,8 +11,20 @@ static Program * parse(const char * buffer)
 {
     Program * program = parse_file(buffer);
     connect_graphs(program);
-    
     return program;
+}
+
+static void do_optimization(Program * program)
+{
+    // TODO
+}
+
+static byte_buffer * do_lowering(Program * program)
+{
+    do_regalloc(program);
+    allocate_stack_slots(program);
+    byte_buffer * code = compile_file(program);
+    return code;
 }
 
 #endif // BBAE_API
