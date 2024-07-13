@@ -52,7 +52,7 @@ static Value * parse_value(Program * program, char * token)
         {
             //uint8_t suffix_len = str_ends_with(token, "i8") ? 2 : 3;
             uint64_t n = parse_int_nonbare(token);
-            printf("parsed int... %lld\n", n);
+            printf("parsed int... %zd\n", n);
             ret->variant = VALUE_CONST;
             if (str_ends_with(token, "i8"))
                 ret->type = basic_type(TYPE_I8);

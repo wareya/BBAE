@@ -60,7 +60,7 @@ static void do_regalloc_block(Function * func, Block * block)
                 else 
                     reg_int_alloced[where] = value;
                 
-                printf("allocated register %lld to arg %s\n", where, value->arg);
+                printf("allocated register %zd to arg %s\n", where, value->arg);
                 
                 value->regalloc = where;
                 value->regalloced = 1;
@@ -94,7 +94,7 @@ static void do_regalloc_block(Function * func, Block * block)
                 assert(value->alloced_use_count <= array_len(value->edges_out, Value *));
                 if (value->alloced_use_count == array_len(value->edges_out, Value *))
                 {
-                    printf("freeing int register %llu... %llu vs %llu\n", n, value->alloced_use_count, array_len(value->edges_out, Value *));
+                    printf("freeing int register %zu... %zu vs %zu\n", n, value->alloced_use_count, array_len(value->edges_out, Value *));
                     reg_int_alloced[n] = 0;
                 }
             }
@@ -104,7 +104,7 @@ static void do_regalloc_block(Function * func, Block * block)
                 assert(value->alloced_use_count <= array_len(value->edges_out, Value *));
                 if (value->alloced_use_count == array_len(value->edges_out, Value *))
                 {
-                    printf("freeing float register %llu...\n", n);
+                    printf("freeing float register %zu...\n", n);
                     reg_float_alloced[n] = 0;
                 }
             }
@@ -199,7 +199,7 @@ static void do_regalloc_block(Function * func, Block * block)
             assert(to_spill >= 0);
             
             Value * spillee = reg_int_alloced[to_spill];
-            printf("want to spill reg %llu (%p)\n", to_spill, (void *)spillee);
+            printf("want to spill reg %zu (%p)\n", to_spill, (void *)spillee);
             
             assert(spillee->regalloced);
             assert(spillee->regalloc >= 0);
@@ -225,7 +225,7 @@ static void do_regalloc_block(Function * func, Block * block)
             for (size_t j = 0; j < array_len(spillee->edges_out, Statement *); j++)
             {
                 Statement * st = spillee->edges_out[j];
-                //printf("checking for unspilling... %llu vs %llu\n", st->num, to_spill_num);
+                //printf("checking for unspilling... %zu vs %zu\n", st->num, to_spill_num);
                 if (st->num > to_spill_num)
                 {
                     if (first)
@@ -274,7 +274,7 @@ static void do_regalloc_block(Function * func, Block * block)
         else 
             reg_int_alloced[where] = statement->output;
         
-        //printf("allocating %lld to statement %llu (assigns to %s)\n", where, statement->id, statement->output_name);
+        //printf("allocating %zd to statement %zu (assigns to %s)\n", where, statement->id, statement->output_name);
         
         statement->output->regalloc = where;
         statement->output->regalloced = 1;

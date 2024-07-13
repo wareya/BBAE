@@ -34,8 +34,6 @@ void allocate_stack_slots(Program * program)
     }
 }
 
-byte_buffer * code;
-
 EncOperand get_basic_encoperand(Value * value)
 {
     assert(value->variant == VALUE_CONST || value->variant == VALUE_STACKADDR || value->regalloced);
@@ -52,9 +50,9 @@ EncOperand get_basic_encoperand(Value * value)
     }
 }
 
-void compile_file(Program * program)
+byte_buffer * compile_file(Program * program)
 {
-    code = (byte_buffer *)malloc(sizeof(byte_buffer));
+    byte_buffer * code = (byte_buffer *)malloc(sizeof(byte_buffer));
     memset(code, 0, sizeof(byte_buffer));
     
     for (size_t f = 0; f < array_len(program->functions, Function *); f++)
@@ -147,9 +145,11 @@ void compile_file(Program * program)
             }
         }
     }
+    
+    return code;
 }
 
-void print_asm(void)
+void print_asm(byte_buffer * code)
 {
     //FILE * logfile = 0;
     
@@ -221,7 +221,7 @@ int main(int argc, char ** argv)
     // lowering
     do_regalloc(program);
     allocate_stack_slots(program);
-    compile_file(program);
+    byte_buffer * code = compile_file(program);
     
     for (size_t i = 0; i < code->len; i++)
         printf("%02X ", code->data[i]);
@@ -239,10 +239,12 @@ int main(int argc, char ** argv)
     
     printf("output: %d (0x%X)\n", asdf, asdf);
     
-    print_asm();
+    print_asm(code);
     
     free_as_executable(jit_code);
     free_all_compiler_allocs();
+    
+    free(buffer);
     
     return 0;
 }

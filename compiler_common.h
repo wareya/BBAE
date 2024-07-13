@@ -438,9 +438,9 @@ static Operand new_op_val(Value * val)
 static uint64_t temp_ctr = 0;
 static char * make_temp_var_name(void)
 {
-    size_t len = snprintf(0, 0, "__bbae_temp_%llu", temp_ctr);
+    size_t len = snprintf(0, 0, "__bbae_temp_%zu", temp_ctr);
     char * str = zero_alloc(len + 1);
-    snprintf(str, len, "__bbae_temp_%llu", temp_ctr);
+    snprintf(str, len, "__bbae_temp_%zu", temp_ctr);
     return str;
 }
 
