@@ -4,11 +4,11 @@ func main returns i32
     arg var_b i32
     stack_slot a 1
     stack_slot b 16
-    c = add var_a var_b
-    d = add 5i32 c
-    e = add c 2i32
-    f = add e d
-    g = add f -1i32
+    c = add var_a var_b # 10
+    d = add 5i32 c # 15
+    e = add d 2i32 # 17
+    f = add e d # 32
+    g = add f -1i32 # 31
     h = add var_a var_b
-    return e
+    return g
 endfunc

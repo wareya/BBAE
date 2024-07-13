@@ -11,6 +11,7 @@
 #include "abi.h"
 #include "compiler_common.h"
 #include "regalloc_x86.h"
+#include "jitify.h"
 
 enum BBAE_PARSER_STATE {
     PARSER_STATE_ROOT,
@@ -20,12 +21,12 @@ enum BBAE_PARSER_STATE {
     PARSER_STATE_BLOCK,
 };
 
-Program program;
-Function current_func;
-Block * current_block = 0;
-
-Value * parse_value(char * token)
+Value * parse_value(Program * program, char * token)
 {
+    Function * func = program->current_func;
+    Block * block = program->current_block;
+    assert(func);
+    assert(block);
     assert(token);
     // tokens
     assert(strcmp(token, "=") != 0);
@@ -61,6 +62,7 @@ Value * parse_value(char * token)
         {
             //uint8_t suffix_len = str_ends_with(token, "i8") ? 2 : 3;
             uint64_t n = parse_int_nonbare(token);
+            printf("parsed int... %lld\n", n);
             ret->variant = VALUE_CONST;
             if (str_ends_with(token, "i8"))
                 ret->type = basic_type(TYPE_I8);
@@ -84,10 +86,10 @@ Value * parse_value(char * token)
     else
     {
         Value ** args = 0;
-        if (current_block == current_func.entry_block)
-            args = current_func.args;
+        if (block == func->entry_block)
+            args = func->args;
         else
-            args = current_block->args;
+            args = block->args;
         
         for (size_t i = 0; i < array_len(args, Value *); i++)
         {
@@ -97,18 +99,18 @@ Value * parse_value(char * token)
                 return val;
         }
         
-        for (size_t i = 0; i < array_len(current_func.stack_slots, Value *); i++)
+        for (size_t i = 0; i < array_len(func->stack_slots, Value *); i++)
         {
-            Value * value = current_func.stack_slots[i];
+            Value * value = func->stack_slots[i];
             assert(value->variant == VALUE_STACKADDR);
             StackSlot * slot = value->slotinfo;
             if (strcmp(slot->name, token) == 0)
                 return value;
         }
         
-        for (size_t i = 0; i < array_len(current_block->statements, Statement *); i++)
+        for (size_t i = 0; i < array_len(block->statements, Statement *); i++)
         {
-            Statement * statement = current_block->statements[i];
+            Statement * statement = block->statements[i];
             if (statement->output_name && strcmp(statement->output_name, token) == 0)
             {
                 if (!statement->output)
@@ -125,9 +127,9 @@ Value * parse_value(char * token)
     }
 }
 
-Operand parse_op_val(char ** cursor)
+Operand parse_op_val(Program * program, char ** cursor)
 {
-    return new_op_val(parse_value(find_next_token(cursor)));
+    return new_op_val(parse_value(program, find_next_token(cursor)));
 }
 
 
@@ -176,7 +178,7 @@ uint8_t op_is_v_v_v(char * opname)
     return 0;
 }
 
-Statement * parse_statement(char ** cursor)
+Statement * parse_statement(Program * program, char ** cursor)
 {
     Statement * ret = new_statement();
     char * token = strcpy_z(find_next_token(cursor));
@@ -194,8 +196,8 @@ Statement * parse_statement(char ** cursor)
             char * op1_text = strcpy_z(find_next_token(cursor));
             char * op2_text = strcpy_z(find_next_token(cursor));
             
-            Operand op1 = parse_op_val(&op1_text);
-            Operand op2 = parse_op_val(&op2_text);
+            Operand op1 = parse_op_val(program, &op1_text);
+            Operand op2 = parse_op_val(program, &op2_text);
             array_push(ret->args, Operand, op1);
             array_push(ret->args, Operand, op2);
             
@@ -204,7 +206,7 @@ Statement * parse_statement(char ** cursor)
         else if (op_is_v(ret->statement_name))
         {
             char * op1_text = strcpy_z(find_next_token(cursor));
-            Operand op1 = parse_op_val(&op1_text);
+            Operand op1 = parse_op_val(program, &op1_text);
             array_push(ret->args, Operand, op1);
             return ret;
         }
@@ -223,7 +225,7 @@ Statement * parse_statement(char ** cursor)
         {
             if (token2)
             {
-                Operand op = new_op_val(parse_value(find_next_token(cursor)));
+                Operand op = new_op_val(parse_value(program, find_next_token(cursor)));
                 array_push(ret->args, Operand, op);
             }
         }
@@ -238,12 +240,12 @@ Statement * parse_statement(char ** cursor)
     return ret;
 }
 
-void fix_last_statement_stack_slot_addr_usage(void)
+void fix_last_statement_stack_slot_addr_usage(Block * block)
 {
-    size_t end = array_len(current_block->statements, Statement *);
+    size_t end = array_len(block->statements, Statement *);
     if (end == 0)
         return;
-    Statement * statement = current_block->statements[end - 1];
+    Statement * statement = block->statements[end - 1];
     // pre-process any stack slot address arguments into explicit address access instructions
     if (strcmp(statement->statement_name, "load") != 0 &&
         strcmp(statement->statement_name, "store") != 0 &&
@@ -276,23 +278,24 @@ void fix_last_statement_stack_slot_addr_usage(void)
                 */
                 
                 // swap locations
-                current_block->statements[end - 1] = s;
-                array_push(current_block->statements, Statement *, statement);
+                block->statements[end - 1] = s;
+                array_push(block->statements, Statement *, statement);
                 
                 // update "end"
-                end = array_len(current_block->statements, Statement *);
+                end = array_len(block->statements, Statement *);
             }
         }
     }
 }
 
-int parse_file(char * cursor)
+Program * parse_file(char * cursor)
 {
+    Program * program = (Program *)zero_alloc(sizeof(Program));
+    program->functions = (Function **)zero_alloc(0);
+    program->current_func = new_func();
+    
     enum BBAE_PARSER_STATE state = PARSER_STATE_ROOT;
     char * token = find_next_token_anywhere(&cursor);
-    
-    program.functions = (Function *)zero_alloc(0);
-    current_func = new_func();
     
     while (token)
     {
@@ -303,11 +306,11 @@ int parse_file(char * cursor)
                 token = find_next_token(&cursor);
                 assert(token);
                 
-                current_func.name = strcpy_z(token);
+                program->current_func->name = strcpy_z(token);
                 
                 token = find_next_token(&cursor);
                 if (token && strcmp(token, "returns"))
-                    current_func.return_type = parse_type(&cursor);
+                    program->current_func->return_type = parse_type(&cursor);
                 
                 state = PARSER_STATE_FUNCARGS;
             }
@@ -356,7 +359,7 @@ int parse_file(char * cursor)
                 Value * value = make_value(type);
                 value->variant = VALUE_ARG;
                 value->arg = name;
-                array_push(current_func.args, Value *, value);
+                array_push(program->current_func->args, Value *, value);
             }
             else
             {
@@ -375,13 +378,13 @@ int parse_file(char * cursor)
                 token = find_next_token(&cursor);
                 uint64_t size = parse_int_bare(token);
                 
-                add_stack_slot(&current_func, name, size);
+                add_stack_slot(program->current_func, name, size);
             }
             else
             {
-                current_block = new_block();
-                array_push(current_func.blocks, Block *, current_block);
-                current_func.entry_block = current_block;
+                program->current_block = new_block();
+                array_push(program->current_func->blocks, Block *, program->current_block);
+                program->current_func->entry_block = program->current_block;
                 
                 state = PARSER_STATE_BLOCK;
                 continue;
@@ -392,10 +395,10 @@ int parse_file(char * cursor)
             if (strcmp(token, "block") != 0 && strcmp(token, "endfunc") != 0)
             {
                 cursor -= strlen(token);
-                Statement * statement = parse_statement(&cursor);
+                Statement * statement = parse_statement(program, &cursor);
                 add_statement_output(statement);
-                array_push(current_block->statements, Statement *, statement);
-                fix_last_statement_stack_slot_addr_usage();
+                array_push(program->current_block->statements, Statement *, statement);
+                fix_last_statement_stack_slot_addr_usage(program->current_block);
             }
             else if (strcmp(token, "block") == 0)
             {
@@ -406,8 +409,8 @@ int parse_file(char * cursor)
             }
             else if (strcmp(token, "endfunc") == 0)
             {
-                array_push(program.functions, Function, current_func);
-                current_func = new_func();
+                array_push(program->functions, Function *, program->current_func);
+                program->current_func = new_func();
                 // end of function
             }
             else
@@ -423,20 +426,20 @@ int parse_file(char * cursor)
     
     puts("finished parsing program!");
     
-    return 0;
+    return program;
 }
 
 // split blocks if they have any conditional jumps
-void split_blocks(void)
+void split_blocks(Program * program)
 {
     // TODO: do a pre-pass collecting the final use of each variable/argument.
     // This will be redundant work vs the graph connection pass, but has to happen separately
     // because the graph connection pass would point to things from the previous block
     // with the later block needing to be patched intrusively. This is simpler.
     
-    for (size_t f = 0; f < array_len(program.functions, Function); f++)
+    for (size_t f = 0; f < array_len(program->functions, Function *); f++)
     {
-        Function * func = &program.functions[f];
+        Function * func = program->functions[f];
         for (size_t b = 0; b < array_len(func->blocks, Block *); b++)
         {
             Block * block = func->blocks[b];
@@ -455,11 +458,11 @@ void split_blocks(void)
 
 void connect_graphs(Program * program)
 {
-    split_blocks();
+    split_blocks(program);
     
-    for (size_t f = 0; f < array_len(program->functions, Function); f++)
+    for (size_t f = 0; f < array_len(program->functions, Function *); f++)
     {
-        Function * func = &program->functions[f];
+        Function * func = program->functions[f];
         for (size_t b = 0; b < array_len(func->blocks, Block *); b++)
         {
             Block * block = func->blocks[b];
@@ -484,9 +487,9 @@ void connect_graphs(Program * program)
 
 void allocate_stack_slots(Program * program)
 {
-    for (size_t f = 0; f < array_len(program->functions, Function); f++)
+    for (size_t f = 0; f < array_len(program->functions, Function *); f++)
     {
-        Function * func = &program->functions[f];
+        Function * func = program->functions[f];
         uint64_t offset = 0;
         for (size_t s = 0; s < array_len(func->stack_slots, Value *); s++)
         {
@@ -519,14 +522,14 @@ EncOperand get_basic_encoperand(Value * value)
     }
 }
 
-void compile_file(void)
+void compile_file(Program * program)
 {
     code = (byte_buffer *)malloc(sizeof(byte_buffer));
     memset(code, 0, sizeof(byte_buffer));
     
-    for (size_t f = 0; f < array_len(program.functions, Function); f++)
+    for (size_t f = 0; f < array_len(program->functions, Function *); f++)
     {
-        Function * func = &program.functions[f];
+        Function * func = program->functions[f];
         for (size_t b = 0; b < array_len(func->blocks, Block *); b++)
         {
             Block * block = func->blocks[b];
@@ -616,6 +619,27 @@ void compile_file(void)
     }
 }
 
+void print_asm(void)
+{
+    //FILE * logfile = 0;
+    
+    size_t offset = 0; 
+    size_t runtime_address = 0; 
+    ZydisDisassembledInstruction instruction; 
+    while (ZYAN_SUCCESS(ZydisDisassembleIntel(
+        ZYDIS_MACHINE_MODE_LONG_64,
+        runtime_address,
+        code->data + offset,  // buffer
+        code->len - offset,   // length
+        &instruction
+    )))
+    {
+        printf("    %s\n", instruction.text);
+        offset += instruction.info.length;
+        runtime_address += instruction.info.length;
+    }
+}
+
 int main(int argc, char ** argv)
 {
     // array insert/erase test code
@@ -644,8 +668,6 @@ int main(int argc, char ** argv)
     if (argc < 2)
         return puts("please provide file"), 0;
     
-    memset(&program, 0, sizeof(Program));
-    
     FILE * f = fopen(argv[1], "rb");
     
     fseek(f, 0, SEEK_END);
@@ -661,18 +683,37 @@ int main(int argc, char ** argv)
     buffer[length] = 0;
     fclose(f);
     
-    parse_file(buffer);
-    connect_graphs(&program);
-    do_regalloc(&program);
-    allocate_stack_slots(&program);
+    // parsing and configuration
+    Program * program = parse_file(buffer);
+    connect_graphs(program);
     
-    compile_file();
+    // TODO: optimization goes here
+    
+    // lowering
+    do_regalloc(program);
+    allocate_stack_slots(program);
+    compile_file(program);
     
     for (size_t i = 0; i < code->len; i++)
         printf("%02X ", code->data[i]);
     puts("");
     
-    puts("wah");
+    uint8_t * jit_code = copy_as_executable(code->data, code->len);
+    
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+    int (*jit_main) (int, int) = (int(*)(int, int))(void *)(jit_code);
+#pragma GCC diagnostic pop
+    
+    assert(jit_main);
+    uint32_t asdf = jit_main(5, 5);
+    
+    printf("output: %d (0x%X)\n", asdf, asdf);
+    
+    print_asm();
+    
+    free_as_executable(jit_code);
+    free_all_compiler_allocs();
     
     return 0;
 }

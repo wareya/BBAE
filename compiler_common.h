@@ -93,6 +93,7 @@ static uint64_t my_strtoull(const char * str, const char ** endptr)
     if (str[0] == '-')
     {
         negative = 1;
+        str += 1;
     }
     
     int radix = 10;
@@ -310,21 +311,22 @@ typedef struct _Function {
     Block * entry_block;
 } Function;
 
-static Function new_func(void)
+static Function * new_func(void)
 {
-    Function func;
-    memset(&func, 0, sizeof(Function));
-    func.args = (Value **)zero_alloc(0);
-    func.stack_slots = (Value **)zero_alloc(0);
-    func.blocks = (Block **)zero_alloc(0);
+    Function * func = (Function *)zero_alloc(sizeof(Function));
+    func->args = (Value **)zero_alloc(0);
+    func->stack_slots = (Value **)zero_alloc(0);
+    func->blocks = (Block **)zero_alloc(0);
     return func;
 }
 
 typedef struct _Program {
     // array
-    Function * functions;
+    Function ** functions;
     //Global * globals;
     //Static * statics;
+    Function * current_func;
+    Block * current_block;
 } Program;
 
 static uint64_t parse_int_bare(const char * n)

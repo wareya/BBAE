@@ -9,7 +9,7 @@
 
 typedef ZydisEncoderOperand EncOperand;
 
-uint8_t encops_equal(EncOperand a, EncOperand b)
+static uint8_t encops_equal(EncOperand a, EncOperand b)
 {
     return memcmp(&a, &b, sizeof(EncOperand)) == 0;
 }
@@ -230,7 +230,7 @@ enum InstName {
     INST_XORPS,
 };
 
-int name_to_mnemonic(int name)
+static int name_to_mnemonic(int name)
 {
     switch (name)
     {
@@ -399,7 +399,7 @@ int name_to_mnemonic(int name)
     }
 }
 
-int reg_unsized_to_sized(enum Register reg, int size)
+static int reg_unsized_to_sized(enum Register reg, int size)
 {
     if (reg == REG_NONE)
         return ZYDIS_REGISTER_NONE;
@@ -424,7 +424,7 @@ int reg_unsized_to_sized(enum Register reg, int size)
         assert(("unknown register!\n", 0));
 }
 
-ZydisEncoderOperand zy_reg(enum Register reg, int size)
+static ZydisEncoderOperand zy_reg(enum Register reg, int size)
 {
     ZydisEncoderOperand ret;
     memset(&ret, 0, sizeof(ret)); 
@@ -435,7 +435,7 @@ ZydisEncoderOperand zy_reg(enum Register reg, int size)
     
     return ret;
 }
-ZydisEncoderOperand zy_mem_full(enum Register base_reg, enum Register index_reg, int index_scale, int64_t offset, int word_size)
+static ZydisEncoderOperand zy_mem_full(enum Register base_reg, enum Register index_reg, int index_scale, int64_t offset, int word_size)
 {
     assert(index_scale == 0 || index_scale == 1 || index_scale == 2 || index_scale == 4 || index_scale == 8);
     
@@ -452,7 +452,7 @@ ZydisEncoderOperand zy_mem_full(enum Register base_reg, enum Register index_reg,
     
     return ret;
 }
-ZydisEncoderOperand zy_mem(enum Register base_reg, int64_t offset, int word_size)
+static ZydisEncoderOperand zy_mem(enum Register base_reg, int64_t offset, int word_size)
 {
     return zy_mem_full(base_reg, REG_NONE, 0, offset, word_size);
 }
@@ -470,7 +470,7 @@ ZydisEncoderOperand zy_ptr(enum Segment segment, int64_t offset, int word_size)
     return ret;
 }
 */
-ZydisEncoderOperand zy_imm(uint64_t imm)
+static ZydisEncoderOperand zy_imm(uint64_t imm)
 {
     ZydisEncoderOperand ret;
     memset(&ret, 0, sizeof(ret)); 
@@ -480,7 +480,7 @@ ZydisEncoderOperand zy_imm(uint64_t imm)
     return ret;
 }
 
-void do_encode(ZydisEncoderRequest req, uint8_t * buf, size_t * len)
+static void do_encode(ZydisEncoderRequest req, uint8_t * buf, size_t * len)
 {
     req.machine_mode = ZYDIS_MACHINE_MODE_LONG_64;
     req.allowed_encodings =
@@ -495,7 +495,7 @@ void do_encode(ZydisEncoderRequest req, uint8_t * buf, size_t * len)
         assert(("Failed to encode instruction", 0));
 }
 
-void zy_emit_n(byte_buffer * bytes, int name, ZydisEncoderOperand * ops, int n)
+static void zy_emit_n(byte_buffer * bytes, int name, ZydisEncoderOperand * ops, int n)
 {
     assert(n <= 5);
     
@@ -513,27 +513,27 @@ void zy_emit_n(byte_buffer * bytes, int name, ZydisEncoderOperand * ops, int n)
     bytes_push(bytes, buf, len);
 }
 
-void zy_emit_4(byte_buffer * bytes, int name, ZydisEncoderOperand op1, ZydisEncoderOperand op2, ZydisEncoderOperand op3, ZydisEncoderOperand op4)
+static void zy_emit_4(byte_buffer * bytes, int name, ZydisEncoderOperand op1, ZydisEncoderOperand op2, ZydisEncoderOperand op3, ZydisEncoderOperand op4)
 {
     ZydisEncoderOperand ops[] = {op1, op2, op3, op4};
     zy_emit_n(bytes, name, ops, 4);
 }
-void zy_emit_3(byte_buffer * bytes, int name, ZydisEncoderOperand op1, ZydisEncoderOperand op2, ZydisEncoderOperand op3)
+static void zy_emit_3(byte_buffer * bytes, int name, ZydisEncoderOperand op1, ZydisEncoderOperand op2, ZydisEncoderOperand op3)
 {
     ZydisEncoderOperand ops[] = {op1, op2, op3};
     zy_emit_n(bytes, name, ops, 3);
 }
-void zy_emit_2(byte_buffer * bytes, int name, ZydisEncoderOperand op1, ZydisEncoderOperand op2)
+static void zy_emit_2(byte_buffer * bytes, int name, ZydisEncoderOperand op1, ZydisEncoderOperand op2)
 {
     ZydisEncoderOperand ops[] = {op1, op2};
     zy_emit_n(bytes, name, ops, 2);
 }
-void zy_emit_1(byte_buffer * bytes, int name, ZydisEncoderOperand op1)
+static void zy_emit_1(byte_buffer * bytes, int name, ZydisEncoderOperand op1)
 {
     ZydisEncoderOperand ops[] = {op1};
     zy_emit_n(bytes, name, ops, 1);
 }
-void zy_emit_0(byte_buffer * bytes, int name)
+static void zy_emit_0(byte_buffer * bytes, int name)
 {
     zy_emit_n(bytes, name, 0, 0);
 }

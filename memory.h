@@ -10,30 +10,30 @@
 
 #define ALLOC_PREFIX_SIZE ((uint64_t)64)
 
-uint64_t * alloc_get_size(uint8_t * alloc)
+static uint64_t * alloc_get_size(uint8_t * alloc)
 {
      return ((uint64_t *)alloc) + 2;
 }
-uint8_t ** alloc_get_prev_ptr(uint8_t * alloc)
+static uint8_t ** alloc_get_prev_ptr(uint8_t * alloc)
 {
      return ((uint8_t **)alloc) + 1;
 }
-uint8_t ** alloc_get_next_ptr(uint8_t * alloc)
+static uint8_t ** alloc_get_next_ptr(uint8_t * alloc)
 {
      return (uint8_t **)alloc;
 }
 
-uint8_t * alloc_base_loc(void * buf)
+static uint8_t * alloc_base_loc(void * buf)
 {
     return ((uint8_t *)buf) - ALLOC_PREFIX_SIZE;
 }
-uint8_t * alloc_data_loc(void * alloc)
+static uint8_t * alloc_data_loc(void * alloc)
 {
     return ((uint8_t *)alloc) + ALLOC_PREFIX_SIZE;
 }
 
-uint8_t * alloc_list = 0;
-void * zero_alloc(size_t n)
+static uint8_t * alloc_list = 0;
+static void * zero_alloc(size_t n)
 {
     n += ALLOC_PREFIX_SIZE;
     
@@ -51,7 +51,7 @@ void * zero_alloc(size_t n)
     
     return alloc_data_loc(alloc);
 }
-void * zero_realloc(uint8_t * buf, size_t n)
+static void * zero_realloc(uint8_t * buf, size_t n)
 {
     n += ALLOC_PREFIX_SIZE;
     
@@ -78,7 +78,7 @@ void * zero_realloc(uint8_t * buf, size_t n)
     
     return alloc_data_loc(new_alloc);
 }
-void free_all_compiler_allocs(void)
+static void free_all_compiler_allocs(void)
 {
     while (alloc_list)
     {
@@ -96,7 +96,7 @@ void free_all_compiler_allocs(void)
      ((TYPE *)(ARRAY))[array_len((uint8_t *)(ARRAY), TYPE) - 1] = (VAL) \
     )
 
-void array_erase_impl(uint8_t ** array, size_t item_size, size_t index)
+static void array_erase_impl(uint8_t ** array, size_t item_size, size_t index)
 {
     size_t size = *alloc_get_size(alloc_base_loc(*array));
     size_t start = item_size * index;
@@ -107,7 +107,7 @@ void array_erase_impl(uint8_t ** array, size_t item_size, size_t index)
 #define array_erase(ARRAY, TYPE, INDEX) \
     (array_erase_impl((uint8_t **)(&(ARRAY)), sizeof(TYPE), INDEX))
 
-void array_insert_impl(uint8_t ** array, size_t item_size, size_t index)
+static void array_insert_impl(uint8_t ** array, size_t item_size, size_t index)
 {
     size_t size = *alloc_get_size(alloc_base_loc(*array)) + item_size;
     *array = zero_realloc(*array, size);
@@ -121,7 +121,7 @@ void array_insert_impl(uint8_t ** array, size_t item_size, size_t index)
      ((TYPE *)(ARRAY))[(INDEX)] = (VAL) \
     )
 
-size_t ptr_array_find_impl(void ** array, void * ptr)
+static size_t ptr_array_find_impl(void ** array, void * ptr)
 {
     for (size_t i = 0; i < array_len(array, void *); i++)
     {
@@ -133,7 +133,7 @@ size_t ptr_array_find_impl(void ** array, void * ptr)
 
 #define ptr_array_find(ARRAY, VAL) (ptr_array_find_impl((void**)(ARRAY), (VAL)))
 
-size_t array_find_impl(void * array, size_t item_size, void * ptr)
+static size_t array_find_impl(void * array, size_t item_size, void * ptr)
 {
     for (size_t i = 0; i < array_len(array, void *); i++)
     {
@@ -146,7 +146,7 @@ size_t array_find_impl(void * array, size_t item_size, void * ptr)
 #define array_find(ARRAY, TYPE, VAL) (array_find_impl((void*)(ARRAY), sizeof(TYPE), &(VAL)))
 
 // Returns a pointer to a buffer with len+1 bytes reserved, and at least one null terminator.
-char * strcpy_len(const char * str, size_t len)
+static char * strcpy_len(const char * str, size_t len)
 {
     if (!str)
         return (char *)zero_alloc(1);
@@ -158,14 +158,14 @@ char * strcpy_len(const char * str, size_t len)
         *ret_copy++ = c;
     return ret;
 }
-char * strcpy_z(const char * str)
+static char * strcpy_z(const char * str)
 {
     assert(str);
     size_t len = strlen(str);
     return strcpy_len(str, len);
 }
 
-uint8_t str_ends_with(const char * a, const char * b)
+static uint8_t str_ends_with(const char * a, const char * b)
 {
     size_t len_a = strlen(a);
     size_t len_b = strlen(b);
@@ -177,7 +177,7 @@ uint8_t str_ends_with(const char * a, const char * b)
     a += len_a - len_b;
     return strncmp(a, b, len_b) == 0;
 }
-uint8_t str_begins_with(const char * a, const char * b)
+static uint8_t str_begins_with(const char * a, const char * b)
 {
     size_t len_a = strlen(a);
     size_t len_b = strlen(b);
@@ -188,25 +188,25 @@ uint8_t str_begins_with(const char * a, const char * b)
     
     return strncmp(a, b, len_b) == 0;
 }
-uint8_t is_space(char c)
+static uint8_t is_space(char c)
 {
     return c == ' ' || c == '\t';
 }
-void skip_space(const char ** b)
+static void skip_space(const char ** b)
 {
     while (is_space(**b))
         *b += 1;
 }
-void to_space(const char ** b)
+static void to_space(const char ** b)
 {
     while (!is_space(**b))
         *b += 1;
 }
-uint8_t is_newline(char c)
+static uint8_t is_newline(char c)
 {
     return c == '\r' || c == '\n';
 }
-uint8_t is_comment(const char * b)
+static uint8_t is_comment(const char * b)
 {
     if (b == 0 || b[0] == 0)
         return 0;
@@ -217,12 +217,12 @@ uint8_t is_comment(const char * b)
     return 0;
 }
 
-void skip_newline(const char ** b)
+static void skip_newline(const char ** b)
 {
     while (is_newline(**b))
         *b += 1;
 }
-void to_newline(const char ** b)
+static void to_newline(const char ** b)
 {
     while (!is_newline(**b))
         *b += 1;

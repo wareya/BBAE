@@ -283,9 +283,9 @@ static void do_regalloc_block(Function * func, Block * block)
 
 static void do_regalloc(Program * program)
 {
-    for (size_t f = 0; f < array_len(program->functions, Function); f++)
+    for (size_t f = 0; f < array_len(program->functions, Function *); f++)
     {
-        Function * func = &program->functions[f];
+        Function * func = program->functions[f];
         for (size_t b = 0; b < array_len(func->blocks, Block *); b++)
         {
             Block * block = func->blocks[b];
