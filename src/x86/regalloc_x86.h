@@ -7,9 +7,9 @@
 #include <string.h>
 #include <assert.h>
 
-#include "abi.h"
-#include "memory.h"
-#include "compiler_common.h"
+#include "abi_x86.h"
+#include "../memory.h"
+#include "../compiler_common.h"
 
 #define BBAE_REGISTER_CAPACITY (16)
 #ifdef BBAE_DEBUG_SPILLS

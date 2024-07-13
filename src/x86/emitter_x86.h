@@ -4,8 +4,11 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <assert.h>
-#include "thirdparty/zydis/Zydis.h"
-#include "thirdparty/zydis/Zydis.c"
+
+#include "../../thirdparty/zydis/Zydis.h"
+#include "../../thirdparty/zydis/Zydis.c"
+
+#include "../buffers.h"
 
 typedef ZydisEncoderOperand EncOperand;
 
@@ -13,8 +16,6 @@ static uint8_t encops_equal(EncOperand a, EncOperand b)
 {
     return memcmp(&a, &b, sizeof(EncOperand)) == 0;
 }
-
-#include "buffers.h"
 
 enum Register {
     REG_RAX,

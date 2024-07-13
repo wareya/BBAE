@@ -8,7 +8,7 @@
             "args": [
                 "--login",
                 "-c",
-                "clang main.c -Wall -Wextra -pedantic -Wno-unused -g -ggdb -O0"
+                "clang main.c -Wall -Wextra -pedantic -Wno-unused -g -ggdb -O0 -o '${workspaceFolder}/a.exe'"
             ],
             "problemMatcher": [
                 "$tsc"
@@ -18,7 +18,7 @@
             },
             "group": "build",
             "options": {
-                "cwd": "${workspaceFolder}",
+                "cwd": "${workspaceFolder}/src",
                 "env": {
                     "PATH": "C:\\msys64\\usr\\bin\\",
                     "CHERE_INVOKING": "1",
