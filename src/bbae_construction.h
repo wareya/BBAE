@@ -16,11 +16,15 @@ uint8_t check_for_redefinition(Program * program, char * name)
     Function * func = program->current_func;
     Block * block = program->current_block;
     
+    assert(func);
+    
     Value ** args = 0;
     if (block == func->entry_block)
         args = func->args;
-    else
+    else if (block)
         args = block->args;
+    else
+        assert(0);
     
     for (size_t i = 0; i < array_len(args, Value *); i++)
     {
@@ -37,13 +41,22 @@ uint8_t check_for_redefinition(Program * program, char * name)
         if (strcmp(slot->name, name) == 0)
             return 1;
     }
-    for (size_t i = 0; i < array_len(block->statements, Statement *); i++)
+    for (size_t i = 0; block && block->statements && i < array_len(block->statements, Statement *); i++)
     {
         Statement * statement = block->statements[i];
         if (statement->output_name && strcmp(statement->output_name, name) == 0)
             return 1;
     }
     return 0;
+}
+
+void assert_no_redefinition(Program * program, char * name)
+{
+    if (check_for_redefinition(program, name))
+    {
+        printf("culprit: %s\n", name);
+        assert(("variable redefined!", 0));
+    }
 }
 
 static Value * parse_value(Program * program, char * token)
@@ -214,11 +227,8 @@ static Statement * parse_statement(Program * program, const char ** cursor)
     
     if (token2 && strcmp("=", token2) == 0)
     {
-        if (check_for_redefinition(program, token))
-        {
-            printf("culprit: %s\n", token);
-            assert(("variable redefined!", 0));
-        }
+        assert_no_redefinition(program, token);
+        
         ret->output_name = token;
         char * token_1 = strcpy_z(find_next_token(cursor));
         ret->statement_name = token_1;
@@ -371,6 +381,8 @@ static Program * parse_file(const char * cursor)
                 char * name = strcpy_z(token);
                 Type type = parse_type(&cursor);
                 
+                assert_no_redefinition(program, name);
+                
                 assert(("todo", 0));
             }
             else
@@ -387,6 +399,8 @@ static Program * parse_file(const char * cursor)
                 assert(token);
                 char * name = strcpy_z(token);
                 Type type = parse_type(&cursor);
+                
+                assert_no_redefinition(program, name);
                 
                 Value * value = make_value(type);
                 value->variant = VALUE_ARG;
@@ -406,6 +420,8 @@ static Program * parse_file(const char * cursor)
                 token = find_next_token(&cursor);
                 assert(token);
                 char * name = strcpy_z(token);
+                
+                assert_no_redefinition(program, name);
                 
                 token = find_next_token(&cursor);
                 uint64_t size = parse_int_bare(token);
