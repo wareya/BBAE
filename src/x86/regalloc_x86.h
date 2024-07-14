@@ -32,6 +32,16 @@ static int64_t first_empty(Value ** array, size_t len)
     return found;
 }
 
+// true if the type can be stored in an integer register
+static uint8_t type_is_intreg(Type type)
+{
+    if (type_size(type) > 8)
+        return 0;
+    if (type_is_agg(type))
+        return !type_is_float_only_agg(type);
+    return type_is_int(type) || type_is_ptr(type);
+}
+
 static void do_regalloc_block(Function * func, Block * block)
 {
     Value * reg_int_alloced[BBAE_REGISTER_CAPACITY];
@@ -124,7 +134,7 @@ static void do_regalloc_block(Function * func, Block * block)
         if (!statement->output)
             continue;
         
-        assert(("TODO", type_is_int(statement->output->type)));
+        assert(("TODO", type_is_intreg(statement->output->type)));
         
         // reuse an operand register if possible
         for (size_t j = 0; j < array_len(statement->args, Operand); j++)

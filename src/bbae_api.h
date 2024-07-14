@@ -16,6 +16,9 @@ static Program * parse(const char * buffer)
 
 static void do_optimization(Program * program)
 {
+    // suppress unused parameter and variable warnings
+    Program * p = program;
+    program = p;
     // TODO
 }
 

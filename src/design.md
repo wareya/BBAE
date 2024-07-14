@@ -7,13 +7,13 @@ Single BBAE files are analogous to single C translation units. They contain glob
 
 3 kinds of types:
 
-- integers: `i8`, `i16`, `i32`, `i64`
+- integers: `i8`, `i16`, `i32`, `i64`, `iptr`
 - floats: `f32`, `f64`
 - aggregates
 
 The alignment requirements of the first 6 types (i.e. excluding aggregates) are implementation-defined. Integers have no signedness. Floats are binary IEEE 754 floats.
 
-Pointers are either i32 or i64, depending on the target platform. In this document, iptr refers to this pointer-sized integer type, but iptr is not an actual type.
+Pointers the same size and can contain the same set of bit patterns as one specific integer type. Which type they're equivalent to is something that depends on the target platform. They are given the unique type iptr, which is an actual type and not just a "typedef".
 
 Aggregate types are defined like:
 
@@ -358,10 +358,14 @@ call_eval <type> i any* // zero or more instances of any value as function argum
 
 freeze <any> // freezes any poison/undefined data in the given value as fixed but not-yet-known data. analogous to LLVM's freeze. returns the frozen value.
 
-ptralias iptr iptr // Evaluates to the left iptr, but with the aliasing analysis of the right iptr.
+ptralias_inherit iptr iptr // Evaluates to the left iptr, but with the aliasing analysis of the right iptr.
 ptralias_merge iptr iptr // Evaluates to the left iptr, but with aliasing analysis that aliases both the left and right iptr.
-ptralias_disjoint iptr iptr // Evaluates to the left iptr, starting with the aliasing analysis of the left iptr, but not aliasing with the right iptr.
+ptralias_disjoint iptr iptr // Evaluates to the left iptr, starting with the aliasing analysis of the left iptr, but asserting that the output iptr and the right iptr cannot be used to derive eachother or point to each other's data.
 ptralias_bless iptr // Evaluates to iptr, but with universal aliasing.
+ptralias_curse iptr // Evaluates to iptr, but with no aliasing (i.e. is assumed to point to different data than any prior-existant pointer, including the original iptr).
+
+ptr_to_int iptr // returns an i64 with the same value as the given pointer
+int_to_ptr i64 // returns an iptr with the same value as an i64, and universal aliasing
 ```
 
 ------
@@ -476,6 +480,7 @@ psn_i8
 psn_i16
 psn_i32
 psn_i64
+psn_iptr
 psn_f32
 psn_f64
 ```
@@ -547,9 +552,9 @@ Pointer capture:
 
 In LLVM terms, all pointers passed to all functions are considered captured, unless the compiler can analyze the callee and determine otherwise.
 
-All pointers whose exact values (aside from whether or not they're null) contribute to a value stored in memory are considered to be captured in that value and any consequent values.
+All pointers whose exact values (aside from whether or not they're null) contribute to a value (stored in memory or otherwise) are considered to be captured in that value and any consequent values.
 
-If the compiler loses track of where a given pointer is captured, then any calls to functions that can see state that the callee does not know about must be considered to potentially modify the data pointed to by that pointer, the compiler can determine otherwise.
+If the compiler loses track of where a given pointer is captured, then any calls to functions that can see state that the callee does not know about must be considered to potentially modify the data pointed to by that pointer, unless the compiler can determine otherwise.
 
 Values with unknown capturing sources (e.g. values passed into a function from external code) are assumed to capture any pointers that have been captured by globals or external code.
 

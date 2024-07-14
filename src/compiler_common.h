@@ -124,6 +124,7 @@ enum BBAE_TYPE_VARIANT {
     TYPE_I16,
     TYPE_I32,
     TYPE_I64,
+    TYPE_IPTR,
     TYPE_F32,
     TYPE_F64,
     TYPE_AGG,
@@ -132,7 +133,7 @@ enum BBAE_TYPE_VARIANT {
 typedef struct _AggData {
     size_t align;
     size_t size;
-    uint8_t * per_byte_likeness; // pointer to an array of uint8_ts with size `size`
+    uint8_t * per_byte_likeness; // pointer to an array of uint8_ts with size `size`. 0 = int, 1 = float
     uint8_t packed;
 } AggData;
 
@@ -153,6 +154,23 @@ static uint8_t type_is_basic(Type type)
 {
     return type.variant >= TYPE_I8 && type.variant <= TYPE_F64;
 }
+static uint8_t type_is_agg(Type type)
+{
+    return type.variant == TYPE_AGG;
+}
+static uint8_t type_is_float_only_agg(Type type)
+{
+    if (type_is_agg(type))
+    {
+        for (size_t i = 0; i < type.aggdata.size; i++)
+        {
+            if (!type.aggdata.per_byte_likeness[i])
+                return 0;
+        }
+        return 1;
+    }
+    return 0;
+}
 static uint8_t type_is_int(Type type)
 {
     return type.variant >= TYPE_I8 && type.variant <= TYPE_I64;
@@ -160,6 +178,10 @@ static uint8_t type_is_int(Type type)
 static uint8_t type_is_float(Type type)
 {
     return type.variant >= TYPE_F32 && type.variant <= TYPE_F64;
+}
+static uint8_t type_is_ptr(Type type)
+{
+    return type.variant == TYPE_IPTR;
 }
 
 static size_t type_size(Type type)
@@ -173,6 +195,8 @@ static size_t type_size(Type type)
     else if (type.variant == TYPE_I32)
         return 4;
     else if (type.variant == TYPE_I64)
+        return 8;
+    else if (type.variant == TYPE_IPTR)
         return 8;
     else if (type.variant == TYPE_F32)
         return 4;
@@ -361,6 +385,8 @@ static Type parse_type(const char ** b)
         type.variant = TYPE_I32;
     else if (strcmp(token, "i64") == 0)
         type.variant = TYPE_I64;
+    else if (strcmp(token, "iptr") == 0)
+        type.variant = TYPE_IPTR;
     else if (strcmp(token, "f32") == 0)
         type.variant = TYPE_F32;
     else if (strcmp(token, "f64") == 0)
@@ -410,7 +436,7 @@ static Value * make_const_value(enum BBAE_TYPE_VARIANT variant, uint64_t data)
 
 static Value * make_stackslot_value(StackSlot * slot)
 {
-    Value * ret = make_value(basic_type(TYPE_I64));
+    Value * ret = make_value(basic_type(TYPE_IPTR));
     ret->variant = VALUE_STACKADDR;
     ret->slotinfo = slot;
     return ret;

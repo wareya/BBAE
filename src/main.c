@@ -61,6 +61,7 @@ int main(int argc, char ** argv)
     
     uint8_t * jit_code = copy_as_executable(code->data, code->len);
     
+    // suppress non-posix-compliant gcc function pointer casting warning
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
     int (*jit_main) (int, int) = (int(*)(int, int))(void *)(jit_code);

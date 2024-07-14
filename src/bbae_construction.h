@@ -48,7 +48,8 @@ static Value * parse_value(Program * program, char * token)
             memcpy(&ret->constant, &f, 8);
         }
         else if (str_ends_with(token, "i8") || str_ends_with(token, "i16")
-                 || str_ends_with(token, "i32") || str_ends_with(token, "i64"))
+                 || str_ends_with(token, "i32") || str_ends_with(token, "i64")
+                 || str_ends_with(token, "iptr"))
         {
             //uint8_t suffix_len = str_ends_with(token, "i8") ? 2 : 3;
             uint64_t n = parse_int_nonbare(token);
@@ -62,6 +63,8 @@ static Value * parse_value(Program * program, char * token)
                 ret->type = basic_type(TYPE_I32);
             else if (str_ends_with(token, "i64"))
                 ret->type = basic_type(TYPE_I64);
+            else if (str_ends_with(token, "iptr"))
+                ret->type = basic_type(TYPE_IPTR);
             else
                 assert(0);
             ret->constant = n;
