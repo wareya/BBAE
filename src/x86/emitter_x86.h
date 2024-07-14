@@ -481,6 +481,28 @@ static ZydisEncoderOperand zy_imm(uint64_t imm)
     return ret;
 }
 
+
+const char * ZyanStatusText(ZyanStatus status)
+{
+    switch (status)
+    {
+        case 0x00: return "NO_MORE_DATA";
+        case 0x01: return "DECODING_ERROR";
+        case 0x02: return "INSTRUCTION_TOO_LONG";
+        case 0x03: return "BAD_REGISTER";
+        case 0x04: return "ILLEGAL_LOCK";
+        case 0x05: return "ILLEGAL_LEGACY_PFX";
+        case 0x06: return "ILLEGAL_REX";
+        case 0x07: return "INVALID_MAP";
+        case 0x08: return "MALFORMED_EVEX";
+        case 0x09: return "MALFORMED_MVEX";
+        case 0x0A: return "INVALID_MASK";
+        case 0x0B: return "SKIP_TOKEN";
+        case 0x0C: return "IMPOSSIBLE_INSTRUCTION";
+        default: assert(0);
+    };
+}
+
 static void do_encode(ZydisEncoderRequest req, uint8_t * buf, size_t * len)
 {
     req.machine_mode = ZYDIS_MACHINE_MODE_LONG_64;
@@ -492,8 +514,12 @@ static void do_encode(ZydisEncoderRequest req, uint8_t * buf, size_t * len)
     
     *len = ZYDIS_MAX_INSTRUCTION_LENGTH;
     
-    if (ZYAN_FAILED(ZydisEncoderEncodeInstruction(&req, buf, len)))
+    ZyanStatus e = ZydisEncoderEncodeInstruction(&req, buf, len);
+    if (ZYAN_FAILED(e))
+    {
+        printf("culprit: %s\n", ZyanStatusText(e));
         assert(("Failed to encode instruction", 0));
+    }
 }
 
 static void zy_emit_n(byte_buffer * bytes, int name, ZydisEncoderOperand * ops, int n)

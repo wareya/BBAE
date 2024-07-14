@@ -51,7 +51,6 @@ static Value * parse_value(Program * program, char * token)
                  || str_ends_with(token, "i32") || str_ends_with(token, "i64")
                  || str_ends_with(token, "iptr"))
         {
-            //uint8_t suffix_len = str_ends_with(token, "i8") ? 2 : 3;
             uint64_t n = parse_int_nonbare(token);
             printf("parsed int... %zd\n", n);
             ret->variant = VALUE_CONST;

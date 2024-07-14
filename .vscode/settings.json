@@ -3,5 +3,11 @@
         "cstdint": "c",
         "memory.h": "c",
         "bbae_api.h": "c"
-    }
+    },
+    "cSpell.words": [
+        "iptr"
+    ],
+    "cSpell.ignoreWords": [
+        "myfunc"
+    ]
 }

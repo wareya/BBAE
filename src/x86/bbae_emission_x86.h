@@ -99,6 +99,7 @@ static byte_buffer * compile_file(Program * program)
                     
                     EncOperand op0 = get_basic_encoperand(statement->output);
                     EncOperand op1 = get_basic_encoperand(op1_op.value);
+                    op1.mem.size = 8;
                     
                     zy_emit_2(code, INST_LEA, op0, op1);
                 }
