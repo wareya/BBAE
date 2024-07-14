@@ -275,8 +275,8 @@ ternary i any any // any and any must be of the same type. compiles down to a co
 
 add i i // i and i must be of the same type
 sub i i // likewise for all of these
-mul i i
-imul i i
+mul i i // unsigned multiplication
+imul i i // signed multiplication
 
 div i i  // division by 0 produces 0
 idiv i i // division by 0 produces 0
@@ -330,9 +330,11 @@ mulf f f
 divf f f
 remf f f
 
-trim <type> i // cast integer to given type, which must be the same size or smaller. bitwise truncation.
-zext <type> i // zero-extend integer into the given type, which must be the same size or larger
-sext <type> i // sign-extend integer into the given type, which must be the same size or larger
+trim <type> i // cast integer to given type, which must be the same size or smaller. bitwise truncation, trims away any higher bits.
+qext <type> i // quick extend integer into the given type, which must be the same size or larger. any new bits contain arbitrary but not-undefined, not-poison data.
+zext <type> i // zero-extend integer into the given type, which must be the same size or larger. any new bits contain zero.
+sext <type> i // sign-extend integer into the given type, which must be the same size or larger. any new bits contain a copy of the uppermost old bit.
+// the above four instructions are legal no-ops if the input and output sizes are the same. valid types are i8, i16, i32, and i64. iptr is not supported.
 
 f32_to_f64 f32 // convert float by value
 f64_to_f32 f64
@@ -364,8 +366,8 @@ ptralias_disjoint iptr iptr // Evaluates to the left iptr, starting with the ali
 ptralias_bless iptr // Evaluates to iptr, but with universal aliasing.
 ptralias_curse iptr // Evaluates to iptr, but with no aliasing (i.e. is assumed to point to different data than any prior-existant pointer, including the original iptr).
 
-ptr_to_int iptr // returns an i64 with the same value as the given pointer
-int_to_ptr i64 // returns an iptr with the same value as an i64, and universal aliasing
+ptr_to_i64 iptr // returns an i64 with the same value as the given pointer
+int_to_ptr i // returns an iptr with the same value as an integer, and universal aliasing
 ```
 
 ------

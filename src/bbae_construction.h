@@ -11,6 +11,41 @@ enum BBAE_PARSER_STATE {
     PARSER_STATE_BLOCK,
 };
 
+uint8_t check_for_redefinition(Program * program, char * name)
+{
+    Function * func = program->current_func;
+    Block * block = program->current_block;
+    
+    Value ** args = 0;
+    if (block == func->entry_block)
+        args = func->args;
+    else
+        args = block->args;
+    
+    for (size_t i = 0; i < array_len(args, Value *); i++)
+    {
+        Value * val = args[i];
+        assert(val->variant == VALUE_ARG);
+        if (strcmp(val->arg, name) == 0)
+            return 1;
+    }
+    for (size_t i = 0; i < array_len(func->stack_slots, Value *); i++)
+    {
+        Value * value = func->stack_slots[i];
+        assert(value->variant == VALUE_STACKADDR);
+        StackSlot * slot = value->slotinfo;
+        if (strcmp(slot->name, name) == 0)
+            return 1;
+    }
+    for (size_t i = 0; i < array_len(block->statements, Statement *); i++)
+    {
+        Statement * statement = block->statements[i];
+        if (statement->output_name && strcmp(statement->output_name, name) == 0)
+            return 1;
+    }
+    return 0;
+}
+
 static Value * parse_value(Program * program, char * token)
 {
     Function * func = program->current_func;
@@ -179,6 +214,11 @@ static Statement * parse_statement(Program * program, const char ** cursor)
     
     if (token2 && strcmp("=", token2) == 0)
     {
+        if (check_for_redefinition(program, token))
+        {
+            printf("culprit: %s\n", token);
+            assert(("variable redefined!", 0));
+        }
         ret->output_name = token;
         char * token_1 = strcpy_z(find_next_token(cursor));
         ret->statement_name = token_1;

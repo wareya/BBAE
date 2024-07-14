@@ -71,15 +71,15 @@ enum {
 };
 
 #ifdef _WIN32
-uint8_t abi = ABI_WIN;
+static uint8_t abi = ABI_WIN;
 #else
-uint8_t abi = ABI_SYSV;
+static uint8_t abi = ABI_SYSV;
 #endif
 
-size_t abi_i64s_used = 0;
-size_t abi_f64s_used = 0;
-size_t abi_stack_used = 0;
-void abi_reset_state(void)
+static size_t abi_i64s_used = 0;
+static size_t abi_f64s_used = 0;
+static size_t abi_stack_used = 0;
+static void abi_reset_state(void)
 {
     abi_i64s_used = 0;
     abi_f64s_used = 0;
@@ -117,7 +117,7 @@ void abi_reset_state(void)
 // Later stack-spill arguments always have higher offsets, e.g. the first may be +48, second may be +56, etc.
 // This is true both on sysv and windows.
 //
-int64_t abi_get_next_arg_basic(uint8_t word_is_float)
+static int64_t abi_get_next_arg_basic(uint8_t word_is_float)
 {
     if (abi == ABI_WIN)
     {
@@ -182,7 +182,7 @@ void abi_get_next_args_struct(uint8_t * eightwords_info, uint64_t * out, size_t 
 }
 */
 
-int64_t abi_get_min_stack_size(void)
+static int64_t abi_get_min_stack_size(void)
 {
     if (abi == ABI_WIN)
         return 40;
@@ -190,27 +190,43 @@ int64_t abi_get_min_stack_size(void)
         return 8;
 }
 
-// Returns a bitmask with a bit set to 1 for exactly any value that gets clobbered by the calling process.
-// So if only RAX is clobbered, returns 1, if only RBX is clobbered, returns 2, if only R8 is clobbered, returns 256 (1<<8), etc.
-// The upper 32 bits are reserved and may gain meaning later. For now, they're always 0.
-uint64_t abi_get_clobbered_regs(void)
+static uint64_t abi_get_clobber_mask(void)
 {
+    uint64_t clobber = 0;
     if (abi == ABI_WIN)
     {
-        return  (1 << _ABI_RAX ) | (1 << _ABI_RCX ) | (1 << _ABI_RDX ) |
-                (1 << _ABI_R8  ) | (1 << _ABI_R9  ) | (1 << _ABI_R10 ) | (1 << _ABI_R11) |
-                (1 << _ABI_XMM0) | (1 << _ABI_XMM1) | (1 << _ABI_XMM2) |
-                (1 << _ABI_XMM3) | (1 << _ABI_XMM4) | (1 << _ABI_XMM5);
+        clobber = (1 << _ABI_RAX ) | (1 << _ABI_RCX ) | (1 << _ABI_RDX ) |
+                  (1 << _ABI_R8  ) | (1 << _ABI_R9  ) | (1 << _ABI_R10 ) | (1 << _ABI_R11) |
+                  (1 << _ABI_XMM0) | (1 << _ABI_XMM1) | (1 << _ABI_XMM2) |
+                  (1 << _ABI_XMM3) | (1 << _ABI_XMM4) | (1 << _ABI_XMM5);
     }
     else
     {
-        return  (1 << _ABI_RAX  ) | (1 << _ABI_RCX  ) | (1 << _ABI_RDX  ) | (1 << _ABI_RSI  ) | (1 << _ABI_RDI ) |
-                (1 << _ABI_R8   ) | (1 << _ABI_R9   ) | (1 << _ABI_R10  ) | (1 << _ABI_R11  ) |
-                (1 << _ABI_XMM0 ) | (1 << _ABI_XMM1 ) | (1 << _ABI_XMM2 ) | (1 << _ABI_XMM3 ) |
-                (1 << _ABI_XMM4 ) | (1 << _ABI_XMM5 ) | (1 << _ABI_XMM6 ) | (1 << _ABI_XMM7 ) |
-                (1 << _ABI_XMM8 ) | (1 << _ABI_XMM9 ) | (1 << _ABI_XMM10) | (1 << _ABI_XMM11) |
-                (1 << _ABI_XMM12) | (1 << _ABI_XMM13) | (1 << _ABI_XMM14) | (1 << _ABI_XMM15);
+        clobber = (1 << _ABI_RAX  ) | (1 << _ABI_RCX  ) | (1 << _ABI_RDX  ) | (1 << _ABI_RSI  ) | (1 << _ABI_RDI ) |
+                  (1 << _ABI_R8   ) | (1 << _ABI_R9   ) | (1 << _ABI_R10  ) | (1 << _ABI_R11  ) |
+                  (1 << _ABI_XMM0 ) | (1 << _ABI_XMM1 ) | (1 << _ABI_XMM2 ) | (1 << _ABI_XMM3 ) |
+                  (1 << _ABI_XMM4 ) | (1 << _ABI_XMM5 ) | (1 << _ABI_XMM6 ) | (1 << _ABI_XMM7 ) |
+                  (1 << _ABI_XMM8 ) | (1 << _ABI_XMM9 ) | (1 << _ABI_XMM10) | (1 << _ABI_XMM11) |
+                  (1 << _ABI_XMM12) | (1 << _ABI_XMM13) | (1 << _ABI_XMM14) | (1 << _ABI_XMM15);
     }
+    return clobber;
+}
+// Values with indexes corresponding to callee-saved registers are multiplied by 2.
+static void abi_get_callee_saved_regs(uint8_t * registers, size_t max_count)
+{
+    uint64_t clobber = abi_get_clobber_mask();
+    for (size_t i = 0; i < 32 && i < max_count; i++)
+    {
+        uint8_t n = !((clobber >> i) & 1);
+        registers[i] *= n + 1;
+    }
+}
+
+static uint8_t abi_reg_is_callee_saved(uint64_t reg)
+{
+    assert(reg < 32);
+    uint64_t clobber = abi_get_clobber_mask();
+    return !!((clobber >> reg) & 1);
 }
 
 #endif // BBAE_ABI_H

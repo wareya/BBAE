@@ -12,11 +12,13 @@
 
 // read the next token on the current line, return 0 if none
 // thrashes any previously-returned token. make copies!
-static char token[4096];
-static size_t token_len;
 static char * find_next_token(const char ** b)
 {
+    static char token[4096];
+    static size_t token_len;
+    
     memset(token, 0, 4096);
+    token_len = 0;
     
     char * w = token;
     
@@ -329,10 +331,13 @@ typedef struct _Function {
     Value ** args;
     // stack slots (array)
     Value ** stack_slots;
+    uint64_t stack_height;
     // blocks, in order of declaration (array)
     Block ** blocks;
     // explicit pointer to entry block so that it doesn't get lost
     Block * entry_block;
+    
+    uint8_t written_registers[256]; // list of registers that have been written to in the function. used to avoid clobbering callee-saved registers.
 } Function;
 
 static Function * new_func(void)

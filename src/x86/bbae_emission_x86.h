@@ -21,6 +21,9 @@ static void allocate_stack_slots(Program * program)
                 offset += 1;
             slot->offset = offset;
         }
+        while (func->stack_height & 8)
+            func->stack_height += 1;
+        func->stack_height = offset;
     }
 }
 
@@ -48,6 +51,38 @@ static byte_buffer * compile_file(Program * program)
     for (size_t f = 0; f < array_len(program->functions, Function *); f++)
     {
         Function * func = program->functions[f];
+        
+        if (func->stack_height)
+        {
+            abi_get_callee_saved_regs(func->written_registers, 32);
+            for (size_t i = 0; i < sizeof(func->written_registers); i++)
+            {
+                if (func->written_registers[i] == 2 && i != REG_RBP && i != REG_RSP)
+                    func->stack_height += 8;
+            }
+            while (func->stack_height & 16)
+                func->stack_height += 1;
+            
+            EncOperand rbp = zy_reg(REG_RBP, 8);
+            EncOperand rsp = zy_reg(REG_RSP, 8);
+            EncOperand height = zy_imm(func->stack_height);
+            
+            zy_emit_1(code, INST_PUSH, rbp);
+            zy_emit_2(code, INST_MOV, rbp, rsp);
+            zy_emit_2(code, INST_SUB, rsp, height);
+            
+            for (size_t i = 0; i < sizeof(func->written_registers); i++)
+            {
+                size_t n = 0;
+                if (func->written_registers[i] == 2 && i != REG_RBP && i != REG_RSP)
+                {
+                    EncOperand mem = zy_mem(REG_RSP, n * 8, 8);
+                    zy_emit_2(code, i >= REG_XMM0 ? INST_MOVQ : INST_MOV, mem, zy_reg(i, 8));
+                    n += 1;
+                }
+            }
+        }
+        
         for (size_t b = 0; b < array_len(func->blocks, Block *); b++)
         {
             Block * block = func->blocks[b];
@@ -64,6 +99,19 @@ static byte_buffer * compile_file(Program * program)
                     EncOperand op2 = get_basic_encoperand(op.value);
                     if (!encops_equal(op1, op2))
                         zy_emit_2(code, INST_MOV, op1, op2);
+                    
+                    for (size_t i = 0; i < sizeof(func->written_registers); i++)
+                    {
+                        size_t n = 0;
+                        if (func->written_registers[i] == 2 && i != REG_RBP && i != REG_RSP)
+                        {
+                            EncOperand mem = zy_mem(REG_RSP, n * 8, 8);
+                            zy_emit_2(code, i >= REG_XMM0 ? INST_MOVQ : INST_MOV, zy_reg(i, 8), mem);
+                            n += 1;
+                        }
+                    }
+                    
+                    zy_emit_0(code, INST_LEAVE);
                     zy_emit_0(code, INST_RET);
                 }
                 else if (strcmp(statement->statement_name, "add") == 0)

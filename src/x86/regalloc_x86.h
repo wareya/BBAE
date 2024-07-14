@@ -20,6 +20,7 @@
 
 static int64_t first_empty(Value ** array, size_t len)
 {
+    // TODO: if block has no calls in it, prefer non-callee-saved registers
     int64_t found = -1;
     for (size_t n = 0; n < len; n++)
     {
@@ -278,6 +279,8 @@ static void do_regalloc_block(Function * func, Block * block)
                 }
             }
         }
+        
+        func->written_registers[where] = 1;
         
         if (where >= _ABI_XMM0)
             reg_float_alloced[where - _ABI_XMM0] = statement->output;

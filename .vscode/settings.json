@@ -2,7 +2,8 @@
     "files.associations": {
         "cstdint": "c",
         "memory.h": "c",
-        "bbae_api.h": "c"
+        "bbae_api.h": "c",
+        "compiler_common.h": "c"
     },
     "cSpell.words": [
         "iptr"
