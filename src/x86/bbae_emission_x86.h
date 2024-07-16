@@ -247,6 +247,12 @@ static byte_buffer * compile_file(Program * program)
                     zy_emit_0(code, INST_RET);
                 }
                 else if (strcmp(statement->statement_name, "add") == 0 ||
+                         strcmp(statement->statement_name, "sub") == 0 ||
+                         strcmp(statement->statement_name, "shl") == 0 ||
+                         strcmp(statement->statement_name, "shr") == 0 ||
+                         strcmp(statement->statement_name, "fadd") == 0 ||
+                         strcmp(statement->statement_name, "fsub") == 0 ||
+                         strcmp(statement->statement_name, "fdiv") == 0 ||
                          strcmp(statement->statement_name, "fmul") == 0)
                 {
                     Operand op1_op = statement->args[0];
@@ -262,12 +268,20 @@ static byte_buffer * compile_file(Program * program)
                     EncOperand op2 = get_basic_encoperand(op2_op.value);
                     if (encops_equal(op0, op2))
                     {
-                        EncOperand temp = op1;
-                        op1 = op2;
-                        op2 = temp;
+                        if (strcmp(statement->statement_name, "add") == 0 ||
+                            strcmp(statement->statement_name, "fadd") == 0 ||
+                            strcmp(statement->statement_name, "fmul") == 0)
+                        {
+                            EncOperand temp = op1;
+                            op1 = op2;
+                            op2 = temp;
+                        }
+                        else
+                            assert(("FIXME", 0));
                     }
                     if (!encops_equal(op0, op1))
                         zy_emit_2(code, INST_MOV, op0, op1);
+                    
                     if (strcmp(statement->statement_name, "add") == 0)
                         zy_emit_2(code, INST_ADD, op0, op2);
                     else if (strcmp(statement->statement_name, "fmul") == 0 && statement->output->type.variant == TYPE_F32)
@@ -385,6 +399,8 @@ static byte_buffer * compile_file(Program * program)
                     
                     zy_emit_1(code, INST_JMP, op_dummy);
                     add_label_relocation(code->len - 4, target_op.text, 4);
+                    
+                    // TODO/FIXME: handle register shuffling!!!!
                 }
                 else if (strcmp(statement->statement_name, "if") == 0)
                 {
@@ -450,8 +466,29 @@ static byte_buffer * compile_file(Program * program)
                         zy_emit_1(code, INST_SETNB, op0);
                     else
                         assert(("TODO", 0));
+                }
+                else if (str_begins_with(statement->statement_name, "uint_to_float"))
+                {
+                    Operand op1_op = statement->args[0];
+                    assert(op1_op.variant == OP_KIND_TYPE);
+                    Operand op2_op = statement->args[1];
+                    assert(op2_op.variant == OP_KIND_VALUE);
                     
-                    // TODO/FIXME: handle register shuffling!!!!
+                    assert(statement->output);
+                    assert(statement->output->regalloced);
+                    
+                    EncOperand op2 = get_basic_encoperand(op2_op.value);
+                    // FIXME: handle sizes other than i32 properly
+                    // i8/i16 need zero extension
+                    // i64 needs overflow handling (CVTSI2SD is signed)
+                    EncOperand op0 = get_basic_encoperand(statement->output);
+                    
+                    if (op1_op.rawtype.variant == TYPE_F64)
+                        zy_emit_2(code, INST_CVTSI2SD, op0, op2);
+                    else if (op1_op.rawtype.variant == TYPE_F32)
+                        zy_emit_2(code, INST_CVTSI2SS, op0, op2);
+                    else
+                        assert(("TODO", 0));
                 }
                 else
                 {

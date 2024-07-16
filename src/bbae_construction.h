@@ -667,6 +667,8 @@ void split_blocks(Program * program)
                     
                     for (size_t a = 0; a < array_len(output_latest_use, uint64_t); a++)
                     {
+                        if (output_latest_use[a] <= i)
+                            continue;
                         Value * arg = make_value(outputs[a]->type);
                         arg->variant = VALUE_ARG;
                         printf("creating dummy block arg with name %s\n", output_names[a]);

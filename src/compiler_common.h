@@ -568,6 +568,8 @@ static void add_statement_output(Statement * statement)
             strcmp(statement->statement_name, "sub") == 0 ||
             strcmp(statement->statement_name, "mul") == 0 ||
             strcmp(statement->statement_name, "div") == 0 ||
+            strcmp(statement->statement_name, "shl") == 0 ||
+            strcmp(statement->statement_name, "shr") == 0 ||
             strcmp(statement->statement_name, "fadd") == 0 ||
             strcmp(statement->statement_name, "fsub") == 0 ||
             strcmp(statement->statement_name, "fmul") == 0 ||
