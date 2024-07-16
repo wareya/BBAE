@@ -145,6 +145,16 @@ static size_t array_find_impl(void * array, size_t item_size, void * ptr)
 
 #define array_find(ARRAY, TYPE, VAL) (array_find_impl((void*)(ARRAY), sizeof(TYPE), &(VAL)))
 
+static uint8_t * array_chop_impl(uint8_t ** array, size_t start_offs, size_t end_offs)
+{
+    uint8_t * ret = (uint8_t *)zero_alloc(end_offs - start_offs);
+    memcpy(ret, *array + start_offs, end_offs - start_offs);
+    *array = zero_realloc(*array, start_offs);
+    return ret;
+}
+
+#define array_chop(ARRAY, TYPE, I) ((TYPE*)array_chop_impl((uint8_t**)(&(ARRAY)), sizeof(TYPE) * (I), array_len(ARRAY, TYPE) * (I)))
+
 // Returns a pointer to a buffer with len+1 bytes reserved, and at least one null terminator.
 static char * strcpy_len(const char * str, size_t len)
 {

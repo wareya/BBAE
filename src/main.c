@@ -59,6 +59,8 @@ int main(int argc, char ** argv)
         printf("%02X ", code->data[i]);
     puts("");
     
+    print_asm(code);
+    
     uint8_t * jit_code = copy_as_executable(code->data, code->len);
     
     // suppress non-posix-compliant gcc function pointer casting warning
@@ -72,7 +74,6 @@ int main(int argc, char ** argv)
     
     printf("output: %d (0x%X)\n", asdf, asdf);
     
-    print_asm(code);
     
     free_as_executable(jit_code);
     free_all_compiler_allocs();

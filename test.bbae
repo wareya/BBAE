@@ -1,16 +1,35 @@
 
-func main returns i32
-    arg var_a i32
-    arg var_b i32
-    stack_slot a 1
-    stack_slot b 16
-    z = stack_addr a
-    z2 = add z 9512iptr
-    c = add var_a var_b # 10
-    d = add 5i32 c # 15
-    e = add d 2i32 # 17
-    f = add e d # 32
-    g = add f -1i32 # 31
-    h = add var_a var_b
-    return g
+func main returns f64
+    arg arg_n i64
+    stack_slot sum 8
+    stack_slot flip 8
+    stack_slot i 8
+    stack_slot n 8
+    store sum 0i64
+    store flip -1.0f64
+    store i 1i64
+    store n arg_n
+    goto loop_head
+block loop_head
+    nval = load i64 n
+    ival = load i64 i
+    cmp = cmp_g ival nval
+    if cmp goto out
+    
+    f = load f64 flip
+    f2 = fmul f -1.0f64
+    store flip f2
+    
+    a = mul ival 2i64
+    b = sub a 1i64
+    c = uint_to_float f64 b
+    d = fdiv f2 c
+    
+    s = load f64 sum
+    s2 = add s d
+    store s s2
+    goto loop_head
+block out
+    ret = load f64 sum
+    return ret
 endfunc

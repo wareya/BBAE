@@ -270,6 +270,8 @@ Implementation-defined behavior is allowed to produce any arbitrary value, but i
 Operations:
 
 ```rs
+mov any // copy any value into a new SSA variable
+
 load <type> iptr
 ternary i any any // any and any must be of the same type. compiles down to a conditional move, not a branch, except on platforms without conditional moves, unless the compiler determines that a branch would be faster.
 
@@ -301,10 +303,10 @@ xor i i // bitwise xor
 cmp_eq i i // produces 1i8 if the values are equal, 0 otherwise. i and i must be of the same type.
 cmp_ne i i // !=
 
-cmp_ge i i // >=
-cmp_le i i // <=
-cmp_g i i // >
-cmp_l i i // <
+cmp_ge i i // unsigned >=
+cmp_le i i // unsigned <=
+cmp_g i i // unsigned >
+cmp_l i i // unsigned <
 
 icmp_ge i i // signed >=
 icmp_le i i // signed <=
@@ -324,11 +326,11 @@ neg i // produces the arithmetic negative of the input value
 not i  // produces 1i8 for 0, 0i8 otherwise.
 bool i // produces 0i8 for 0, 1i8 otherwise.
 
-addf f f // f and f must be of the same type
-subf f f
-mulf f f
-divf f f
-remf f f
+fadd f f // f and f must be of the same type
+fsub f f
+fmul f f
+fdiv f f
+frem f f
 
 trim <type> i // cast integer to given type, which must be the same size or smaller. bitwise truncation, trims away any higher bits.
 qext <type> i // quick extend integer into the given type, which must be the same size or larger. any new bits contain arbitrary but not-undefined, not-poison data.
@@ -367,7 +369,8 @@ ptralias_bless iptr // Evaluates to iptr, but with universal aliasing.
 ptralias_curse iptr // Evaluates to iptr, but with no aliasing (i.e. is assumed to point to different data than any prior-existant pointer, including the original iptr).
 
 ptr_to_i64 iptr // returns an i64 with the same value as the given pointer
-int_to_ptr i // returns an iptr with the same value as an integer, and universal aliasing
+int_to_ptr_blessed i // returns an iptr with the same value as an integer, and universal aliasing. primarily used for int-punned pointers.
+int_to_ptr_cursed i // returns an iptr with the same value as an integer, and no aliasing. primarily used for offsets.
 ```
 
 ------

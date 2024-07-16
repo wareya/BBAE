@@ -152,6 +152,10 @@ static Type basic_type(int x)
     return ret;
 }
 
+static uint8_t type_is_valid(Type type)
+{
+    return type.variant >= TYPE_I8 && type.variant <= TYPE_AGG;
+}
 static uint8_t type_is_basic(Type type)
 {
     return type.variant >= TYPE_I8 && type.variant <= TYPE_F64;
@@ -229,7 +233,7 @@ typedef struct _Value {
     Type type;
     uint64_t constant; // is a pointer if type is aggregate. otherwise is bits of value
     struct _Statement * ssa;
-    char * arg;
+    const char * arg;
     struct _StackSlot * slotinfo;
     
     struct _Statement ** edges_out;
@@ -248,6 +252,8 @@ typedef struct _Value {
     
     struct _StackSlot * spilled; // set if currently spilled, null otherwise
     // set once when spilled. when unspilling, Value needs to be duplicated, modified, and injected into descendants.
+    
+    uint64_t temp; // temporary, used by specific algorithms as a kind of cache
 } Value;
 
 enum BBAE_OP_VARIANT {
@@ -255,13 +261,14 @@ enum BBAE_OP_VARIANT {
     OP_KIND_TYPE,
     OP_KIND_VALUE,
     OP_KIND_TEXT,
+    OP_KIND_SEPARATOR,
 };
 
 typedef struct _Operand {
     enum BBAE_OP_VARIANT variant;
     Type rawtype;
     Value * value;
-    char * text;
+    const char * text;
 } Operand;
 
 struct _Block;
@@ -275,17 +282,12 @@ typedef struct _Statement {
     
     // array
     Operand * args;
-    // arrays of secondary args -- ONLY for if and if-else.
-    Operand * args_a;
-    Operand * args_b;
 } Statement;
 
 static Statement * new_statement(void)
 {
     Statement * statement = (Statement *)zero_alloc(sizeof(Statement));
     statement->args = (Operand *)zero_alloc(0);
-    statement->args_a = (Operand *)zero_alloc(0);
-    statement->args_b = (Operand *)zero_alloc(0);
     return statement;
 }
 
@@ -305,6 +307,8 @@ typedef struct _Block {
     Statement ** edges_out;
     // statements within the block (array)
     Statement ** statements;
+    // where the block starts within its associated byte buffer
+    uint64_t start_offset;
 } Block;
 
 static Block * new_block(void)
@@ -349,14 +353,67 @@ static Function * new_func(void)
     return func;
 }
 
+static Block * find_block(Function * func, const char * name)
+{
+    for (size_t b = 0; b < array_len(func->blocks, Block *); b++)
+    {
+        Block * block = func->blocks[b];
+        if (strcmp(block->name, name) == 0)
+            return block;
+    }
+    return 0;
+}
+
+typedef struct _StaticData {
+    const char * name;
+    Type type;
+    uint64_t init_data_short; // only used if size of type is 8 or less
+    uint8_t * init_data_long;
+    size_t location; // starts out uninitialized, becomes initialized when code generation is done
+} StaticData;
+
 typedef struct _Program {
     // array
     Function ** functions;
     //Global * globals;
-    //Static * statics;
+    StaticData * statics;
     Function * current_func;
     Block * current_block;
 } Program;
+
+static void add_static_i8(Program * program, const char * name, uint8_t value)
+{
+    StaticData data = {name, basic_type(TYPE_I8), value, 0, 0};
+    array_push(program->statics, StaticData, data);
+}
+static void add_static_i16(Program * program, const char * name, uint16_t value)
+{
+    StaticData data = {name, basic_type(TYPE_I16), value, 0, 0};
+    array_push(program->statics, StaticData, data);
+}
+static void add_static_i32(Program * program, const char * name, uint32_t value)
+{
+    StaticData data = {name, basic_type(TYPE_I32), value, 0, 0};
+    array_push(program->statics, StaticData, data);
+}
+static void add_static_i64(Program * program, const char * name, uint64_t value)
+{
+    StaticData data = {name, basic_type(TYPE_I64), value, 0, 0};
+    array_push(program->statics, StaticData, data);
+}
+
+static StaticData find_static(Program * program, const char * name)
+{
+    for (size_t i = 0; i < array_len(program->statics, StaticData); i++)
+    {
+        StaticData stat = program->statics[i];
+        if (strcmp(stat.name, name) == 0)
+            return stat;
+    }
+    StaticData ret;
+    memset(&ret, 0, sizeof(StaticData));
+    return ret;
+}
 
 static uint64_t parse_int_bare(const char * n)
 {
@@ -466,12 +523,40 @@ static Operand new_op_val(Value * val)
     return op;
 }
 
-static uint64_t temp_ctr = 0;
-static char * make_temp_var_name(void)
+static Operand new_op_type(Type rawtype)
 {
-    size_t len = snprintf(0, 0, "__bbae_temp_%zu", temp_ctr);
+    Operand op;
+    memset(&op, 0, sizeof(Operand));
+    op.variant = OP_KIND_TYPE;
+    op.rawtype = rawtype;
+    return op;
+}
+
+static Operand new_op_text(const char * name)
+{
+    Operand op;
+    memset(&op, 0, sizeof(Operand));
+    op.variant = OP_KIND_TEXT;
+    op.text = name;
+    return op;
+}
+
+static Operand new_op_separator(void)
+{
+    Operand op;
+    memset(&op, 0, sizeof(Operand));
+    op.variant = OP_KIND_SEPARATOR;
+    return op;
+}
+
+static uint64_t temp_ctr = 0;
+static char * make_temp_name(void)
+{
+    size_t len = snprintf(0, 0, "__bbae_temp_%zu", temp_ctr) + 1;
     char * str = zero_alloc(len + 1);
     snprintf(str, len, "__bbae_temp_%zu", temp_ctr);
+    assert(len > 12);
+    assert(strcmp(str, "__bbae_temp_") != 0);
     return str;
 }
 
@@ -481,14 +566,37 @@ static void add_statement_output(Statement * statement)
     {
         if (strcmp(statement->statement_name, "add") == 0 ||
             strcmp(statement->statement_name, "sub") == 0 ||
-            strcmp(statement->statement_name, "stack_addr") == 0)
+            strcmp(statement->statement_name, "mul") == 0 ||
+            strcmp(statement->statement_name, "div") == 0 ||
+            strcmp(statement->statement_name, "fadd") == 0 ||
+            strcmp(statement->statement_name, "fsub") == 0 ||
+            strcmp(statement->statement_name, "fmul") == 0 ||
+            strcmp(statement->statement_name, "fdiv") == 0 ||
+            strcmp(statement->statement_name, "mov") == 0)
         {
             assert(statement->args[0].variant == OP_KIND_VALUE);
             statement->output = make_value(statement->args[0].value->type);
-            statement->output->variant = VALUE_SSA;
+        }
+        else if (strcmp(statement->statement_name, "load") == 0 ||
+                 strcmp(statement->statement_name, "uint_to_float") == 0 ||
+                 strcmp(statement->statement_name, "load") == 0)
+        {
+            assert(statement->args[0].variant == OP_KIND_TYPE);
+            statement->output = make_value(statement->args[0].rawtype);
+        }
+        else if (strcmp(statement->statement_name, "cmp_g") == 0 ||
+                 strcmp(statement->statement_name, "cmp_ge") == 0 ||
+                 strcmp(statement->statement_name, "cmp_ge") == 0)
+        {
+            statement->output = make_value(basic_type(TYPE_I8));
         }
         else
+        {
+            printf("culprit: %s\n", statement->statement_name);
             assert(("TODO", 0));
+        }
+        statement->output->variant = VALUE_SSA;
+        statement->output->ssa = statement;
     }
 }
 
@@ -503,4 +611,43 @@ static void connect_statement_to_operand(Statement * statement, Operand op)
     }
 }
 
+
+// On some backends, specific types of argument can't be used with specific functions.
+// For example, on x86, there's no <reg_a> = fmul <reg_a> <const> instruction.
+// So, we need a legalization system. Our legalization system runs immediately before an instruction
+// is regalloced
+
+typedef struct _ImmOpsAllowed
+{
+    // For if and goto instructions, all operands are legal (except for the ones that need to be label names).
+    // For branches, it's the backend's job to emit all the relevant machine code.
+    // The backend knows exactly which registers are allowed to be clobbered during jumps, so it's able to do so.
+    
+    uint8_t immediates_allowed[8];
+} ImmOpsAllowed;
+// implemented by backend
+ImmOpsAllowed imm_op_rule_determiner(Statement * statement);
+
+typedef struct _RegAllocRules
+{
+    // for up to 8 operands (0 is output, 1 is input 0, 2 is input 1, etc):
+    // which registers from 0 to 63 are allowed
+    uint64_t allowed_registers_lo[8];
+    // 64 to 127, etc. not used in x86 backend, but useful in exotic architectures.
+    // might also be useful for x86 in the future for extended SIMD support? dunno
+    uint64_t allowed_registers_e1[8];
+    uint64_t allowed_registers_e2[8];
+    uint64_t allowed_registers_e3[8];
+    
+    // which registers the instruction clobbers, if any
+    uint8_t clobbers[256];
+    
+    uint8_t output_same_as_left_input; // for x86, almost always 1
+    uint8_t raw_stack_addr_arguments_allowed;
+} RegAllocRules;
+// implemented by backend
+RegAllocRules regalloc_rule_determiner(Statement * statement);
+
+
+    
 #endif // BBAE_COMPILER_COMMON

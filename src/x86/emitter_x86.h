@@ -54,6 +54,8 @@ enum Register {
     REG_XMM14,
     REG_XMM15,
     
+    REG_RIP,
+    
     REG_NONE,
 };
 
@@ -409,6 +411,9 @@ static int reg_unsized_to_sized(enum Register reg, int size)
     if (reg >= REG_XMM0)
         assert(size == 8);
     
+    if (reg == REG_RIP)
+        return ZYDIS_REGISTER_RIP;
+    
     if (reg >= REG_XMM0)
         return ZYDIS_REGISTER_XMM0 + ((int)reg - REG_XMM0);
     else if (size == 8)
@@ -425,9 +430,9 @@ static int reg_unsized_to_sized(enum Register reg, int size)
         assert(("unknown register!\n", 0));
 }
 
-static ZydisEncoderOperand zy_reg(enum Register reg, int size)
+static EncOperand zy_reg(enum Register reg, int size)
 {
-    ZydisEncoderOperand ret;
+    EncOperand ret;
     memset(&ret, 0, sizeof(ret)); 
     
     ret.type = ZYDIS_OPERAND_TYPE_REGISTER;
@@ -436,11 +441,11 @@ static ZydisEncoderOperand zy_reg(enum Register reg, int size)
     
     return ret;
 }
-static ZydisEncoderOperand zy_mem_full(enum Register base_reg, enum Register index_reg, int index_scale, int64_t offset, int word_size)
+static EncOperand zy_mem_full(enum Register base_reg, enum Register index_reg, int index_scale, int64_t offset, int word_size)
 {
     assert(index_scale == 0 || index_scale == 1 || index_scale == 2 || index_scale == 4 || index_scale == 8);
     
-    ZydisEncoderOperand ret;
+    EncOperand ret;
     memset(&ret, 0, sizeof(ret)); 
     
     ret.type = ZYDIS_OPERAND_TYPE_MEMORY;
@@ -453,16 +458,31 @@ static ZydisEncoderOperand zy_mem_full(enum Register base_reg, enum Register ind
     
     return ret;
 }
-static ZydisEncoderOperand zy_mem(enum Register base_reg, int64_t offset, int word_size)
+static EncOperand zy_mem(enum Register base_reg, int64_t offset, int word_size)
 {
     return zy_mem_full(base_reg, REG_NONE, 0, offset, word_size);
 }
+
+static EncOperand zy_mem_add_offset(EncOperand op, uint64_t offset)
+{
+    assert(op.type == ZYDIS_OPERAND_TYPE_MEMORY);
+    op.mem.displacement += offset;
+    return op;
+}
+
+static EncOperand zy_mem_change_size(EncOperand op, uint64_t size)
+{
+    assert(op.type == ZYDIS_OPERAND_TYPE_MEMORY);
+    assert(size == 1 || size == 2 || size == 4 || size == 8);
+    op.mem.size = size;
+    return op;
+}
 /*
-ZydisEncoderOperand zy_ptr(enum Segment segment, int64_t offset, int word_size)
+EncOperand zy_ptr(enum Segment segment, int64_t offset, int word_size)
 {
     assert(index_scale == 1 || index_scale == 2 || index_scale == 4 || index_scale == 8);
     
-    ZydisEncoderOperand ret;
+    EncOperand ret;
     memset(&ret, 0, sizeof(ret)); 
     
     ret.mem.segment = segment;
@@ -471,10 +491,27 @@ ZydisEncoderOperand zy_ptr(enum Segment segment, int64_t offset, int word_size)
     return ret;
 }
 */
-static ZydisEncoderOperand zy_imm(uint64_t imm)
+static EncOperand zy_imm(uint64_t imm, uint64_t size)
 {
-    ZydisEncoderOperand ret;
-    memset(&ret, 0, sizeof(ret)); 
+    assert(size == 1 || size == 2 || size == 4 || size == 8);
+    EncOperand ret;
+    memset(&ret, 0, sizeof(ret));
+    
+    if (size == 1)
+    {
+        int8_t n = imm;
+        imm = (int64_t)n;
+    }
+    else if (size == 2)
+    {
+        int16_t n = imm;
+        imm = (int16_t)n;
+    }
+    else if (size == 4)
+    {
+        int32_t n = imm;
+        imm = (int32_t)n;
+    }
     
     ret.type = ZYDIS_OPERAND_TYPE_IMMEDIATE;
     ret.imm.u = imm;
@@ -522,7 +559,7 @@ static void do_encode(ZydisEncoderRequest req, uint8_t * buf, size_t * len)
     }
 }
 
-static void zy_emit_n(byte_buffer * bytes, int name, ZydisEncoderOperand * ops, int n)
+static void zy_emit_n(byte_buffer * bytes, int name, EncOperand * ops, int n)
 {
     assert(n <= 5);
     
@@ -540,24 +577,24 @@ static void zy_emit_n(byte_buffer * bytes, int name, ZydisEncoderOperand * ops, 
     bytes_push(bytes, buf, len);
 }
 
-static void zy_emit_4(byte_buffer * bytes, int name, ZydisEncoderOperand op1, ZydisEncoderOperand op2, ZydisEncoderOperand op3, ZydisEncoderOperand op4)
+static void zy_emit_4(byte_buffer * bytes, int name, EncOperand op1, EncOperand op2, EncOperand op3, EncOperand op4)
 {
-    ZydisEncoderOperand ops[] = {op1, op2, op3, op4};
+    EncOperand ops[] = {op1, op2, op3, op4};
     zy_emit_n(bytes, name, ops, 4);
 }
-static void zy_emit_3(byte_buffer * bytes, int name, ZydisEncoderOperand op1, ZydisEncoderOperand op2, ZydisEncoderOperand op3)
+static void zy_emit_3(byte_buffer * bytes, int name, EncOperand op1, EncOperand op2, EncOperand op3)
 {
-    ZydisEncoderOperand ops[] = {op1, op2, op3};
+    EncOperand ops[] = {op1, op2, op3};
     zy_emit_n(bytes, name, ops, 3);
 }
-static void zy_emit_2(byte_buffer * bytes, int name, ZydisEncoderOperand op1, ZydisEncoderOperand op2)
+static void zy_emit_2(byte_buffer * bytes, int name, EncOperand op1, EncOperand op2)
 {
-    ZydisEncoderOperand ops[] = {op1, op2};
+    EncOperand ops[] = {op1, op2};
     zy_emit_n(bytes, name, ops, 2);
 }
-static void zy_emit_1(byte_buffer * bytes, int name, ZydisEncoderOperand op1)
+static void zy_emit_1(byte_buffer * bytes, int name, EncOperand op1)
 {
-    ZydisEncoderOperand ops[] = {op1};
+    EncOperand ops[] = {op1};
     zy_emit_n(bytes, name, ops, 1);
 }
 static void zy_emit_0(byte_buffer * bytes, int name)

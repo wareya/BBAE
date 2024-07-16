@@ -66,12 +66,13 @@ static void do_regalloc_block(Function * func, Block * block)
             {
                 int64_t where = abi_get_next_arg_basic(type_is_float(value->type));
                 assert(("arg reg spill not yet supported", where >= 0));
+                
                 if (where >= _ABI_XMM0)
                     reg_float_alloced[where - _ABI_XMM0] = value;
                 else 
                     reg_int_alloced[where] = value;
                 
-                printf("allocated register %zd to arg %s\n", where, value->arg);
+                printf("allocated register %zd to func arg %s\n", where, value->arg);
                 
                 value->regalloc = where;
                 value->regalloced = 1;
@@ -82,8 +83,25 @@ static void do_regalloc_block(Function * func, Block * block)
     }
     else
     {
-        // TODO: allocate based on output allocation of entry blocks
-        assert(("TODO later block regalloc", 0));
+        // TODO: preferentially allocate based on output allocation of entry blocks
+        for (size_t i = 0; i < array_len(block->args, Value *); i++)
+        {
+            Value * value = block->args[i];
+            assert(("TODO", type_is_intreg(value->type)));
+            int64_t where = first_empty(reg_int_alloced, BBAE_REGISTER_COUNT);
+            if (where < 0)
+                assert(("spilled block arguments not yet supported", 0));
+                
+            if (where >= _ABI_XMM0)
+                reg_float_alloced[where - _ABI_XMM0] = value;
+            else 
+                reg_int_alloced[where] = value;
+            
+            printf("allocated register %zd to block arg %s\n", where, value->arg);
+            
+            value->regalloc = where;
+            value->regalloced = 1;
+        }
     }
     
     // give statements numbers for regalloc reasons
@@ -135,7 +153,7 @@ static void do_regalloc_block(Function * func, Block * block)
         if (!statement->output)
             continue;
         
-        assert(("TODO", type_is_intreg(statement->output->type)));
+        uint8_t is_int = type_is_intreg(statement->output->type);
         
         // reuse an operand register if possible
         for (size_t j = 0; j < array_len(statement->args, Operand); j++)
@@ -144,6 +162,9 @@ static void do_regalloc_block(Function * func, Block * block)
             if (arg && arg->regalloced
                 && arg->alloced_use_count == array_len(arg->edges_out, Value *))
             {
+                if (is_int != type_is_intreg(arg->type))
+                    continue;
+                
                 statement->output->regalloc = arg->regalloc;
                 statement->output->regalloced = 1;
                 
@@ -163,7 +184,9 @@ static void do_regalloc_block(Function * func, Block * block)
             continue;
         }
         
-        int64_t where = first_empty(reg_int_alloced, BBAE_REGISTER_COUNT);
+        int64_t where = first_empty(is_int ? reg_int_alloced : reg_float_alloced, BBAE_REGISTER_COUNT);
+        if (!is_int)
+            where += _ABI_XMM0;
         if (where < 0)
         {
             // pick the register whose next use is the furthest into the future
@@ -172,8 +195,16 @@ static void do_regalloc_block(Function * func, Block * block)
             for (size_t n = 0; n < BBAE_REGISTER_COUNT; n++)
             {
                 Value * spill_candidate = 0;
-                if (!(reg_int_alloced[n] && reg_int_alloced[n] != (Value *)-1 && n != _ABI_RSP && n != _ABI_RBP))
-                    continue;
+                if (is_int)
+                {
+                    if (!(reg_int_alloced[n] && reg_int_alloced[n] != (Value *)-1 && n != _ABI_RSP && n != _ABI_RBP))
+                        continue;
+                }
+                else
+                {
+                    if (!(reg_float_alloced[n] && reg_float_alloced[n] != (Value *)-1))
+                        continue;
+                }
                 
                 spill_candidate = reg_int_alloced[n];
                 
@@ -209,7 +240,7 @@ static void do_regalloc_block(Function * func, Block * block)
             }
             assert(to_spill >= 0);
             
-            Value * spillee = reg_int_alloced[to_spill];
+            Value * spillee = (is_int ? reg_int_alloced : reg_float_alloced)[to_spill];
             printf("want to spill reg %zu (%p)\n", to_spill, (void *)spillee);
             
             assert(spillee->regalloced);
@@ -217,7 +248,7 @@ static void do_regalloc_block(Function * func, Block * block)
             assert(!spillee->spilled);
             
             // spill statements don't need to be numbered because they're never an outward edge of an SSA value
-            Value * spill_slot = add_stack_slot(func, make_temp_var_name(), type_size(spillee->type));
+            Value * spill_slot = add_stack_slot(func, make_temp_name(), type_size(spillee->type));
             spillee->spilled = spill_slot->slotinfo;
             
             Statement * spill = new_statement();
@@ -247,14 +278,16 @@ static void do_regalloc_block(Function * func, Block * block)
                         assert(inst_index != -1);
                         
                         unspill = new_statement();
-                        unspill->output_name = make_temp_var_name();
+                        unspill->output_name = make_temp_name();
                         unspill->statement_name = strcpy_z("load");
                         unspill->output = make_value(spillee->type);
                         unspill->output->variant = VALUE_SSA;
                         
-                        Operand op = new_op_val(spill_slot);
-                        array_push(unspill->args, Operand, op);
-                        connect_statement_to_operand(unspill, op);
+                        Operand op1 = new_op_type(spillee->type);
+                        array_push(unspill->args, Operand, op1);
+                        Operand op2 = new_op_val(spill_slot);
+                        array_push(unspill->args, Operand, op2);
+                        connect_statement_to_operand(unspill, op2);
                         
                         array_insert(block->statements, Statement *, inst_index, unspill);
                     }
@@ -305,6 +338,31 @@ static void do_regalloc(Program * program)
             do_regalloc_block(func, block);
         }
     }
+}
+
+ImmOpsAllowed imm_op_rule_determiner(Statement * statement)
+{
+    ImmOpsAllowed ret;
+    memset(&ret, 1, sizeof(ImmOpsAllowed));
+    if (strcmp(statement->statement_name, "add") == 0 ||
+        strcmp(statement->statement_name, "sub") == 0 ||
+        strcmp(statement->statement_name, "mul") == 0 ||
+        strcmp(statement->statement_name, "imul") == 0 ||
+        strcmp(statement->statement_name, "div") == 0 ||
+        strcmp(statement->statement_name, "idiv") == 0)
+    {
+        ret.immediates_allowed[0] = 0;
+    }
+    else if (strcmp(statement->statement_name, "fadd") == 0 ||
+        strcmp(statement->statement_name, "fsub") == 0 ||
+        strcmp(statement->statement_name, "fmul") == 0 ||
+        strcmp(statement->statement_name, "fdiv") == 0)
+    {
+        ret.immediates_allowed[0] = 0;
+        ret.immediates_allowed[1] = 0;
+    }
+    
+    return ret;
 }
 
 #endif // BBAE_REGALLOC
