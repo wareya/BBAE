@@ -163,6 +163,60 @@ static EncOperand get_basic_encoperand(Value * value)
     }
 }
 
+void reg_shuffle_setup(Value ** regs, Operand * args)
+{
+    memset(regs, 0, sizeof(Value *) * 32);
+    for (size_t i = 0; i < array_len(args, Operand); i++)
+    {
+        Operand op = args[i];
+        if (op.variant == OP_KIND_SEPARATOR)
+            continue;
+        assert(op.variant == OP_KIND_VALUE);
+        Value * arg_value = op.value;
+        if (arg_value->regalloced)
+        {
+            assert(((int64_t)arg_value->regalloc) >= 0);
+            assert(regs[arg_value->regalloc] == 0);
+            regs[arg_value->regalloc] = arg_value;
+        }
+    }
+}
+void reg_shuffle_reset(Value ** regs)
+{
+    for (size_t i = 0; i < array_len(regs, Value *); i++)
+        regs[i]->regalloc = i;
+}
+void reg_shuffle(byte_buffer * code, Value ** regs, Value ** block_args, Operand * args)
+{
+    for (size_t i = 0; i < array_len(block_args, Value *); i++)
+    {
+        Value * arg_block = block_args[i];
+        assert(arg_block->regalloced);
+        
+        Operand op = args[i];
+        assert(op.variant == OP_KIND_VALUE);
+        Value * arg_value = op.value;
+        assert(arg_value->regalloced);
+        assert(((int64_t)arg_value->regalloc) >= 0);
+        
+        if (arg_value->regalloc == arg_block->regalloc)
+            continue;
+        
+        EncOperand op1 = get_basic_encoperand(arg_block);
+        EncOperand op2 = get_basic_encoperand(arg_value);
+        
+        if (regs[arg_block->regalloc])
+        {
+            zy_emit_2(code, INST_XCHG, op1, op2);
+            regs[arg_block->regalloc]->regalloc = arg_value->regalloc;
+        }
+        else
+        {
+            zy_emit_2(code, INST_MOV, op1, op2);
+        }
+    }
+}
+                    
 static byte_buffer * compile_file(Program * program)
 {
     byte_buffer * code = (byte_buffer *)malloc(sizeof(byte_buffer));
@@ -423,10 +477,17 @@ static byte_buffer * compile_file(Program * program)
                     Value * dummy = make_const_value(TYPE_I32, 0x7FFFFFFF);
                     EncOperand op_dummy = get_basic_encoperand(dummy);
                     
+                    Block * target_block = find_block(func, target_op.text);
+                    size_t ba_len = array_len(target_block->args, Value *);
+                    size_t sa_len = array_len(statement->args, Operand) - 1;
+                    assert(("wrong number of arguments to block", ba_len == sa_len));
+                    
+                    Value * regs[32];
+                    reg_shuffle_setup(regs, statement->args + 1);
+                    reg_shuffle(code, regs, target_block->args, statement->args + 1);
+                    
                     zy_emit_1(code, INST_JMP, op_dummy);
                     add_label_relocation(code->len - 4, target_op.text, 4);
-                    
-                    // TODO/FIXME: handle register shuffling!!!!
                 }
                 else if (strcmp(statement->statement_name, "if") == 0)
                 {
@@ -439,38 +500,66 @@ static byte_buffer * compile_file(Program * program)
                     
                     Operand target_op2;
                     memset(&target_op2, 0, sizeof(Operand));
+                    size_t separator_pos = 0;
                     for (size_t i = 2; i < array_len(statement->args, Operand); i++)
                     {
                         if (statement->args[i].variant == OP_KIND_SEPARATOR)
                         {
+                            separator_pos = i;
                             assert(array_len(statement->args, Operand) > i + 1);
                             target_op2 = statement->args[i + 1];
                             break;
                         }
                     }
+                    assert(separator_pos);
                     assert(target_op2.variant == OP_KIND_TEXT);
                     
-                    printf("testing %zu against itself...\n", op1_op.value->regalloc);
+                    //printf("testing %zu against itself...\n", op1_op.value->regalloc);
                     size_t b = code->len;
-                    printf("b %zu\n", b);
+                    //printf("b %zu\n", b);
                     zy_emit_2(code, INST_TEST, op1, op1);
                     size_t a = code->len;
-                    printf("a %zu\n", a);
-                    for (size_t i = b; i < a; i++)
-                        printf("  %02X\n", code->data[i]);
+                    //printf("a %zu\n", a);
+                    //for (size_t i = b; i < a; i++)
+                    //    printf("  %02X\n", code->data[i]);
                     
-                    Value * dummy_short = make_const_value(TYPE_I8, 0);
-                    EncOperand op_dummy_short = get_basic_encoperand(dummy_short);
                     Value * dummy = make_const_value(TYPE_I32, 0x7FFFFFFF);
                     EncOperand op_dummy = get_basic_encoperand(dummy);
                     
-                    zy_emit_1(code, INST_JNZ, op_dummy);
+                    zy_emit_1(code, INST_JZ, op_dummy);
+                    size_t jump_over_loc = code->len;
+                    
+                    Operand * if_s_args = statement->args + 2;
+                    
+                    Block * if_target_block = find_block(func, target_op.text);
+                    size_t iba_len = array_len(if_target_block->args, Value *);
+                    size_t isa_len = separator_pos - 2;
+                    assert(("wrong number of arguments to block", iba_len == isa_len));
+                    
+                    Operand * else_s_args = statement->args + separator_pos + 2;
+                    
+                    Block * else_target_block = find_block(func, target_op2.text);
+                    size_t eba_len = array_len(else_target_block->args, Value *);
+                    size_t esa_len = array_len(statement->args, Operand) - separator_pos - 2;
+                    assert(("wrong number of arguments to block", eba_len == esa_len));
+                    
+                    Value * regs[32];
+                    reg_shuffle_setup(regs, if_s_args);
+                    reg_shuffle(code, regs, if_target_block->args, if_s_args);
+                    
+                    zy_emit_1(code, INST_JMP, op_dummy);
                     add_label_relocation(code->len - 4, target_op.text, 4);
+                    
+                    size_t jump_over_target = code->len;
+                    int32_t jump_over_len = jump_over_target - jump_over_loc;
+                    memcpy(code->data + jump_over_loc - 4, &jump_over_len, 4);
+                    
+                    reg_shuffle_reset(regs);
+                    reg_shuffle_setup(regs, else_s_args);
+                    reg_shuffle(code, regs, else_target_block->args, else_s_args);
                     
                     zy_emit_1(code, INST_JMP, op_dummy);
                     add_label_relocation(code->len - 4, target_op2.text, 4);
-                    
-                    // TODO/FIXME: handle register shuffling!!!!
                 }
                 else if (str_begins_with(statement->statement_name, "cmp_"))
                 {

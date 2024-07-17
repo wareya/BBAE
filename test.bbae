@@ -8,7 +8,7 @@ func main returns f64
     store sum 0i64
     store flip -1.0f64
     store i 1i64
-    store n 100000000i64
+    store n 10000000000i64
     goto loop_head
 block loop_head
     nval = load i64 n
@@ -30,10 +30,10 @@ block loop_head
     
     ival2 = add ival 1i64
     
-    store i ival2
-    
     cmp = cmp_g ival2 nval
     if cmp goto out
+    
+    store i ival2
     
     goto loop_head
 block out
