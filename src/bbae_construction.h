@@ -177,7 +177,7 @@ static Operand parse_op_text(const char ** cursor)
 }
 
 
-static uint8_t op_is_v(char * opname)
+static uint8_t op_is_v(const char * opname)
 {
     const char * ops[] = {
         "bnot", "not", "bool", "neg", "f32_to_f64", "f64_to_f32", "freeze", "ptralias_bless", "mov"
@@ -190,7 +190,7 @@ static uint8_t op_is_v(char * opname)
     return 0;
 }
 
-static uint8_t op_is_t_v(char * opname)
+static uint8_t op_is_t_v(const char * opname)
 {
     const char * ops[] = {
         "load", "trim", "qext", "zext", "sext",
@@ -206,7 +206,7 @@ static uint8_t op_is_t_v(char * opname)
     return 0;
 }
 
-static uint8_t op_is_v_v(char * opname)
+static uint8_t op_is_v_v(const char * opname)
 {
     const char * ops[] = {
         "add", "sub", "mul", "imul", "div", "idiv", "rem", "irem", "div_unsafe", "idiv_unsafe", "rem_unsafe", "irem_unsafe",
@@ -225,7 +225,7 @@ static uint8_t op_is_v_v(char * opname)
     return 0;
 }
 
-static uint8_t op_is_v_v_v(char * opname)
+static uint8_t op_is_v_v_v(const char * opname)
 {
     const char * ops[] = {
         "ternary", "inject"
@@ -328,6 +328,15 @@ static Statement * parse_statement(Program * program, const char ** cursor)
             array_push(ret->args, Operand, op1);
             array_push(ret->args, Operand, op3);
             
+            const char * next = find_next_token(cursor);
+            while (next && strcmp(next, "") != 0 && strcmp(next, "else") != 0)
+            {
+                next = strcpy_z(next);
+                Operand op = parse_op_val(program, &next);
+                array_push(ret->args, Operand, op);
+                next = find_next_token(cursor);
+            }
+            
             return ret;
         }
         else if (strcmp(ret->statement_name, "goto") == 0)
@@ -335,6 +344,15 @@ static Statement * parse_statement(Program * program, const char ** cursor)
             const char * op1_text = strcpy_z(find_next_token(cursor));
             Operand op1 = parse_op_text(&op1_text);
             array_push(ret->args, Operand, op1);
+            
+            const char * next = find_next_token(cursor);
+            while (next && strcmp(next, "") != 0)
+            {
+                next = strcpy_z(next);
+                Operand op = parse_op_val(program, &next);
+                array_push(ret->args, Operand, op);
+                next = find_next_token(cursor);
+            }
             
             return ret;
         }

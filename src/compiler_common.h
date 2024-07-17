@@ -37,6 +37,11 @@ static char * find_next_token(const char ** b)
         *b += 1;
         token_len += 1;
     }
+    if (is_comment(*b))
+    {
+        while (!is_newline(**b) && **b != 0)
+            *b += 1;
+    }
     
     assert(token[4095] == 0);
     
@@ -49,14 +54,14 @@ static char * find_next_token(const char ** b)
 // thrashes any previously-returned token
 static char * find_next_token_anywhere(const char ** b)
 {
-    while ((is_newline(**b) || is_space(**b)) && **b != 0)
+    while ((is_newline(**b) || is_space(**b) || is_comment(*b)) && **b != 0)
     {
-        *b += 1;
         if (is_comment(*b))
         {
             while (!is_newline(**b) && **b != 0)
                 *b += 1;
         }
+        *b += 1;
     }
     
     return find_next_token(b);
@@ -212,6 +217,24 @@ static size_t type_size(Type type)
         assert(0);
 }
 
+uint8_t aggdata_same(AggData a, AggData b)
+{
+    if (a.align != b.align || a.packed != b.packed || a.size != b.size)
+        return 0;
+    return !memcmp(a.per_byte_likeness, b.per_byte_likeness, a.size);
+}
+
+uint8_t types_same(Type a, Type b)
+{
+    if (a.variant == TYPE_INVALID || b.variant == TYPE_INVALID)
+        return 0;
+    if (a.variant != b.variant)
+        return 0;
+    if (a.variant != TYPE_AGG)
+        return 1;
+    return aggdata_same(a.aggdata, b.aggdata);
+}
+
 typedef struct _Global {
     char * name;
     Type type;
@@ -273,9 +296,9 @@ typedef struct _Operand {
 
 struct _Block;
 typedef struct _Statement {
-    char * output_name; // if null, instruction. else, operation.
+    const char * output_name; // if null, instruction. else, operation.
     Value * output; // if null, instruction. else, operation.
-    char * statement_name;
+    const char * statement_name;
     struct _Block * block;
     
     uint64_t num; // only used during register allocation; zero until then
@@ -608,9 +631,23 @@ static void connect_statement_to_operand(Statement * statement, Operand op)
     if (op.variant == OP_KIND_VALUE)
     {
         Value * val = op.value;
-        
         if (val->variant == VALUE_ARG || val->variant == VALUE_SSA || val->variant == VALUE_STACKADDR)
             array_push(val->edges_out, Statement *, statement);
+    }
+}
+
+static void disconnect_statement_from_operand(Statement * statement, Operand op)
+{
+    if (op.variant != OP_KIND_VALUE)
+        return;
+    Value * val = op.value;
+    for (size_t i = 0; i < array_len(val->edges_out, Statement *); i++)
+    {
+        if (val->edges_out[i] == statement)
+        {
+            array_erase(val->edges_out, Statement *, i);
+            break;
+        }
     }
 }
 

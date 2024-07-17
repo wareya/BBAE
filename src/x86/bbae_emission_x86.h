@@ -23,7 +23,9 @@ static void add_relocation(NameUsageInfo ** usages, uint64_t loc, const char * n
 }
 static void apply_relocations(NameUsageInfo ** usages, byte_buffer * code, int64_t (*target_lookup_func)(const char *, void *), void * userdata)
 {
-    assert(*usages);
+    if (!*usages)
+        return;
+    
     for (size_t u = 0; u < array_len((*usages), NameUsageInfo); u++)
     {
         NameUsageInfo info = (*usages)[u];
@@ -163,10 +165,10 @@ static EncOperand get_basic_encoperand(Value * value)
     }
 }
 
-void reg_shuffle_setup(Value ** regs, Operand * args)
+void reg_shuffle_setup(Value ** regs, Operand * args, size_t count)
 {
     memset(regs, 0, sizeof(Value *) * 32);
-    for (size_t i = 0; i < array_len(args, Operand); i++)
+    for (size_t i = 0; i < count; i++)
     {
         Operand op = args[i];
         if (op.variant == OP_KIND_SEPARATOR)
@@ -181,14 +183,25 @@ void reg_shuffle_setup(Value ** regs, Operand * args)
         }
     }
 }
-void reg_shuffle_reset(Value ** regs)
+void reg_shuffle_reset(Value ** regs, size_t count)
 {
-    for (size_t i = 0; i < array_len(regs, Value *); i++)
-        regs[i]->regalloc = i;
+    for (size_t i = 0; i < count; i++)
+    {
+        if (regs[i] && regs[i] != (Value *)-1)
+            regs[i]->regalloc = i;
+    }
 }
-void reg_shuffle(byte_buffer * code, Value ** regs, Value ** block_args, Operand * args)
+
+//#define BBAE_DO_NOT_EMIT_XCHG
+
+void reg_shuffle(byte_buffer * code, Value ** regs, Value ** block_args, Operand * args, size_t count)
 {
-    for (size_t i = 0; i < array_len(block_args, Value *); i++)
+    for (size_t i = 0; i < count; i++)
+    {
+        printf("block arg %zu type: %d\n", i, block_args[i]->type.variant);
+        printf("passed arg %zu type: %d\n", i, args[i].value->type.variant);
+    }
+    for (size_t i = 0; i < count; i++)
     {
         Value * arg_block = block_args[i];
         assert(arg_block->regalloced);
@@ -205,14 +218,36 @@ void reg_shuffle(byte_buffer * code, Value ** regs, Value ** block_args, Operand
         EncOperand op1 = get_basic_encoperand(arg_block);
         EncOperand op2 = get_basic_encoperand(arg_value);
         
+        assert(types_same(arg_block->type, arg_value->type));
+        
         if (regs[arg_block->regalloc])
         {
-            zy_emit_2(code, INST_XCHG, op1, op2);
+            if (type_is_intreg(arg_block->type))
+            {
+#ifndef BBAE_DO_NOT_EMIT_XCHG
+                zy_emit_2(code, INST_XCHG, op1, op2);
+#else
+                EncOperand op_temp = zy_reg(REG_R11, type_size(arg_block->type));
+                zy_emit_2(code, INST_MOV, op_temp, op1);
+                zy_emit_2(code, INST_MOV, op1, op2);
+                zy_emit_2(code, INST_MOV, op2, op_temp);
+#endif
+            }
+            else
+            {
+                EncOperand op_temp = zy_reg(REG_XMM5, 8);
+                zy_emit_2(code, INST_MOVQ, op_temp, op1);
+                zy_emit_2(code, INST_MOVQ, op1, op2);
+                zy_emit_2(code, INST_MOVQ, op2, op_temp);
+            }
             regs[arg_block->regalloc]->regalloc = arg_value->regalloc;
         }
         else
         {
-            zy_emit_2(code, INST_MOV, op1, op2);
+            if (type_is_intreg(arg_block->type))
+                zy_emit_2(code, INST_MOV, op1, op2);
+            else
+                zy_emit_2(code, INST_MOVQ, op1, op2);
         }
     }
 }
@@ -226,23 +261,23 @@ static byte_buffer * compile_file(Program * program)
     {
         Function * func = program->functions[f];
         
+        abi_get_callee_saved_regs(func->written_registers, 32);
+        for (size_t i = 0; i < sizeof(func->written_registers); i++)
+        {
+            if (func->written_registers[i] == 2 && i != REG_RBP && i != REG_RSP)
+                func->stack_height += 8;
+        }
+        while (func->stack_height & 16)
+            func->stack_height += 1;
+        
+        EncOperand rbp = zy_reg(REG_RBP, 8);
+        EncOperand rsp = zy_reg(REG_RSP, 8);
+        zy_emit_1(code, INST_PUSH, rbp);
+        zy_emit_2(code, INST_MOV, rbp, rsp);
+        
         if (func->stack_height)
         {
-            abi_get_callee_saved_regs(func->written_registers, 32);
-            for (size_t i = 0; i < sizeof(func->written_registers); i++)
-            {
-                if (func->written_registers[i] == 2 && i != REG_RBP && i != REG_RSP)
-                    func->stack_height += 8;
-            }
-            while (func->stack_height & 16)
-                func->stack_height += 1;
-            
-            EncOperand rbp = zy_reg(REG_RBP, 8);
-            EncOperand rsp = zy_reg(REG_RSP, 8);
             EncOperand height = zy_imm(func->stack_height, 4);
-            
-            zy_emit_1(code, INST_PUSH, rbp);
-            zy_emit_2(code, INST_MOV, rbp, rsp);
             zy_emit_2(code, INST_SUB, rsp, height);
             
             for (size_t i = 0; i < sizeof(func->written_registers); i++)
@@ -273,17 +308,11 @@ static byte_buffer * compile_file(Program * program)
                     assert(op.variant == OP_KIND_VALUE);
                     
                     EncOperand op2 = get_basic_encoperand(op.value);
-                    if (op.value->type.variant == TYPE_F64)
+                    if (op.value->type.variant == TYPE_F64 || op.value->type.variant == TYPE_F64)
                     {
                         EncOperand op1 = zy_reg(REG_XMM0, type_size(op.value->type));
                         if (!encops_equal(op1, op2))
                             zy_emit_2(code, INST_MOVQ, op1, op2);
-                    }
-                    else if (op.value->type.variant == TYPE_F64)
-                    {
-                        EncOperand op1 = zy_reg(REG_XMM0, type_size(op.value->type));
-                        if (!encops_equal(op1, op2))
-                            zy_emit_2(code, INST_MOVD, op1, op2);
                     }
                     else
                     {
@@ -340,7 +369,12 @@ static byte_buffer * compile_file(Program * program)
                             assert(("FIXME", 0));
                     }
                     if (!encops_equal(op0, op1))
-                        zy_emit_2(code, INST_MOV, op0, op1);
+                    {
+                        if (statement->output->type.variant == TYPE_F64 || statement->output->type.variant == TYPE_F32)
+                            zy_emit_2(code, INST_MOVQ, op0, op1);
+                        else
+                            zy_emit_2(code, INST_MOV, op0, op1);
+                    }
                     
                     if (strcmp(statement->statement_name, "add") == 0)
                         zy_emit_2(code, INST_ADD, op0, op2);
@@ -393,18 +427,14 @@ static byte_buffer * compile_file(Program * program)
                             
                             EncOperand op_dummy = zy_mem(REG_RIP, 0x7FFFFFFF, 8);
                             
-                            if (statement->output->type.variant == TYPE_F64)
-                                zy_emit_2(code, INST_MOVQ, op0, op_dummy);
-                            else
-                                zy_emit_2(code, INST_MOVD, op0, op_dummy);
+                            zy_emit_2(code, INST_MOVQ, op0, op_dummy);
                             add_static_relocation(code->len - 4, name, 4);
                         }
                         else
                         {
-                            if (statement->output->type.variant == TYPE_F64 || op1_op.value->type.variant == TYPE_F64)
+                            if (statement->output->type.variant == TYPE_F64 || op1_op.value->type.variant == TYPE_F64 ||
+                                statement->output->type.variant == TYPE_F32 || op1_op.value->type.variant == TYPE_F32)
                                 zy_emit_2(code, INST_MOVQ, op0, op1);
-                            else if (statement->output->type.variant == TYPE_F32 || op1_op.value->type.variant == TYPE_F32)
-                                zy_emit_2(code, INST_MOVD, op0, op1);
                             else
                                 zy_emit_2(code, INST_MOV, op0, op1);
                         }
@@ -441,10 +471,8 @@ static byte_buffer * compile_file(Program * program)
                     else
                     {
                         EncOperand op2 = get_basic_encoperand(op2_op.value);
-                        if (op2_op.value->type.variant == TYPE_F64)
+                        if (op2_op.value->type.variant == TYPE_F64 || op2_op.value->type.variant == TYPE_F32)
                             zy_emit_2(code, INST_MOVQ, op1, op2);
-                        else if (op2_op.value->type.variant == TYPE_F32)
-                            zy_emit_2(code, INST_MOVD, op1, op2);
                         else
                             zy_emit_2(code, INST_MOV, op1, op2);
                     }
@@ -462,10 +490,8 @@ static byte_buffer * compile_file(Program * program)
                     EncOperand op0 = get_basic_encoperand(statement->output);
                     EncOperand op1 = get_basic_encoperand(op1_op.value);
                     
-                    if (statement->output->type.variant == TYPE_F64)
+                    if (statement->output->type.variant == TYPE_F64 || statement->output->type.variant == TYPE_F32)
                         zy_emit_2(code, INST_MOVQ, op0, op1);
-                    else if (statement->output->type.variant == TYPE_F32)
-                        zy_emit_2(code, INST_MOVD, op0, op1);
                     else
                         zy_emit_2(code, INST_MOV, op0, op1);
                 }
@@ -483,8 +509,8 @@ static byte_buffer * compile_file(Program * program)
                     assert(("wrong number of arguments to block", ba_len == sa_len));
                     
                     Value * regs[32];
-                    reg_shuffle_setup(regs, statement->args + 1);
-                    reg_shuffle(code, regs, target_block->args, statement->args + 1);
+                    reg_shuffle_setup(regs, statement->args + 1, ba_len);
+                    reg_shuffle(code, regs, target_block->args, statement->args + 1, ba_len);
                     
                     zy_emit_1(code, INST_JMP, op_dummy);
                     add_label_relocation(code->len - 4, target_op.text, 4);
@@ -544,8 +570,8 @@ static byte_buffer * compile_file(Program * program)
                     assert(("wrong number of arguments to block", eba_len == esa_len));
                     
                     Value * regs[32];
-                    reg_shuffle_setup(regs, if_s_args);
-                    reg_shuffle(code, regs, if_target_block->args, if_s_args);
+                    reg_shuffle_setup(regs, if_s_args, iba_len);
+                    reg_shuffle(code, regs, if_target_block->args, if_s_args, iba_len);
                     
                     zy_emit_1(code, INST_JMP, op_dummy);
                     add_label_relocation(code->len - 4, target_op.text, 4);
@@ -554,9 +580,9 @@ static byte_buffer * compile_file(Program * program)
                     int32_t jump_over_len = jump_over_target - jump_over_loc;
                     memcpy(code->data + jump_over_loc - 4, &jump_over_len, 4);
                     
-                    reg_shuffle_reset(regs);
-                    reg_shuffle_setup(regs, else_s_args);
-                    reg_shuffle(code, regs, else_target_block->args, else_s_args);
+                    reg_shuffle_reset(regs, eba_len);
+                    reg_shuffle_setup(regs, else_s_args, eba_len);
+                    reg_shuffle(code, regs, else_target_block->args, else_s_args, eba_len);
                     
                     zy_emit_1(code, INST_JMP, op_dummy);
                     add_label_relocation(code->len - 4, target_op2.text, 4);

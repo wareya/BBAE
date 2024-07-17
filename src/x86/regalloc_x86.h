@@ -51,7 +51,9 @@ static void do_regalloc_block(Function * func, Block * block)
     memset(reg_int_alloced, 0, BBAE_REGISTER_CAPACITY * sizeof(Value *));
     reg_int_alloced[_ABI_RSP] = (Value *)-1;
     reg_int_alloced[_ABI_RBP] = (Value *)-1;
+    reg_int_alloced[_ABI_R11] = (Value *)-1; // universal scratch register
     memset(reg_float_alloced, 0, BBAE_REGISTER_CAPACITY * sizeof(Value *));
+    reg_float_alloced[_ABI_XMM5 - _ABI_XMM0] = (Value *)-1; // universal scratch register
     
     if (block == func->entry_block)
     {
@@ -87,8 +89,14 @@ static void do_regalloc_block(Function * func, Block * block)
         for (size_t i = 0; i < array_len(block->args, Value *); i++)
         {
             Value * value = block->args[i];
-            assert(("TODO", type_is_intreg(value->type)));
-            int64_t where = first_empty(reg_int_alloced, BBAE_REGISTER_COUNT);
+            int64_t where;
+            if (type_is_intreg(value->type))
+                where = first_empty(reg_int_alloced, BBAE_REGISTER_COUNT);
+            else if (type_is_float(value->type))
+                where = first_empty(reg_float_alloced, BBAE_REGISTER_COUNT) + _ABI_XMM0;
+            else
+                assert(("TODO", 0));
+            
             if (where < 0)
                 assert(("spilled block arguments not yet supported", 0));
                 
@@ -155,9 +163,19 @@ static void do_regalloc_block(Function * func, Block * block)
         
         uint8_t is_int = type_is_intreg(statement->output->type);
         
+        uint8_t op_is_commutative = 0;
+        if (strcmp(statement->statement_name, "add") == 0 ||
+            strcmp(statement->statement_name, "mul") == 0 ||
+            strcmp(statement->statement_name, "fadd") == 0 ||
+            strcmp(statement->statement_name, "fmul") == 0)
+            op_is_commutative = 1;
+        
         // reuse an operand register if possible
         for (size_t j = 0; j < array_len(statement->args, Operand); j++)
         {
+            if (j > 0 && !op_is_commutative)
+                break;
+            
             Value * arg = statement->args[j].value;
             if (arg && arg->regalloced
                 && arg->alloced_use_count == array_len(arg->edges_out, Value *))

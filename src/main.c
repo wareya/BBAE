@@ -25,7 +25,7 @@ void print_asm(byte_buffer * code)
         &instruction
     )))
     {
-        printf("    %s\n", instruction.text);
+        printf("0x%04X    %s\n", offset, instruction.text);
         offset += instruction.info.length;
         runtime_address += instruction.info.length;
     }
@@ -55,6 +55,13 @@ int main(int argc, char ** argv)
     do_optimization(program);
     byte_buffer * code = do_lowering(program);
     
+    assert(code);
+    if (code->len == 0)
+    {
+        puts("produced no output. exiting");
+        return 0;
+    }
+    
     for (size_t i = 0; i < code->len; i++)
         printf("%02X ", code->data[i]);
     puts("");
@@ -73,10 +80,17 @@ int main(int argc, char ** argv)
     
     assert(jit_main);
     double asdf = jit_main(5, 5);
-    
     printf("output: %f\n", asdf);
-    //printf("output: %d (0x%X)\n", asdf, asdf);
+/*
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+    int (*jit_main) (int, int) = (int(*)(int, int))(void *)(jit_code);
+#pragma GCC diagnostic pop
     
+    assert(jit_main);
+    int asdf = jit_main(5, 5);
+    printf("output: %d (0x%X)\n", asdf, asdf);
+*/
     
     free_as_executable(jit_code);
     free_all_compiler_allocs();

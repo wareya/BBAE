@@ -3,8 +3,9 @@
 
 #include "compiler_common.h"
 #include "bbae_construction.h"
+#include "bbae_optimization.h"
 
-// TODO (long term): support other platforms (arm, risc-v, llvm)
+// TODO (long term): support other platforms (e.g. arm, risc-v, llvm)
 #include "x86/bbae_emission_x86.h"
 
 static Program * parse(const char * buffer)
@@ -16,10 +17,7 @@ static Program * parse(const char * buffer)
 
 static void do_optimization(Program * program)
 {
-    // suppress unused parameter and variable warnings
-    Program * p = program;
-    program = p;
-    // TODO
+    //optimization_mem2reg(program);
 }
 
 static byte_buffer * do_lowering(Program * program)

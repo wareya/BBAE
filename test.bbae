@@ -1,22 +1,19 @@
-
+## MANUAL MEM2REG
 func main returns f64
     arg arg_n i64
-    stack_slot sum 8
-    stack_slot flip 8
-    stack_slot i 8
-    stack_slot n 8
-    store sum 0i64
-    store flip -1.0f64
-    store i 1i64
-    store n 10000000000i64
-    goto loop_head
+    sum = mov 0.0f64
+    flip = mov -1.0f64
+    i = mov 1i64
+    n = mov 100000000i64
+    goto loop_head sum flip i n
 block loop_head
-    nval = load i64 n
-    ival = load i64 i
+    arg sum f64
+    arg flip f64
+    arg ival i64
+    arg nval i64
     
     f = load f64 flip
     f2 = fmul f -1.0f64
-    store flip f2
     
     //a = mul ival 2i64
     a = shl ival 1i64
@@ -24,20 +21,16 @@ block loop_head
     c = uint_to_float f64 b
     d = fdiv f2 c
     
-    s = load f64 sum
-    s2 = fadd s d
-    store sum s2
+    s2 = fadd sum d
     
     ival2 = add ival 1i64
     
     cmp = cmp_g ival2 nval
-    if cmp goto out
+    if cmp goto out sum
     
-    store i ival2
-    
-    goto loop_head
+    goto loop_head s2 f2 ival2 nval
 block out
-    ret = load f64 sum
-    ret2 = fmul ret 4.0f64
-    return ret2
+    arg sum f64
+    ret = fmul sum 4.0f64
+    return ret
 endfunc

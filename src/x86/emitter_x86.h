@@ -589,6 +589,8 @@ static void zy_emit_3(byte_buffer * bytes, int name, EncOperand op1, EncOperand 
 }
 static void zy_emit_2(byte_buffer * bytes, int name, EncOperand op1, EncOperand op2)
 {
+    if (name == INST_MOV && memcmp(&op1, &op2, sizeof(EncOperand)) == 0)
+        return;
     EncOperand ops[] = {op1, op2};
     zy_emit_n(bytes, name, ops, 2);
 }
