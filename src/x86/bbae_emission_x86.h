@@ -37,14 +37,16 @@ static void apply_relocations(NameUsageInfo ** usages, byte_buffer * code, int64
         int64_t rewrite_loc = info.loc;
         if (info.size == 4)
         {
-            int64_t diff = rewrite_loc + 4 - target;
+            //int64_t diff = rewrite_loc + 4 - target;
+            int64_t diff = target - (rewrite_loc + 4);
             assert(diff >= -2147483648 && diff <= 2147483647);
             assert(rewrite_loc + 4 < (int64_t)code->len);
             memcpy(code->data + rewrite_loc, &diff, 4);
         }
         else if (info.size == 1)
         {
-            int64_t diff = rewrite_loc + 1 - target;
+            //int64_t diff = rewrite_loc + 1 - target;
+            int64_t diff = target - (rewrite_loc + 1);
             assert(diff >= -128 && diff <= 127);
             assert(rewrite_loc + 1 < (int64_t)code->len);
             memcpy(code->data + rewrite_loc, &diff, 1);
@@ -103,10 +105,14 @@ static void apply_static_relocations(byte_buffer * code, Program * program)
         
         stat.location = code->len;
         
+        printf("allocating static %s at %zu\n", stat.name, stat.location);
+        
         if (type_size(stat.type) <= 8)
             bytes_push(code, (uint8_t *)&stat.init_data_short, type_size(stat.type));
         else
             bytes_push(code, stat.init_data_long, type_size(stat.type));
+        
+        program->statics[i] = stat;
     }
     // apply relocations pointing at statics
     apply_relocations(&static_addr_relocations, code, get_static_or_assert, (void *)program);
@@ -284,10 +290,30 @@ static byte_buffer * compile_file(Program * program)
                     
                     if (strcmp(statement->statement_name, "add") == 0)
                         zy_emit_2(code, INST_ADD, op0, op2);
+                    else if (strcmp(statement->statement_name, "sub") == 0)
+                        zy_emit_2(code, INST_SUB, op0, op2);
+                    else if (strcmp(statement->statement_name, "shl") == 0)
+                        zy_emit_2(code, INST_SHL, op0, op2);
+                    else if (strcmp(statement->statement_name, "shr") == 0)
+                        zy_emit_2(code, INST_SHR, op0, op2);
+                    else if (strcmp(statement->statement_name, "fadd") == 0 && statement->output->type.variant == TYPE_F32)
+                        zy_emit_2(code, INST_ADDSS, op0, op2);
+                    else if (strcmp(statement->statement_name, "fadd") == 0 && statement->output->type.variant == TYPE_F64)
+                        zy_emit_2(code, INST_ADDSD, op0, op2);
+                    else if (strcmp(statement->statement_name, "fsub") == 0 && statement->output->type.variant == TYPE_F32)
+                        zy_emit_2(code, INST_SUBSS, op0, op2);
+                    else if (strcmp(statement->statement_name, "fsub") == 0 && statement->output->type.variant == TYPE_F64)
+                        zy_emit_2(code, INST_SUBSD, op0, op2);
                     else if (strcmp(statement->statement_name, "fmul") == 0 && statement->output->type.variant == TYPE_F32)
                         zy_emit_2(code, INST_MULSS, op0, op2);
                     else if (strcmp(statement->statement_name, "fmul") == 0 && statement->output->type.variant == TYPE_F64)
                         zy_emit_2(code, INST_MULSD, op0, op2);
+                    else if (strcmp(statement->statement_name, "fdiv") == 0 && statement->output->type.variant == TYPE_F32)
+                        zy_emit_2(code, INST_DIVSS, op0, op2);
+                    else if (strcmp(statement->statement_name, "fdiv") == 0 && statement->output->type.variant == TYPE_F64)
+                        zy_emit_2(code, INST_DIVSD, op0, op2);
+                    else
+                        assert(("TODO", 0));
                 }
                 else if (strcmp(statement->statement_name, "mov") == 0)
                 {
@@ -435,12 +461,12 @@ static byte_buffer * compile_file(Program * program)
                     
                     Value * dummy_short = make_const_value(TYPE_I8, 0);
                     EncOperand op_dummy_short = get_basic_encoperand(dummy_short);
-                    
-                    zy_emit_1(code, INST_JZ, op_dummy_short);
-                    add_label_relocation(code->len - 1, target_op.text, 1);
-                    
                     Value * dummy = make_const_value(TYPE_I32, 0x7FFFFFFF);
                     EncOperand op_dummy = get_basic_encoperand(dummy);
+                    
+                    zy_emit_1(code, INST_JNZ, op_dummy);
+                    add_label_relocation(code->len - 4, target_op.text, 4);
+                    
                     zy_emit_1(code, INST_JMP, op_dummy);
                     add_label_relocation(code->len - 4, target_op2.text, 4);
                     

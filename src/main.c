@@ -63,16 +63,19 @@ int main(int argc, char ** argv)
     
     uint8_t * jit_code = copy_as_executable(code->data, code->len);
     
+    printf("-- %p\n", (void *)jit_code);
+    
     // suppress non-posix-compliant gcc function pointer casting warning
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
-    int (*jit_main) (int, int) = (int(*)(int, int))(void *)(jit_code);
+    double (*jit_main) (int, int) = (double(*)(int, int))(void *)(jit_code);
 #pragma GCC diagnostic pop
     
     assert(jit_main);
-    uint32_t asdf = jit_main(5, 5);
+    double asdf = jit_main(5, 5);
     
-    printf("output: %d (0x%X)\n", asdf, asdf);
+    printf("output: %f\n", asdf);
+    //printf("output: %d (0x%X)\n", asdf, asdf);
     
     
     free_as_executable(jit_code);

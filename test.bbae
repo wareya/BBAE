@@ -8,7 +8,7 @@ func main returns f64
     store sum 0i64
     store flip -1.0f64
     store i 1i64
-    store n arg_n
+    store n 100000000i64
     goto loop_head
 block loop_head
     nval = load i64 n
@@ -26,12 +26,18 @@ block loop_head
     
     s = load f64 sum
     s2 = fadd s d
-    store s s2
+    store sum s2
     
-    cmp = cmp_g ival nval
+    ival2 = add ival 1i64
+    
+    store i ival2
+    
+    cmp = cmp_g ival2 nval
     if cmp goto out
+    
     goto loop_head
 block out
     ret = load f64 sum
-    return ret
+    ret2 = fmul ret 4.0f64
+    return ret2
 endfunc

@@ -552,6 +552,7 @@ static Operand new_op_separator(void)
 static uint64_t temp_ctr = 0;
 static char * make_temp_name(void)
 {
+    temp_ctr += 1;
     size_t len = snprintf(0, 0, "__bbae_temp_%zu", temp_ctr) + 1;
     char * str = zero_alloc(len + 1);
     snprintf(str, len, "__bbae_temp_%zu", temp_ctr);
