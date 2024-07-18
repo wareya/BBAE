@@ -18,8 +18,8 @@ static Program * parse(const char * buffer)
 static void do_optimization(Program * program)
 {
     print_ir_to(0, program);
-    //optimization_empty_block_removal(program);
-    optimization_mem2reg(program);
+    optimization_empty_block_removal(program);
+    optimization_global_mem2reg(program);
 }
 
 static byte_buffer * do_lowering(Program * program)

@@ -3,6 +3,65 @@
 
 #include "compiler_common.h"
 
+Operand * _remap_args(Value ** block_args, Operand * exit_args, Operand * entry_args)
+{
+    size_t entry_count = array_len(block_args, Value *);
+    size_t exit_count = array_len(exit_args, Operand);
+    
+    Operand * args_copy = (Operand *)zero_alloc(0);
+    array_push(args_copy, Operand, exit_args[0]);
+    
+    for (size_t i = 1; i < exit_count; i++)
+    {
+        Operand op = exit_args[i];
+        for (size_t j = 0; j < entry_count; j++)
+        {
+            Value * block_arg = block_args[j];
+            Operand entry_op = entry_args[j];
+            if (op.value == block_arg)
+            {
+                op = entry_op;
+                break;
+            }
+        }
+        assert(memcmp(&op, &exit_args[i], sizeof(Operand)) != 0);
+        array_push(args_copy, Operand, op);
+    }
+    
+    return args_copy;
+}
+
+
+void remap_args_span(Value ** block_args, Operand * exit_args, Statement * entry, size_t entry_label_offset)
+{
+    size_t block_arg_count = array_len(block_args, Value *);
+    size_t raw_entry_count = array_len(entry->args, Operand);
+    
+    size_t offset = entry_label_offset + 1;
+    
+    // ensure non-broken jump source
+    size_t entry_arg_count = 0;
+    for (size_t i = offset; i < raw_entry_count && entry->args[i].variant != OP_KIND_SEPARATOR; i++)
+        entry_arg_count += 1;
+    assert(entry_arg_count == block_arg_count);
+    
+    Operand * new_args = _remap_args(block_args, exit_args, entry->args + offset);
+    
+    for (size_t i = 0; i < block_arg_count; i++)
+    {
+        disconnect_statement_from_operand(entry, entry->args[i + offset]);
+        array_erase(entry->args, Operand, offset);
+    }
+    
+    entry->args[entry_label_offset] = new_args[0];
+    
+    for (size_t i = 0; i < block_arg_count; i++)
+    {
+        Operand op = new_args[i + 1];
+        array_insert(entry->args, Operand, offset + i, op);
+        connect_statement_to_operand(entry, op);
+    }
+}
 void optimization_empty_block_removal(Program * program)
 {
     for (size_t f = 0; f < array_len(program->functions, Function *); f++)
@@ -17,9 +76,28 @@ void optimization_empty_block_removal(Program * program)
             assert(exit);
             if (strcmp(exit->statement_name, "goto") == 0)
             {
-                puts("-1-1111-1---1 erasing empty block...");
+                Block * target_block = find_block(func, exit->args[0].text);
+                size_t target_block_in_edge_index = (size_t)-1;
+                for (size_t i = 0; i < array_len(target_block->edges_in, Statement *); i++)
+                {
+                    if (target_block->edges_in[i] == exit)
+                    {
+                        target_block_in_edge_index = i;
+                        break;
+                    }
+                }
+                assert(target_block_in_edge_index != (size_t)-1);
                 
                 array_erase(func->blocks, Block *, b);
+                
+                for (size_t i = 1; i < array_len(exit->args, Operand); i++)
+                {
+                    if (exit->args[i].value)
+                        exit->args[i].value->temp = i - 1;
+                    disconnect_statement_from_operand(exit, exit->args[0]);
+                }
+                
+                size_t block_arg_count = array_len(block->args, Value *);
                 
                 // FIXME make sure arguments get transferred properly even if they're in a different order
                 for (size_t i = 0; i < array_len(block->edges_in, Statement *); i++)
@@ -28,25 +106,36 @@ void optimization_empty_block_removal(Program * program)
                     if (strcmp(entry->statement_name, "goto") == 0)
                     {
                         assert(strcmp(entry->args[0].text, block->name) == 0);
-                        entry->args[0] = exit->args[0];
-                        for (size_t i = 1; i < array_len(exit->args, Operand); i++)
-                        {
-                            //for (size_t i = 1; i < array_len(exit->args, Operand); i++)
-                            
-                        }
+                        assert(block_arg_count == array_len(entry->args, Operand) - 1);
+                        remap_args_span(block->args, exit->args, entry, 0);
+                        target_block->edges_in[target_block_in_edge_index] = entry;
                     }
                     if (strcmp(entry->statement_name, "if") == 0)
                     {
-                        if (strcmp(entry->args[1].text, block->name) == 0)
-                        {
-                            entry->args[1] = exit->args[0];
-                        }
-                        
+                        // need to make sure the separator exists
                         size_t separator_index = find_separator_index(entry->args);
                         assert(separator_index);
+                        
+                        uint8_t filled_once = 0;
+                        
+                        if (strcmp(entry->args[1].text, block->name) == 0)
+                        {
+                            remap_args_span(block->args, exit->args, entry, 1);
+                            target_block->edges_in[target_block_in_edge_index] = entry;
+                            filled_once = 1;
+                        }
+                        
+                        // need to recalculate because it might have moved
+                        separator_index = find_separator_index(entry->args);
+                        assert(separator_index);
+                        
                         if (strcmp(entry->args[separator_index + 1].text, block->name) == 0)
                         {
-                            entry->args[separator_index + 1] = exit->args[0];
+                            remap_args_span(block->args, exit->args, entry, separator_index + 1);
+                            if (!filled_once)
+                                target_block->edges_in[target_block_in_edge_index] = entry;
+                            else
+                                array_insert(target_block->edges_in, Statement *, target_block_in_edge_index, entry);
                         }
                     }
                 }
@@ -55,7 +144,7 @@ void optimization_empty_block_removal(Program * program)
     }
 }
 
-void optimization_mem2reg(Program * program)
+void optimization_global_mem2reg(Program * program)
 {
     for (size_t f = 0; f < array_len(program->functions, Function *); f++)
     {

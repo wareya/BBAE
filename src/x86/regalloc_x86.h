@@ -97,7 +97,6 @@ static void do_regalloc_block(Function * func, Block * block)
     }
     else
     {
-        printf("regallocing block %s\n", block->name);
         for (size_t i = 0; i < array_len(block->args, Value *); i++)
         {
             // preferentially allocate based on output allocation of entry blocks
@@ -105,18 +104,15 @@ static void do_regalloc_block(Function * func, Block * block)
             int64_t where = 0;
             uint8_t where_found = 0;
             
-            puts("looking for preferential allocs...");
             for (size_t j = 0; j < array_len(block->edges_in, Statement *); j++)
             {
                 Statement * entry = block->edges_in[j];
-                printf("entry statement name %s\n", entry->statement_name);
                 if (strcmp(entry->statement_name, "goto") == 0)
                 {
                     Operand op = entry->args[i + 1];
                     assert(op.value);
                     if (!value_reg_is_thrashed(reg_int_alloced, reg_float_alloced, op.value))
                     {
-                        puts("--- -1 -12- 1@_    found preferable regalloc");
                         where = op.value->regalloc;
                         where_found = 1;
                         break;
@@ -126,12 +122,10 @@ static void do_regalloc_block(Function * func, Block * block)
                 {
                     if (entry->args[1].text == block->name)
                     {
-                        puts("--- found if");
                         Operand op = entry->args[i + 2];
                         assert(op.value);
                         if (!value_reg_is_thrashed(reg_int_alloced, reg_float_alloced, op.value))
                         {
-                            puts("--- -1 -12- 1@_    found preferable regalloc");
                             where = op.value->regalloc;
                             where_found = 1;
                             break;
@@ -143,13 +137,11 @@ static void do_regalloc_block(Function * func, Block * block)
                     
                     if (entry->args[separator_pos + 1].text == block->name)
                     {
-                        puts("--- found else");
                         Operand op = entry->args[i + separator_pos + 2];
                         assert(op.value);
                         
                         if (!value_reg_is_thrashed(reg_int_alloced, reg_float_alloced, op.value))
                         {
-                            puts("--- -1 -12- 1@_    found preferable regalloc");
                             where = op.value->regalloc;
                             where_found = 1;
                             break;
@@ -175,8 +167,6 @@ static void do_regalloc_block(Function * func, Block * block)
                 reg_float_alloced[where - _ABI_XMM0] = value;
             else 
                 reg_int_alloced[where] = value;
-            
-            printf("allocated register %zd to block arg %s\n", where, value->arg);
             
             value->regalloc = where;
             value->regalloced = 1;
