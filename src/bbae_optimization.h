@@ -3,6 +3,53 @@
 
 #include "compiler_common.h"
 
+void optimization_empty_block_removal(Program * program)
+{
+    for (size_t f = 0; f < array_len(program->functions, Function *); f++)
+    {
+        Function * func = program->functions[f];
+        for (size_t b = 1; b < array_len(func->blocks, Block *); b++)
+        {
+            Block * block = func->blocks[b];
+            if (array_len(block->statements, Statement *) != 1)
+                continue;
+            Statement * exit = block->statements[0];
+            assert(exit);
+            if (strcmp(exit->statement_name, "goto") == 0)
+            {
+                puts("-1-1111-1---1 erasing empty block...");
+                
+                array_erase(func->blocks, Block *, b);
+                
+                // FIXME make sure arguments get transferred properly even if they're in a different order
+                for (size_t i = 0; i < array_len(block->edges_in, Statement *); i++)
+                {
+                    Statement * entry = block->edges_in[i];
+                    if (strcmp(entry->statement_name, "goto") == 0)
+                    {
+                        assert(strcmp(entry->args[0].text, block->name) == 0);
+                        entry->args[0] = exit->args[0];
+                    }
+                    if (strcmp(entry->statement_name, "if") == 0)
+                    {
+                        if (strcmp(entry->args[1].text, block->name) == 0)
+                        {
+                            entry->args[1] = exit->args[0];
+                        }
+                        
+                        size_t separator_index = find_separator_index(entry->args);
+                        assert(separator_index);
+                        if (strcmp(entry->args[separator_index + 1].text, block->name) == 0)
+                        {
+                            entry->args[separator_index + 1] = exit->args[0];
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 void optimization_mem2reg(Program * program)
 {
     for (size_t f = 0; f < array_len(program->functions, Function *); f++)

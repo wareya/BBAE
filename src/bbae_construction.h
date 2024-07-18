@@ -215,6 +215,7 @@ static uint8_t op_is_v_v(const char * opname)
         "icmp_ge", "icmp_le", "icmp_g", "icmp_l",
         "fcmp_eq", "fcmp_ne", "fcmp_ge", "fcmp_le", "fcmp_g", "fcmp_l",
         "fadd", "fsub", "fmul", "fdiv", "frem",
+        "fxor",
         "ptralias", "ptralias_merge", "ptralias_disjoint",
     };
     for (size_t i = 0; i < sizeof(ops)/sizeof(char *); i++)
@@ -570,6 +571,7 @@ static Program * parse_file(const char * cursor)
                 cursor -= strlen(token);
                 Statement * statement = parse_statement(program, &cursor);
                 add_statement_output(statement);
+                statement->block = program->current_block;
                 array_push(program->current_block->statements, Statement *, statement);
                 legalize_last_statement_operands(program->current_block);
             }
@@ -705,7 +707,7 @@ void split_blocks(Program * program)
                     }
                     
                     array_insert(func->blocks, Block *, b + 1, next_block);
-                    array_push(next_block->edges_in, Statement *, branch);
+                    //array_push(next_block->edges_in, Statement *, branch);
                     
                     break;
                     //assert(("TODO: split block, convey arguments", 0));
@@ -731,12 +733,41 @@ void connect_graphs(Program * program)
                 for (size_t n = 0; n < array_len(statement->args, Operand); n++)
                     connect_statement_to_operand(statement, statement->args[n]);
                 
-                if (statement->output_name)
+                if (statement->statement_name)
                 {
-                    if (strcmp(statement->output_name, "if") == 0 ||
-                        strcmp(statement->output_name, "goto") == 0)
+                    if (strcmp(statement->statement_name, "goto") == 0)
                     {
-                        assert(("TODO: block lookup and connect blocks together", 0));
+                        assert(statement->args[0].text);
+                        assert(statement->block);
+                        Block * target = find_block(func, statement->args[0].text);
+                        array_push(target->edges_in, Statement *, statement);
+                        array_push(statement->block->edges_out, Statement *, statement);
+                    }
+                    if (strcmp(statement->statement_name, "if") == 0)
+                    {
+                        assert(statement->args[1].text);
+                        assert(statement->block);
+                        Block * target = find_block(func, statement->args[1].text);
+                        array_push(target->edges_in, Statement *, statement);
+                        array_push(statement->block->edges_out, Statement *, statement);
+                        
+                        size_t separator_pos = 0;
+                        for (size_t i = 2; i < array_len(statement->args, Operand); i++)
+                        {
+                            if (statement->args[i].variant == OP_KIND_SEPARATOR)
+                            {
+                                separator_pos = i;
+                                break;
+                            }
+                        }
+                        // block splitting is required to have happened before now
+                        assert(separator_pos);
+                        
+                        assert(statement->args[separator_pos + 1].text);
+                        assert(statement->block);
+                        target = find_block(func, statement->args[separator_pos + 1].text);
+                        array_push(target->edges_in, Statement *, statement);
+                        array_push(statement->block->edges_out, Statement *, statement);
                     }
                 }
             }

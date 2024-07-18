@@ -1,0 +1,35 @@
+## MANUAL MEM2REG
+func main returns f64
+    arg arg_n i64
+    sum = mov 0.0f64
+    flip = mov -1.0f64
+    i = mov 1i64
+    n = mov 1000000000i64
+    goto loop_head sum flip i n
+block loop_head
+    arg sum f64
+    arg flip f64
+    arg ival i64
+    arg nval i64
+    
+    inv = bitcast f64 0x8000000000000000i64
+    f2 = fxor flip inv
+    
+    a = shl ival 1i64
+    b = sub a 1i64
+    c = uint_to_float f64 b
+    d = fdiv f2 c
+    
+    s2 = fadd sum d
+    
+    ival2 = add ival 1i64
+    
+    cmp = cmp_g ival2 nval
+    if cmp goto out s2
+    
+    goto loop_head s2 f2 ival2 nval
+block out
+    arg sum f64
+    ret = fmul sum 4.0f64
+    return ret
+endfunc

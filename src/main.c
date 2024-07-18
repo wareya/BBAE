@@ -80,7 +80,7 @@ int main(int argc, char ** argv)
     
     assert(jit_main);
     double asdf = jit_main(5, 5);
-    printf("output: %f\n", asdf);
+    printf("output: %.9f\n", asdf);
 /*
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"

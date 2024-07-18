@@ -165,90 +165,56 @@ static EncOperand get_basic_encoperand(Value * value)
     }
 }
 
-void reg_shuffle_setup(Value ** regs, Operand * args, size_t count)
-{
-    memset(regs, 0, sizeof(Value *) * 32);
-    for (size_t i = 0; i < count; i++)
-    {
-        Operand op = args[i];
-        if (op.variant == OP_KIND_SEPARATOR)
-            continue;
-        assert(op.variant == OP_KIND_VALUE);
-        Value * arg_value = op.value;
-        if (arg_value->regalloced)
-        {
-            assert(((int64_t)arg_value->regalloc) >= 0);
-            assert(regs[arg_value->regalloc] == 0);
-            regs[arg_value->regalloc] = arg_value;
-        }
-    }
-}
-void reg_shuffle_reset(Value ** regs, size_t count)
+uint8_t reg_shuffle_needed(Value ** block_args, Operand * args, size_t count)
 {
     for (size_t i = 0; i < count; i++)
     {
-        if (regs[i] && regs[i] != (Value *)-1)
-            regs[i]->regalloc = i;
+        assert(args[i].value);
+        if (args[i].value->variant == VALUE_CONST)
+            return 1;
+        if (block_args[i]->regalloc != args[i].value->regalloc)
+            return 1;
     }
+    return 0;
 }
 
-//#define BBAE_DO_NOT_EMIT_XCHG
-
-void reg_shuffle(byte_buffer * code, Value ** regs, Value ** block_args, Operand * args, size_t count)
+void reg_shuffle(byte_buffer * code, Value ** block_args, Operand * args, size_t count)
 {
+    int64_t out2in[32];
+    for (size_t i = 0; i < 32; i++)
+        out2in[i] = -1;
+    uint8_t out2in_color[32]; // for cycle detection
+    memset(out2in_color, 0, sizeof(out2in_color));
+    
     for (size_t i = 0; i < count; i++)
     {
-        printf("block arg %zu type: %d\n", i, block_args[i]->type.variant);
-        printf("passed arg %zu type: %d\n", i, args[i].value->type.variant);
-    }
-    for (size_t i = 0; i < count; i++)
-    {
-        Value * arg_block = block_args[i];
-        assert(arg_block->regalloced);
+        assert(args[i].value);
+        if (args[i].value->variant == VALUE_CONST)
+        {
+            assert(("FIXME", 0));
+            continue;
+        }
+        assert(args[i].value->variant == VALUE_SSA || args[i].value->variant == VALUE_ARG);
         
-        Operand op = args[i];
-        assert(op.variant == OP_KIND_VALUE);
-        Value * arg_value = op.value;
-        assert(arg_value->regalloced);
-        assert(((int64_t)arg_value->regalloc) >= 0);
+        assert(block_args[i]->regalloced);
+        assert(("spilled block args not yet supported", block_args[i]->regalloc >= 0));
+        assert(block_args[i]->regalloc < 32);
         
-        if (arg_value->regalloc == arg_block->regalloc)
+        assert(args[i].value->regalloced);
+        assert(("spilled block args not yet supported", args[i].value->regalloc >= 0));
+        assert(args[i].value->regalloc < 32);
+        
+        // no MOV needed
+        if (block_args[i]->regalloc == args[i].value->regalloc)
             continue;
         
-        EncOperand op1 = get_basic_encoperand(arg_block);
-        EncOperand op2 = get_basic_encoperand(arg_value);
-        
-        assert(types_same(arg_block->type, arg_value->type));
-        
-        if (regs[arg_block->regalloc])
-        {
-            if (type_is_intreg(arg_block->type))
-            {
-#ifndef BBAE_DO_NOT_EMIT_XCHG
-                zy_emit_2(code, INST_XCHG, op1, op2);
-#else
-                EncOperand op_temp = zy_reg(REG_R11, type_size(arg_block->type));
-                zy_emit_2(code, INST_MOV, op_temp, op1);
-                zy_emit_2(code, INST_MOV, op1, op2);
-                zy_emit_2(code, INST_MOV, op2, op_temp);
-#endif
-            }
-            else
-            {
-                EncOperand op_temp = zy_reg(REG_XMM5, 8);
-                zy_emit_2(code, INST_MOVQ, op_temp, op1);
-                zy_emit_2(code, INST_MOVQ, op1, op2);
-                zy_emit_2(code, INST_MOVQ, op2, op_temp);
-            }
-            regs[arg_block->regalloc]->regalloc = arg_value->regalloc;
-        }
-        else
-        {
-            if (type_is_intreg(arg_block->type))
-                zy_emit_2(code, INST_MOV, op1, op2);
-            else
-                zy_emit_2(code, INST_MOVQ, op1, op2);
-        }
+        out2in[block_args[i]->regalloc] = args[i].value->regalloc;
+    }
+    
+    for (size_t i = 0; i < 32; i++)
+    {
+        if (out2in[i] < 0)
+            continue;
     }
 }
                     
@@ -295,12 +261,15 @@ static byte_buffer * compile_file(Program * program)
         for (size_t b = 0; b < array_len(func->blocks, Block *); b++)
         {
             Block * block = func->blocks[b];
+            Block * next_block = (b + 1 < array_len(func->blocks, Block *)) ? func->blocks[b + 1] : 0;
             
             block->start_offset = code->len;
             
             for (size_t i = 0; i < array_len(block->statements, Statement *); i++)
             {
+                Statement * prev_statement = i > 0 ? block->statements[i - 1] : 0;
                 Statement * statement = block->statements[i];
+                Statement * next_statement = (i + 1 < array_len(block->statements, Statement *)) ? block->statements[i + 1] : 0;
                 
                 if (strcmp(statement->statement_name, "return") == 0)
                 {
@@ -342,6 +311,7 @@ static byte_buffer * compile_file(Program * program)
                          strcmp(statement->statement_name, "fadd") == 0 ||
                          strcmp(statement->statement_name, "fsub") == 0 ||
                          strcmp(statement->statement_name, "fdiv") == 0 ||
+                         strcmp(statement->statement_name, "fxor") == 0 ||
                          strcmp(statement->statement_name, "fmul") == 0)
                 {
                     Operand op1_op = statement->args[0];
@@ -371,7 +341,7 @@ static byte_buffer * compile_file(Program * program)
                     if (!encops_equal(op0, op1))
                     {
                         if (statement->output->type.variant == TYPE_F64 || statement->output->type.variant == TYPE_F32)
-                            zy_emit_2(code, INST_MOVQ, op0, op1);
+                            zy_emit_2(code, INST_MOVAPS, op0, op1);
                         else
                             zy_emit_2(code, INST_MOV, op0, op1);
                     }
@@ -400,6 +370,8 @@ static byte_buffer * compile_file(Program * program)
                         zy_emit_2(code, INST_DIVSS, op0, op2);
                     else if (strcmp(statement->statement_name, "fdiv") == 0 && statement->output->type.variant == TYPE_F64)
                         zy_emit_2(code, INST_DIVSD, op0, op2);
+                    else if (strcmp(statement->statement_name, "fxor") == 0)
+                        zy_emit_2(code, INST_XORPS, op0, op2);
                     else
                         assert(("TODO", 0));
                 }
@@ -427,14 +399,14 @@ static byte_buffer * compile_file(Program * program)
                             
                             EncOperand op_dummy = zy_mem(REG_RIP, 0x7FFFFFFF, 8);
                             
-                            zy_emit_2(code, INST_MOVQ, op0, op_dummy);
+                            zy_emit_2(code, INST_MOVSD, op0, op_dummy);
                             add_static_relocation(code->len - 4, name, 4);
                         }
                         else
                         {
                             if (statement->output->type.variant == TYPE_F64 || op1_op.value->type.variant == TYPE_F64 ||
                                 statement->output->type.variant == TYPE_F32 || op1_op.value->type.variant == TYPE_F32)
-                                zy_emit_2(code, INST_MOVQ, op0, op1);
+                                zy_emit_2(code, INST_MOVAPS, op0, op1);
                             else
                                 zy_emit_2(code, INST_MOV, op0, op1);
                         }
@@ -471,8 +443,10 @@ static byte_buffer * compile_file(Program * program)
                     else
                     {
                         EncOperand op2 = get_basic_encoperand(op2_op.value);
-                        if (op2_op.value->type.variant == TYPE_F64 || op2_op.value->type.variant == TYPE_F32)
+                        if (op2_op.value->type.variant == TYPE_F64)
                             zy_emit_2(code, INST_MOVQ, op1, op2);
+                        else if (op2_op.value->type.variant == TYPE_F32)
+                            zy_emit_2(code, INST_MOVD, op1, op2);
                         else
                             zy_emit_2(code, INST_MOV, op1, op2);
                     }
@@ -490,8 +464,10 @@ static byte_buffer * compile_file(Program * program)
                     EncOperand op0 = get_basic_encoperand(statement->output);
                     EncOperand op1 = get_basic_encoperand(op1_op.value);
                     
-                    if (statement->output->type.variant == TYPE_F64 || statement->output->type.variant == TYPE_F32)
+                    if (statement->output->type.variant == TYPE_F64)
                         zy_emit_2(code, INST_MOVQ, op0, op1);
+                    else if (statement->output->type.variant == TYPE_F32)
+                        zy_emit_2(code, INST_MOVD, op0, op1);
                     else
                         zy_emit_2(code, INST_MOV, op0, op1);
                 }
@@ -508,12 +484,15 @@ static byte_buffer * compile_file(Program * program)
                     size_t sa_len = array_len(statement->args, Operand) - 1;
                     assert(("wrong number of arguments to block", ba_len == sa_len));
                     
-                    Value * regs[32];
-                    reg_shuffle_setup(regs, statement->args + 1, ba_len);
-                    reg_shuffle(code, regs, target_block->args, statement->args + 1, ba_len);
+                    if (reg_shuffle_needed(target_block->args, statement->args + 1, ba_len))
+                        reg_shuffle(code, target_block->args, statement->args + 1, ba_len);
                     
-                    zy_emit_1(code, INST_JMP, op_dummy);
-                    add_label_relocation(code->len - 4, target_op.text, 4);
+                    if (strcmp(target_op.text, next_block->name) != 0)
+                    {
+                        zy_emit_1(code, INST_JMP, op_dummy);
+                        add_label_relocation(code->len - 4, target_op.text, 4);
+                    }
+                    zy_emit_0(code, INST_NOP);
                 }
                 else if (strcmp(statement->statement_name, "if") == 0)
                 {
@@ -526,66 +505,118 @@ static byte_buffer * compile_file(Program * program)
                     
                     Operand target_op2;
                     memset(&target_op2, 0, sizeof(Operand));
-                    size_t separator_pos = 0;
-                    for (size_t i = 2; i < array_len(statement->args, Operand); i++)
-                    {
-                        if (statement->args[i].variant == OP_KIND_SEPARATOR)
-                        {
-                            separator_pos = i;
-                            assert(array_len(statement->args, Operand) > i + 1);
-                            target_op2 = statement->args[i + 1];
-                            break;
-                        }
-                    }
+                    size_t separator_pos = find_separator_index(statement->args);
                     assert(separator_pos);
+                    assert(array_len(statement->args, Operand) > separator_pos + 1); // second label must exist
+                    target_op2 = statement->args[separator_pos + 1];
                     assert(target_op2.variant == OP_KIND_TEXT);
                     
-                    //printf("testing %zu against itself...\n", op1_op.value->regalloc);
-                    size_t b = code->len;
-                    //printf("b %zu\n", b);
-                    zy_emit_2(code, INST_TEST, op1, op1);
-                    size_t a = code->len;
-                    //printf("a %zu\n", a);
-                    //for (size_t i = b; i < a; i++)
-                    //    printf("  %02X\n", code->data[i]);
+                    int jcc_yin  = INST_JZ;
+                    int jcc_yang = INST_JNZ;
+                    
+                    if (prev_statement && str_begins_with(prev_statement->statement_name, "cmp_"))
+                    {
+                        if (strcmp(prev_statement->statement_name, "cmp_g") == 0)
+                        {
+                            jcc_yin = INST_JBE;
+                            jcc_yang = INST_JNBE;
+                        }
+                        else
+                        {
+                            assert(("TODO", 0));
+                        }
+                    }
+                    else
+                    {
+                        zy_emit_2(code, INST_TEST, op1, op1);
+                    }
                     
                     Value * dummy = make_const_value(TYPE_I32, 0x7FFFFFFF);
                     EncOperand op_dummy = get_basic_encoperand(dummy);
                     
-                    zy_emit_1(code, INST_JZ, op_dummy);
-                    size_t jump_over_loc = code->len;
-                    
                     Operand * if_s_args = statement->args + 2;
-                    
                     Block * if_target_block = find_block(func, target_op.text);
                     size_t iba_len = array_len(if_target_block->args, Value *);
                     size_t isa_len = separator_pos - 2;
                     assert(("wrong number of arguments to block", iba_len == isa_len));
                     
                     Operand * else_s_args = statement->args + separator_pos + 2;
-                    
                     Block * else_target_block = find_block(func, target_op2.text);
                     size_t eba_len = array_len(else_target_block->args, Value *);
                     size_t esa_len = array_len(statement->args, Operand) - separator_pos - 2;
                     assert(("wrong number of arguments to block", eba_len == esa_len));
                     
-                    Value * regs[32];
-                    reg_shuffle_setup(regs, if_s_args, iba_len);
-                    reg_shuffle(code, regs, if_target_block->args, if_s_args, iba_len);
+                    uint8_t if_shuffle_needed = 0;//reg_shuffle_needed(if_target_block->args, if_s_args, iba_len);
+                    uint8_t else_shuffle_needed = 0;//reg_shuffle_needed(else_target_block->args, else_s_args, eba_len);
                     
-                    zy_emit_1(code, INST_JMP, op_dummy);
-                    add_label_relocation(code->len - 4, target_op.text, 4);
+                    printf("00-`-`-`1 - -3`2    %d %d\n", if_shuffle_needed, else_shuffle_needed);
                     
-                    size_t jump_over_target = code->len;
-                    int32_t jump_over_len = jump_over_target - jump_over_loc;
-                    memcpy(code->data + jump_over_loc - 4, &jump_over_len, 4);
-                    
-                    reg_shuffle_reset(regs, eba_len);
-                    reg_shuffle_setup(regs, else_s_args, eba_len);
-                    reg_shuffle(code, regs, else_target_block->args, else_s_args, eba_len);
-                    
-                    zy_emit_1(code, INST_JMP, op_dummy);
-                    add_label_relocation(code->len - 4, target_op2.text, 4);
+                    if (if_shuffle_needed && else_shuffle_needed)
+                    {
+                        zy_emit_1(code, jcc_yin, op_dummy);
+                        size_t jump_over_loc = code->len;
+                        
+                        reg_shuffle(code, if_target_block->args, if_s_args, iba_len);
+                        
+                        zy_emit_1(code, INST_JMP, op_dummy);
+                        add_label_relocation(code->len - 4, target_op.text, 4);
+                        
+                        size_t jump_over_target = code->len;
+                        int32_t jump_over_len = jump_over_target - jump_over_loc;
+                        memcpy(code->data + jump_over_loc - 4, &jump_over_len, 4);
+                        
+                        reg_shuffle(code, else_target_block->args, else_s_args, eba_len);
+                        
+                        if (strcmp(target_op2.text, next_block->name) != 0)
+                        {
+                            zy_emit_1(code, INST_JMP, op_dummy);
+                            add_label_relocation(code->len - 4, target_op2.text, 4);
+                        }
+                    }
+                    else if (else_shuffle_needed)
+                    {
+                        zy_emit_1(code, jcc_yang, op_dummy);
+                        add_label_relocation(code->len - 4, target_op.text, 4);
+                        
+                        reg_shuffle(code, else_target_block->args, else_s_args, eba_len);
+                        
+                        if (strcmp(target_op2.text, next_block->name) != 0)
+                        {
+                            zy_emit_1(code, INST_JMP, op_dummy);
+                            add_label_relocation(code->len - 4, target_op2.text, 4);
+                        }
+                    }
+                    else if (if_shuffle_needed)
+                    {
+                        zy_emit_1(code, jcc_yin, op_dummy);
+                        add_label_relocation(code->len - 4, target_op2.text, 4);
+                        
+                        reg_shuffle(code, if_target_block->args, if_s_args, iba_len);
+                        
+                        if (strcmp(target_op.text, next_block->name) != 0)
+                        {
+                            zy_emit_1(code, INST_JMP, op_dummy);
+                            add_label_relocation(code->len - 4, target_op.text, 4);
+                        }
+                    }
+                    else if (strcmp(target_op2.text, next_block->name) == 0)
+                    {
+                        zy_emit_1(code, jcc_yang, op_dummy);
+                        add_label_relocation(code->len - 4, target_op.text, 4);
+                    }
+                    else if (strcmp(target_op.text, next_block->name) == 0)
+                    {
+                        zy_emit_1(code, jcc_yin, op_dummy);
+                        add_label_relocation(code->len - 4, target_op2.text, 4);
+                    }
+                    else
+                    {
+                        zy_emit_1(code, jcc_yin, op_dummy);
+                        add_label_relocation(code->len - 4, target_op2.text, 4);
+                        zy_emit_1(code, INST_JMP, op_dummy);
+                        add_label_relocation(code->len - 4, target_op.text, 4);
+                    }
+                    zy_emit_0(code, INST_NOP);
                 }
                 else if (str_begins_with(statement->statement_name, "cmp_"))
                 {
@@ -603,12 +634,15 @@ static byte_buffer * compile_file(Program * program)
                     
                     EncOperand op0 = get_basic_encoperand(statement->output);
                     
-                    if ((strcmp(statement->statement_name, "cmp_g") == 0))
-                        zy_emit_1(code, INST_SETNB, op0);
-                    else
-                        assert(("TODO", 0));
+                    if (!next_statement || strcmp(next_statement->statement_name, "if") != 0)
+                    {
+                        if ((strcmp(statement->statement_name, "cmp_g") == 0))
+                            zy_emit_1(code, INST_SETNB, op0);
+                        else
+                            assert(("TODO", 0));
+                    }
                 }
-                else if (str_begins_with(statement->statement_name, "uint_to_float"))
+                else if (strcmp(statement->statement_name, "uint_to_float") == 0)
                 {
                     Operand op1_op = statement->args[0];
                     assert(op1_op.variant == OP_KIND_TYPE);
@@ -621,7 +655,7 @@ static byte_buffer * compile_file(Program * program)
                     EncOperand op2 = get_basic_encoperand(op2_op.value);
                     // FIXME: handle sizes other than i32 properly
                     // i8/i16 need zero extension
-                    // i64 needs overflow handling (CVTSI2SD is signed)
+                    // i64 needs overflow handling (CVTSI2SD/INST_CVTSI2SS are signed)
                     EncOperand op0 = get_basic_encoperand(statement->output);
                     
                     if (op1_op.rawtype.variant == TYPE_F64)
@@ -630,6 +664,25 @@ static byte_buffer * compile_file(Program * program)
                         zy_emit_2(code, INST_CVTSI2SS, op0, op2);
                     else
                         assert(("TODO", 0));
+                }
+                else if (strcmp(statement->statement_name, "bitcast") == 0)
+                {
+                    Operand op1_op = statement->args[0];
+                    assert(op1_op.variant == OP_KIND_TYPE);
+                    Operand op2_op = statement->args[1];
+                    assert(op2_op.variant == OP_KIND_VALUE);
+                    
+                    assert(type_size(op1_op.rawtype) == type_size(op2_op.value->type));
+                    
+                    EncOperand op2 = get_basic_encoperand(op2_op.value);
+                    EncOperand op0 = get_basic_encoperand(statement->output);
+                    
+                    if (type_is_intreg(statement->output->type) && type_is_intreg(op2_op.value->type))
+                        zy_emit_2(code, INST_MOV, op0, op2);
+                    else if (!type_is_intreg(statement->output->type) && !type_is_intreg(op2_op.value->type))
+                        zy_emit_2(code, INST_MOVAPS, op0, op2);
+                    else
+                        zy_emit_2(code, INST_MOVQ, op0, op2);
                 }
                 else
                 {

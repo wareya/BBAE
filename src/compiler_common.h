@@ -598,6 +598,7 @@ static void add_statement_output(Statement * statement)
             strcmp(statement->statement_name, "fsub") == 0 ||
             strcmp(statement->statement_name, "fmul") == 0 ||
             strcmp(statement->statement_name, "fdiv") == 0 ||
+            strcmp(statement->statement_name, "fxor") == 0 ||
             strcmp(statement->statement_name, "mov") == 0)
         {
             assert(statement->args[0].variant == OP_KIND_VALUE);
@@ -605,7 +606,7 @@ static void add_statement_output(Statement * statement)
         }
         else if (strcmp(statement->statement_name, "load") == 0 ||
                  strcmp(statement->statement_name, "uint_to_float") == 0 ||
-                 strcmp(statement->statement_name, "load") == 0)
+                 strcmp(statement->statement_name, "bitcast") == 0)
         {
             assert(statement->args[0].variant == OP_KIND_TYPE);
             statement->output = make_value(statement->args[0].rawtype);
@@ -651,6 +652,15 @@ static void disconnect_statement_from_operand(Statement * statement, Operand op)
     }
 }
 
+size_t find_separator_index(Operand * args)
+{
+    for (size_t i = 2; i < array_len(args, Operand); i++)
+    {
+        if (args[i].variant == OP_KIND_SEPARATOR)
+            return i;
+    }
+    return 0;
+}
 
 // On some backends, specific types of argument can't be used with specific functions.
 // For example, on x86, there's no <reg_a> = fmul <reg_a> <const> instruction.

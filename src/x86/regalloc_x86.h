@@ -43,6 +43,18 @@ static uint8_t type_is_intreg(Type type)
     return type_is_int(type) || type_is_ptr(type);
 }
 
+static uint8_t value_reg_is_thrashed(Value ** reg_int_alloced, Value ** reg_float_alloced, Value * value)
+{
+    if (value->regalloced && !value->spilled)
+    {
+        if (value->regalloc < _ABI_XMM0 && !reg_int_alloced[value->regalloc])
+            return 0;
+        else if (value->regalloc >= _ABI_XMM0 && !reg_float_alloced[value->regalloc - _ABI_XMM0])
+            return 0;
+    }
+    return 1;
+}
+
 static void do_regalloc_block(Function * func, Block * block)
 {
     Value * reg_int_alloced[BBAE_REGISTER_CAPACITY];
@@ -85,21 +97,73 @@ static void do_regalloc_block(Function * func, Block * block)
     }
     else
     {
-        // TODO: preferentially allocate based on output allocation of entry blocks
         for (size_t i = 0; i < array_len(block->args, Value *); i++)
         {
+            // preferentially allocate based on output allocation of entry blocks
             Value * value = block->args[i];
-            int64_t where;
-            if (type_is_intreg(value->type))
-                where = first_empty(reg_int_alloced, BBAE_REGISTER_COUNT);
-            else if (type_is_float(value->type))
-                where = first_empty(reg_float_alloced, BBAE_REGISTER_COUNT) + _ABI_XMM0;
-            else
-                assert(("TODO", 0));
+            int64_t where = 0;
+            uint8_t where_found = 0;
+            
+            for (size_t j = 0; j < array_len(block->edges_in, Statement *); j++)
+            {
+                Statement * entry = block->edges_in[j];
+                printf("entry statement name %s\n", entry->statement_name);
+                if (strcmp(entry->statement_name, "goto") == 0)
+                {
+                    Operand op = entry->args[i + 1];
+                    assert(op.value);
+                    if (!value_reg_is_thrashed(reg_int_alloced, reg_float_alloced, op.value))
+                    {
+                        where = op.value->regalloc;
+                        where_found = 1;
+                        break;
+                    }
+                }
+                else if (strcmp(entry->statement_name, "if") == 0)
+                {
+                    if (entry->args[1].text == block->name)
+                    {
+                        Operand op = entry->args[i + 2];
+                        assert(op.value);
+                        if (!value_reg_is_thrashed(reg_int_alloced, reg_float_alloced, op.value))
+                        {
+                            where = op.value->regalloc;
+                            where_found = 1;
+                            break;
+                        }
+                    }
+                    
+                    size_t separator_pos = find_separator_index(entry->args);
+                    assert(separator_pos); // blocks must be split at if statements
+                    
+                    if (entry->args[i + separator_pos + 2].text == block->name)
+                    {
+                        Operand op = entry->args[i + separator_pos + 2];
+                        assert(op.value);
+                        
+                        if (!value_reg_is_thrashed(reg_int_alloced, reg_float_alloced, op.value))
+                        {
+                            where = op.value->regalloc;
+                            where_found = 1;
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            if (!where_found)
+            {
+                if (type_is_intreg(value->type))
+                    where = first_empty(reg_int_alloced, BBAE_REGISTER_COUNT);
+                else if (type_is_float(value->type))
+                    where = first_empty(reg_float_alloced, BBAE_REGISTER_COUNT) + _ABI_XMM0;
+                else
+                    assert(("TODO", 0));
+            }
             
             if (where < 0)
                 assert(("spilled block arguments not yet supported", 0));
-                
+            
             if (where >= _ABI_XMM0)
                 reg_float_alloced[where - _ABI_XMM0] = value;
             else 
@@ -374,10 +438,17 @@ ImmOpsAllowed imm_op_rule_determiner(Statement * statement)
     else if (strcmp(statement->statement_name, "fadd") == 0 ||
         strcmp(statement->statement_name, "fsub") == 0 ||
         strcmp(statement->statement_name, "fmul") == 0 ||
+        strcmp(statement->statement_name, "fxor") == 0 ||
         strcmp(statement->statement_name, "fdiv") == 0)
     {
         ret.immediates_allowed[0] = 0;
         ret.immediates_allowed[1] = 0;
+    }
+    else if (strcmp(statement->statement_name, "bitcast") == 0)
+    {
+        ret.immediates_allowed[0] = 0;
+        if (type_is_float(statement->output->type))
+            ret.immediates_allowed[1] = 0;
     }
     
     return ret;

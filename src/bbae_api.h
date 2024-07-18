@@ -17,6 +17,7 @@ static Program * parse(const char * buffer)
 
 static void do_optimization(Program * program)
 {
+    //optimization_empty_block_removal(program);
     //optimization_mem2reg(program);
 }
 
