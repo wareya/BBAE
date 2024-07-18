@@ -687,7 +687,6 @@ size_t find_separator_index(Operand * args)
     return 0;
 }
 
-#include <stdio.h>
 void print_ir_to(FILE * f, Program * program)
 {
     if (f == 0)

@@ -29,6 +29,11 @@ void optimization_empty_block_removal(Program * program)
                     {
                         assert(strcmp(entry->args[0].text, block->name) == 0);
                         entry->args[0] = exit->args[0];
+                        for (size_t i = 1; i < array_len(exit->args, Operand); i++)
+                        {
+                            //for (size_t i = 1; i < array_len(exit->args, Operand); i++)
+                            
+                        }
                     }
                     if (strcmp(entry->statement_name, "if") == 0)
                     {
