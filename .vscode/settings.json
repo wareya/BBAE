@@ -3,7 +3,8 @@
         "cstdint": "c",
         "memory.h": "c",
         "bbae_api.h": "c",
-        "compiler_common.h": "c"
+        "compiler_common.h": "c",
+        "bbae_optimization.h": "c"
     },
     "cSpell.words": [
         "iptr"

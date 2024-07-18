@@ -177,7 +177,62 @@ uint8_t reg_shuffle_needed(Value ** block_args, Operand * args, size_t count)
     }
     return 0;
 }
-
+void reg_shuffle_single(byte_buffer * code, int64_t * out2in, uint8_t * out2in_color, size_t out)
+{
+    int64_t in = out2in[out];
+    EncOperand reg_scratch_int = zy_reg(REG_R11, 8);
+    EncOperand reg_scratch_float = zy_reg(REG_XMM5, 8);
+    
+    EncOperand reg_out = zy_reg(out, 8);
+    EncOperand reg_in = zy_reg(in, 8);
+    
+    if (out2in[in] < 0)
+    {
+        if (in <= REG_R15)
+            zy_emit_2(code, INST_MOV, reg_out, reg_in);
+        else
+            zy_emit_2(code, INST_MOVAPS, reg_out, reg_in);
+    }
+    else
+    {
+        // hit a cycle! mov into temp register. will be mov'd out of at the end of the cycle
+        if (out2in_color[out])
+        {
+            if (out <= REG_R15)
+            {
+                zy_emit_2(code, INST_MOV, reg_scratch_int, reg_out);
+                zy_emit_2(code, INST_MOV, reg_out, reg_in);
+            }
+            else
+            {
+                zy_emit_2(code, INST_MOVAPS, reg_scratch_float, reg_out);
+                zy_emit_2(code, INST_MOVAPS, reg_out, reg_in);
+            }
+            
+            out2in_color[out] = 2;
+        }
+        else
+        {
+            out2in_color[out] = 1;
+            reg_shuffle_single(code, out2in, out2in_color, in);
+            if (out2in_color[out] == 2)
+            {
+                if (in <= REG_R15)
+                    zy_emit_2(code, INST_MOV, reg_out, reg_scratch_int);
+                else
+                    zy_emit_2(code, INST_MOVAPS, reg_out, reg_scratch_float);
+            }
+            else
+            {
+                if (in <= REG_R15)
+                    zy_emit_2(code, INST_MOV, reg_out, reg_in);
+                else
+                    zy_emit_2(code, INST_MOVAPS, reg_out, reg_in);
+            }
+            out2in[out] = -1;
+        }
+    }
+}
 void reg_shuffle(byte_buffer * code, Value ** block_args, Operand * args, size_t count)
 {
     int64_t out2in[32];
@@ -211,10 +266,11 @@ void reg_shuffle(byte_buffer * code, Value ** block_args, Operand * args, size_t
         out2in[block_args[i]->regalloc] = args[i].value->regalloc;
     }
     
-    for (size_t i = 0; i < 32; i++)
+    for (size_t out = 0; out < 32; out++)
     {
-        if (out2in[i] < 0)
+        if (out2in[out] < 0)
             continue;
+        reg_shuffle_single(code, out2in, out2in_color, out);
     }
 }
                     
@@ -546,8 +602,8 @@ static byte_buffer * compile_file(Program * program)
                     size_t esa_len = array_len(statement->args, Operand) - separator_pos - 2;
                     assert(("wrong number of arguments to block", eba_len == esa_len));
                     
-                    uint8_t if_shuffle_needed = 0;//reg_shuffle_needed(if_target_block->args, if_s_args, iba_len);
-                    uint8_t else_shuffle_needed = 0;//reg_shuffle_needed(else_target_block->args, else_s_args, eba_len);
+                    uint8_t if_shuffle_needed = reg_shuffle_needed(if_target_block->args, if_s_args, iba_len);
+                    uint8_t else_shuffle_needed = reg_shuffle_needed(else_target_block->args, else_s_args, eba_len);
                     
                     printf("00-`-`-`1 - -3`2    %d %d\n", if_shuffle_needed, else_shuffle_needed);
                     

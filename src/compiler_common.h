@@ -157,6 +157,31 @@ static Type basic_type(int x)
     return ret;
 }
 
+const char * type_to_static_string(Type type)
+{
+    if (type.variant == TYPE_NONE)
+        return "void";
+    if (type.variant == TYPE_I8)
+        return "i8";
+    if (type.variant == TYPE_I16)
+        return "i16";
+    if (type.variant == TYPE_I32)
+        return "i32";
+    if (type.variant == TYPE_I64)
+        return "i64";
+    if (type.variant == TYPE_F32)
+        return "f32";
+    if (type.variant == TYPE_F64)
+        return "f64";
+    if (type.variant == TYPE_I32)
+        return "i32";
+    if (type.variant == TYPE_AGG)
+        return "<aggregatetype>";
+    if (type.variant == TYPE_INVALID)
+        return "<INVALIDTYPE>";
+    return "<BROKENTYPE>";
+}
+
 static uint8_t type_is_valid(Type type)
 {
     return type.variant >= TYPE_I8 && type.variant <= TYPE_AGG;
@@ -660,6 +685,91 @@ size_t find_separator_index(Operand * args)
             return i;
     }
     return 0;
+}
+
+#include <stdio.h>
+void print_ir_to(FILE * f, Program * program)
+{
+    if (f == 0)
+        f = stdout;
+    for (size_t fn = 0; fn < array_len(program->functions, Function *); fn++)
+    {
+        Function * func = program->functions[fn];
+        fprintf(f, "func %s", func->name);
+        if (func->return_type.variant != TYPE_NONE)
+            fprintf(f, " returns %s", type_to_static_string(func->return_type));
+        fprintf(f, "\n");
+        for (size_t i = 0; i < array_len(func->args, Value *); i++)
+        {
+            Value * arg = func->args[i];
+            fprintf(f, "    arg %s %s\n", arg->arg, type_to_static_string(arg->type));
+        }
+        for (size_t i = 0; i < array_len(func->stack_slots, Value *); i++)
+        {
+            StackSlot * slot = func->stack_slots[i]->slotinfo;
+            fprintf(f, "    stack_slot %s %zu\n", slot->name, slot->size);
+        }
+        for (size_t b = 0; b < array_len(func->blocks, Block *); b++)
+        {
+            Block * block = func->blocks[b];
+            if (b != 0)
+                fprintf(f, "block %s\n", block->name);
+            for (size_t i = 0; i < array_len(block->args, Value *); i++)
+            {
+                Value * arg = block->args[i];
+                fprintf(f, "    arg %s %s\n", arg->arg, type_to_static_string(arg->type));
+            }
+            for (size_t i = 0; i < array_len(block->statements, Statement *); i++)
+            {
+                Statement * statement = block->statements[i];
+                if (statement->output)
+                    fprintf(f, "    %s = %s", statement->output_name, statement->statement_name);
+                else
+                    fprintf(f, "    %s", statement->statement_name);
+                
+                for (size_t j = 0; j < array_len(statement->args, Operand); j++)
+                {
+                    Operand op = statement->args[j];
+                    if (op.variant == OP_KIND_INVALID)
+                        fprintf(f, " <invalidoperand>");
+                    else if (op.variant == OP_KIND_SEPARATOR)
+                        fprintf(f, " else");
+                    else if (op.variant == OP_KIND_TEXT)
+                        fprintf(f, " %s", op.text);
+                    else if (op.variant == OP_KIND_TYPE)
+                        fprintf(f, " %s", type_to_static_string(op.rawtype));
+                    else if (op.variant == OP_KIND_VALUE)
+                    {
+                        Value * value = op.value;
+                        assert(value);
+                        if (value->variant == VALUE_INVALID)
+                            fprintf(f, " <invalidvalue>");
+                        else if (value->variant == VALUE_ARG)
+                            fprintf(f, " %s", value->arg);
+                        else if (value->variant == VALUE_STACKADDR)
+                            fprintf(f, " %s", value->slotinfo->name);
+                        else if (value->variant == VALUE_SSA)
+                            fprintf(f, " %s", value->ssa->output_name);
+                        else if (value->variant == VALUE_CONST)
+                        {
+                            if (type_is_int(value->type))
+                                fprintf(f, " %zu%s", value->constant, type_to_static_string(value->type));
+                            else if (value->type.variant == TYPE_F64)
+                                fprintf(f, " %f%s", *(double *)&value->constant, type_to_static_string(value->type));
+                            else if (value->type.variant == TYPE_F32)
+                                fprintf(f, " %f%s", *(float *)&value->constant, type_to_static_string(value->type));
+                            else
+                                fprintf(f, " <aggregate>");
+                        }
+                    }
+                    else
+                        assert(0);
+                }
+                fprintf(f, "\n");
+            }
+        }
+    }
+    fflush(f);
 }
 
 // On some backends, specific types of argument can't be used with specific functions.

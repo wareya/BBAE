@@ -213,9 +213,11 @@ static uint8_t op_is_v_v(const char * opname)
         "shl", "shr", "shr_unsafe", "sar", "sar_unsafe", "and", "or", "xor",
         "cmp_eq", "cmp_ne", "cmp_ge", "cmp_le", "cmp_g", "cmp_l",
         "icmp_ge", "icmp_le", "icmp_g", "icmp_l",
-        "fcmp_eq", "fcmp_ne", "fcmp_ge", "fcmp_le", "fcmp_g", "fcmp_l",
+        
         "fadd", "fsub", "fmul", "fdiv", "frem",
         "fxor",
+        "fcmp_eq", "fcmp_ne", "fcmp_ge", "fcmp_le", "fcmp_g", "fcmp_l",
+        
         "ptralias", "ptralias_merge", "ptralias_disjoint",
     };
     for (size_t i = 0; i < sizeof(ops)/sizeof(char *); i++)
