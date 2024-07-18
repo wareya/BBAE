@@ -25,7 +25,7 @@ void print_asm(byte_buffer * code)
         &instruction
     )))
     {
-        printf("0x%04X    %s\n", offset, instruction.text);
+        printf("0x%04zX    %s\n", offset, instruction.text);
         offset += instruction.info.length;
         runtime_address += instruction.info.length;
     }

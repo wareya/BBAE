@@ -50,7 +50,7 @@ void assert_no_redefinition(Program * program, char * name)
     if (check_for_redefinition(program, name))
     {
         printf("culprit: %s\n", name);
-        assert(("variable redefined!", 0));
+        assert(((void)"variable redefined!", 0));
     }
 }
 
@@ -76,7 +76,7 @@ static Value * parse_value(Program * program, char * token)
         {
             char * end = 0;
             float f = strtof(token, &end);
-            assert(("invalid float literal", strlen(token) - (size_t)(end - token) == 3));
+            assert(((void)"invalid float literal", strlen(token) - (size_t)(end - token) == 3));
             ret->variant = VALUE_CONST;
             ret->type = basic_type(TYPE_F32);
             memcpy(&ret->constant, &f, 4);
@@ -85,7 +85,7 @@ static Value * parse_value(Program * program, char * token)
         {
             char * end = 0;
             double f = strtod(token, &end);
-            assert(("invalid float literal", strlen(token) - (size_t)(end - token) == 3));
+            assert(((void)"invalid float literal", strlen(token) - (size_t)(end - token) == 3));
             ret->variant = VALUE_CONST;
             ret->type = basic_type(TYPE_F64);
             memcpy(&ret->constant, &f, 8);
@@ -113,7 +113,7 @@ static Value * parse_value(Program * program, char * token)
         }
         else
         {
-            assert(("unknown type of literal value", 0));
+            assert(((void)"unknown type of literal value", 0));
         }
         
         return ret;
@@ -151,14 +151,14 @@ static Value * parse_value(Program * program, char * token)
                 if (!statement->output)
                 {
                     printf("culprit: %s\n", token);
-                    assert(("tried to use output of operation before it was run", 0));
+                    assert(((void)"tried to use output of operation before it was run", 0));
                 }
                 return statement->output;
             }
         }
         
         printf("culprit: %s\n", token);
-        assert(("tried to use unknown variable", 0));
+        assert(((void)"tried to use unknown variable", 0));
     }
 }
 
@@ -290,7 +290,7 @@ static Statement * parse_statement(Program * program, const char ** cursor)
         else
         {
             printf("culprit: %s\n", ret->statement_name);
-            assert(("glfy39", 0));
+            assert(((void)"glfy39", 0));
         }
     }
     else
@@ -363,7 +363,7 @@ static Statement * parse_statement(Program * program, const char ** cursor)
         else
         {
             printf("culprit: %s\n", ret->statement_name);
-            assert(("unknown instruction", 0));
+            assert(((void)"unknown instruction", 0));
         }
     }
     
@@ -375,7 +375,7 @@ static void legalize_last_statement_operands(Block * block)
     size_t end = array_len(block->statements, Statement *);
     if (end == 0)
         return;
-    size_t orig_end = end;
+    //size_t orig_end = end;
     Statement * statement = block->statements[end - 1];
     // pre-process any stack slot address arguments into explicit address access instructions
     if (strcmp(statement->statement_name, "load") != 0 &&
@@ -478,16 +478,16 @@ static Program * parse_file(const char * cursor)
             }
             else if (strcmp(token, "global") == 0)
             {
-                assert(("TODO global", 0));
+                assert(((void)"TODO global", 0));
             }
             else if (strcmp(token, "static") == 0)
             {
-                assert(("TODO static", 0));
+                assert(((void)"TODO static", 0));
             }
             else
             {
                 printf("culprit: %s\n", token);
-                assert(("unknown directive name", 0));
+                assert(((void)"unknown directive name", 0));
             }
         }
         else if (state == PARSER_STATE_BLOCKARGS)
@@ -598,7 +598,7 @@ static Program * parse_file(const char * cursor)
             else
             {
                 printf("culprit: %s\n", token);
-                assert(("unknown statement or directive", 0));
+                assert(((void)"unknown statement or directive", 0));
             }
         }
         
@@ -712,7 +712,7 @@ void split_blocks(Program * program)
                     //array_push(next_block->edges_in, Statement *, branch);
                     
                     break;
-                    //assert(("TODO: split block, convey arguments", 0));
+                    //assert(((void)"TODO: split block, convey arguments", 0));
                 }
             }
         }

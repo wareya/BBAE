@@ -469,7 +469,7 @@ static uint64_t parse_int_bare(const char * n)
     
     const char * end = 0;
     uint64_t ret = (uint64_t)my_strtoull(n, &end);
-    assert(("bare integer literal has trailing characters", (uint64_t)(end - n) == len));
+    assert(((void)"bare integer literal has trailing characters", (uint64_t)(end - n) == len));
     
     return ret;
 }
@@ -503,26 +503,27 @@ static Type parse_type(const char ** b)
         type.variant = TYPE_F64;
     else if (strcmp(token, "{") == 0)
     {
-        uint8_t is_packed = 0;
+        //uint8_t is_packed = 0;
         token = find_next_token(b);
         if (strcmp(token, "packed") == 0)
         {
-            is_packed = 1;
+            //is_packed = 1;
             token = find_next_token(b);
         }
         if (str_begins_with(token, "align."))
         {
             uint64_t align = parse_int_bare(token + 6);
+            align = align + 0; // suppress unused variable warning
             token = find_next_token(b);
         }
         else
-            assert(("missing alignment in aggregate type spec", 0));
+            assert(((void)"missing alignment in aggregate type spec", 0));
         
-        assert(("TODO: properly parse struct types", 0));
+        assert(((void)"TODO: properly parse struct types", 0));
     }
     else
     {
-        assert(("invalid type", 0));
+        assert(((void)"invalid type", 0));
     }
     
     return type;
@@ -645,7 +646,7 @@ static void add_statement_output(Statement * statement)
         else
         {
             printf("culprit: %s\n", statement->statement_name);
-            assert(("TODO", 0));
+            assert(((void)"TODO", 0));
         }
         statement->output->variant = VALUE_SSA;
         statement->output->ssa = statement;

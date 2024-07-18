@@ -398,7 +398,7 @@ static int name_to_mnemonic(int name)
         
         case INST_XOR       : return ZYDIS_MNEMONIC_XOR;
         case INST_XORPS     : return ZYDIS_MNEMONIC_XORPS;
-        default: assert(("unknown instruction!", 0));
+        default: assert(((void)"unknown instruction!", 0));
     }
 }
 
@@ -427,7 +427,7 @@ static int reg_unsized_to_sized(enum Register reg, int size)
     else if (size == 1 && reg > REG_RBX)
         return ZYDIS_REGISTER_AL + (int)reg + 4;
     else
-        assert(("unknown register!\n", 0));
+        assert(((void)"unknown register!\n", 0));
 }
 
 static EncOperand zy_reg(enum Register reg, int size)
@@ -555,7 +555,7 @@ static void do_encode(ZydisEncoderRequest req, uint8_t * buf, size_t * len)
     if (ZYAN_FAILED(e))
     {
         printf("culprit: %s\n", ZyanStatusText(e));
-        assert(("Failed to encode instruction", 0));
+        assert(((void)"Failed to encode instruction", 0));
     }
 }
 

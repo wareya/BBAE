@@ -79,7 +79,7 @@ static void do_regalloc_block(Function * func, Block * block)
             if (type_is_basic(value->type))
             {
                 int64_t where = abi_get_next_arg_basic(type_is_float(value->type));
-                assert(("arg reg spill not yet supported", where >= 0));
+                assert(((void)"arg reg spill not yet supported", where >= 0));
                 
                 if (where >= _ABI_XMM0)
                     reg_float_alloced[where - _ABI_XMM0] = value;
@@ -92,7 +92,7 @@ static void do_regalloc_block(Function * func, Block * block)
                 value->regalloced = 1;
             }
             else
-                assert(("aggregate args not yet supported", 0));
+                assert(((void)"aggregate args not yet supported", 0));
         }
     }
     else
@@ -157,11 +157,11 @@ static void do_regalloc_block(Function * func, Block * block)
                 else if (type_is_float(value->type))
                     where = first_empty(reg_float_alloced, BBAE_REGISTER_COUNT) + _ABI_XMM0;
                 else
-                    assert(("TODO", 0));
+                    assert(((void)"TODO", 0));
             }
             
             if (where < 0)
-                assert(("spilled block arguments not yet supported", 0));
+                assert(((void)"spilled block arguments not yet supported", 0));
             
             if (where >= _ABI_XMM0)
                 reg_float_alloced[where - _ABI_XMM0] = value;

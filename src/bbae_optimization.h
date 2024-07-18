@@ -31,8 +31,7 @@ Operand * _remap_args(Value ** block_args, Operand * exit_args, Operand * entry_
     return args_copy;
 }
 
-
-void remap_args_span(Value ** block_args, Operand * exit_args, Statement * entry, size_t entry_label_offset)
+void _remap_args_span(Value ** block_args, Operand * exit_args, Statement * entry, size_t entry_label_offset)
 {
     size_t block_arg_count = array_len(block_args, Value *);
     size_t raw_entry_count = array_len(entry->args, Operand);
@@ -107,7 +106,7 @@ void optimization_empty_block_removal(Program * program)
                     {
                         assert(strcmp(entry->args[0].text, block->name) == 0);
                         assert(block_arg_count == array_len(entry->args, Operand) - 1);
-                        remap_args_span(block->args, exit->args, entry, 0);
+                        _remap_args_span(block->args, exit->args, entry, 0);
                         target_block->edges_in[target_block_in_edge_index] = entry;
                     }
                     if (strcmp(entry->statement_name, "if") == 0)
@@ -120,7 +119,7 @@ void optimization_empty_block_removal(Program * program)
                         
                         if (strcmp(entry->args[1].text, block->name) == 0)
                         {
-                            remap_args_span(block->args, exit->args, entry, 1);
+                            _remap_args_span(block->args, exit->args, entry, 1);
                             target_block->edges_in[target_block_in_edge_index] = entry;
                             filled_once = 1;
                         }
@@ -131,7 +130,7 @@ void optimization_empty_block_removal(Program * program)
                         
                         if (strcmp(entry->args[separator_index + 1].text, block->name) == 0)
                         {
-                            remap_args_span(block->args, exit->args, entry, separator_index + 1);
+                            _remap_args_span(block->args, exit->args, entry, separator_index + 1);
                             if (!filled_once)
                                 target_block->edges_in[target_block_in_edge_index] = entry;
                             else
@@ -179,6 +178,9 @@ void optimization_global_mem2reg(Program * program)
             // TODO: implement volatile and make volatile stores count as loads
             if (!ever_loaded)
                 continue;
+            
+            ever_stored = ever_stored + 0; // suppress unused variable warning
+            
             assert(type_set);
             
             printf("---- stack slot type %d\n", type.variant);

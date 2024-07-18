@@ -54,7 +54,7 @@ static void apply_relocations(NameUsageInfo ** usages, byte_buffer * code, int64
             memcpy(code->data + rewrite_loc, &diff, 1);
         }
         else
-            assert(("TODO", 0));
+            assert(((void)"TODO", 0));
     }
 }
 
@@ -148,7 +148,7 @@ static EncOperand get_basic_encoperand(Value * value)
     if (value->variant == VALUE_CONST)
     {
         assert(type_is_valid(value->type));
-        assert(("TODO", type_size(value->type) <= 8));
+        assert(((void)"TODO", type_size(value->type) <= 8));
         return zy_imm(value->constant, type_size(value->type));
     }
     else if (value->variant == VALUE_SSA || value->variant == VALUE_ARG)
@@ -161,7 +161,7 @@ static EncOperand get_basic_encoperand(Value * value)
     else
     {
         printf("culprit: %d\n", value->variant);
-        assert(("TODO", 0));
+        assert(((void)"TODO", 0));
     }
 }
 
@@ -246,17 +246,17 @@ void reg_shuffle(byte_buffer * code, Value ** block_args, Operand * args, size_t
         assert(args[i].value);
         if (args[i].value->variant == VALUE_CONST)
         {
-            assert(("FIXME", 0));
+            assert(((void)"FIXME", 0));
             continue;
         }
         assert(args[i].value->variant == VALUE_SSA || args[i].value->variant == VALUE_ARG);
         
         assert(block_args[i]->regalloced);
-        assert(("spilled block args not yet supported", block_args[i]->regalloc >= 0));
+        assert(((void)"spilled block args not yet supported", block_args[i]->regalloc >= 0));
         assert(block_args[i]->regalloc < 32);
         
         assert(args[i].value->regalloced);
-        assert(("spilled block args not yet supported", args[i].value->regalloc >= 0));
+        assert(((void)"spilled block args not yet supported", args[i].value->regalloc >= 0));
         assert(args[i].value->regalloc < 32);
         
         // no MOV needed
@@ -392,7 +392,7 @@ static byte_buffer * compile_file(Program * program)
                             op2 = temp;
                         }
                         else
-                            assert(("FIXME", 0));
+                            assert(((void)"FIXME", 0));
                     }
                     if (!encops_equal(op0, op1))
                     {
@@ -429,7 +429,7 @@ static byte_buffer * compile_file(Program * program)
                     else if (strcmp(statement->statement_name, "fxor") == 0)
                         zy_emit_2(code, INST_XORPS, op0, op2);
                     else
-                        assert(("TODO", 0));
+                        assert(((void)"TODO", 0));
                 }
                 else if (strcmp(statement->statement_name, "mov") == 0)
                 {
@@ -478,7 +478,7 @@ static byte_buffer * compile_file(Program * program)
                     EncOperand op1 = get_basic_encoperand(op1_op.value);
                     EncOperand op2 = get_basic_encoperand(op2_op.value);
                     
-                    assert(("TODO", type_size(op2_op.value->type) <= 8));
+                    assert(((void)"TODO", type_size(op2_op.value->type) <= 8));
                     
                     if (op2_op.value->variant == VALUE_CONST &&
                         type_size(op2_op.value->type) == 8 &&
@@ -498,7 +498,6 @@ static byte_buffer * compile_file(Program * program)
                     }
                     else
                     {
-                        EncOperand op2 = get_basic_encoperand(op2_op.value);
                         if (op2_op.value->type.variant == TYPE_F64)
                             zy_emit_2(code, INST_MOVQ, op1, op2);
                         else if (op2_op.value->type.variant == TYPE_F32)
@@ -538,7 +537,7 @@ static byte_buffer * compile_file(Program * program)
                     Block * target_block = find_block(func, target_op.text);
                     size_t ba_len = array_len(target_block->args, Value *);
                     size_t sa_len = array_len(statement->args, Operand) - 1;
-                    assert(("wrong number of arguments to block", ba_len == sa_len));
+                    assert(((void)"wrong number of arguments to block", ba_len == sa_len));
                     
                     if (reg_shuffle_needed(target_block->args, statement->args + 1, ba_len))
                         reg_shuffle(code, target_block->args, statement->args + 1, ba_len);
@@ -579,7 +578,7 @@ static byte_buffer * compile_file(Program * program)
                         }
                         else
                         {
-                            assert(("TODO", 0));
+                            assert(((void)"TODO", 0));
                         }
                     }
                     else
@@ -594,13 +593,13 @@ static byte_buffer * compile_file(Program * program)
                     Block * if_target_block = find_block(func, target_op.text);
                     size_t iba_len = array_len(if_target_block->args, Value *);
                     size_t isa_len = separator_pos - 2;
-                    assert(("wrong number of arguments to block", iba_len == isa_len));
+                    assert(((void)"wrong number of arguments to block", iba_len == isa_len));
                     
                     Operand * else_s_args = statement->args + separator_pos + 2;
                     Block * else_target_block = find_block(func, target_op2.text);
                     size_t eba_len = array_len(else_target_block->args, Value *);
                     size_t esa_len = array_len(statement->args, Operand) - separator_pos - 2;
-                    assert(("wrong number of arguments to block", eba_len == esa_len));
+                    assert(((void)"wrong number of arguments to block", eba_len == esa_len));
                     
                     uint8_t if_shuffle_needed = reg_shuffle_needed(if_target_block->args, if_s_args, iba_len);
                     uint8_t else_shuffle_needed = reg_shuffle_needed(else_target_block->args, else_s_args, eba_len);
@@ -695,7 +694,7 @@ static byte_buffer * compile_file(Program * program)
                         if ((strcmp(statement->statement_name, "cmp_g") == 0))
                             zy_emit_1(code, INST_SETNB, op0);
                         else
-                            assert(("TODO", 0));
+                            assert(((void)"TODO", 0));
                     }
                 }
                 else if (strcmp(statement->statement_name, "uint_to_float") == 0)
@@ -719,7 +718,7 @@ static byte_buffer * compile_file(Program * program)
                     else if (op1_op.rawtype.variant == TYPE_F32)
                         zy_emit_2(code, INST_CVTSI2SS, op0, op2);
                     else
-                        assert(("TODO", 0));
+                        assert(((void)"TODO", 0));
                 }
                 else if (strcmp(statement->statement_name, "bitcast") == 0)
                 {
@@ -743,7 +742,7 @@ static byte_buffer * compile_file(Program * program)
                 else
                 {
                     printf("culprit: %s\n", statement->statement_name);
-                    assert(("unhandled operation!", 0));
+                    assert(((void)"unhandled operation!", 0));
                 }
             }
         }
