@@ -304,6 +304,11 @@ typedef struct _Value {
     uint64_t temp; // temporary, used by specific algorithms as a kind of cache
 } Value;
 
+uint8_t value_is_basic_zero_constant(Value * value)
+{
+    return value->variant == VALUE_CONST && type_is_basic(value->type) && value->constant == 0;
+}
+
 enum BBAE_OP_VARIANT {
     OP_KIND_INVALID,
     OP_KIND_TYPE,
@@ -786,28 +791,6 @@ typedef struct _ImmOpsAllowed
     uint8_t immediates_allowed[8];
 } ImmOpsAllowed;
 // implemented by backend
-ImmOpsAllowed imm_op_rule_determiner(Statement * statement);
+static ImmOpsAllowed imm_op_rule_determiner(Statement * statement);
 
-typedef struct _RegAllocRules
-{
-    // for up to 8 operands (0 is output, 1 is input 0, 2 is input 1, etc):
-    // which registers from 0 to 63 are allowed
-    uint64_t allowed_registers_lo[8];
-    // 64 to 127, etc. not used in x86 backend, but useful in exotic architectures.
-    // might also be useful for x86 in the future for extended SIMD support? dunno
-    uint64_t allowed_registers_e1[8];
-    uint64_t allowed_registers_e2[8];
-    uint64_t allowed_registers_e3[8];
-    
-    // which registers the instruction clobbers, if any
-    uint8_t clobbers[256];
-    
-    uint8_t output_same_as_left_input; // for x86, almost always 1
-    uint8_t raw_stack_addr_arguments_allowed;
-} RegAllocRules;
-// implemented by backend
-RegAllocRules regalloc_rule_determiner(Statement * statement);
-
-
-    
 #endif // BBAE_COMPILER_COMMON

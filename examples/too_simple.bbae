@@ -18,8 +18,7 @@ block loop_head
     f2 = fmul f -1.0f64
     store flip f2
     
-    a = mul ival 2i64
-    //a = shl ival 1i64
+    a = shl ival 1i64
     b = sub a 1i64
     c = uint_to_float f64 b
     d = fdiv f2 c

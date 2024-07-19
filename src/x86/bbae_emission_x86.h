@@ -360,7 +360,58 @@ static byte_buffer * compile_file(Program * program)
                     zy_emit_0(code, INST_LEAVE);
                     zy_emit_0(code, INST_RET);
                 }
-                else if (strcmp(statement->statement_name, "add") == 0 ||
+                else if (strcmp(statement->statement_name, "div") == 0 ||
+                         strcmp(statement->statement_name, "idiv") == 0 ||
+                         strcmp(statement->statement_name, "rem") == 0 ||
+                         strcmp(statement->statement_name, "irem") == 0)
+                {
+                    Operand op1_op = statement->args[0];
+                    assert(op1_op.variant == OP_KIND_VALUE);
+                    Operand op2_op = statement->args[1];
+                    assert(op2_op.variant == OP_KIND_VALUE);
+                    
+                    assert(op1_op.value->regalloced);
+                    assert(op2_op.value->regalloced);
+                    
+                    //EncOperand op0 = get_basic_encoperand(statement->output);
+                    EncOperand op2 = get_basic_encoperand(op2_op.value);
+                    
+                    if (type_size(statement->output->type) != 1)
+                        zy_emit_2(code, INST_XOR, zy_reg(REG_RDX, 4), zy_reg(REG_RDX, 4));
+                    
+                    uint64_t forced_output = REG_RAX;
+                    if (type_size(statement->output->type) != 1 && 
+                        (strcmp(statement->statement_name, "rem") == 0 ||
+                         strcmp(statement->statement_name, "irem") == 0))
+                        forced_output = REG_RDX;
+                    
+                    assert(statement->output->regalloc == forced_output);
+                    
+                    if (op1_op.value->regalloc != REG_RAX)
+                    {
+                        EncOperand op1 = get_basic_encoperand(op1_op.value);
+                        zy_emit_2(code, INST_MOV, zy_reg(REG_RAX, type_size(op1_op.value->type)), op1);
+                    }
+                    
+                    if (strcmp(statement->statement_name, "div") == 0)
+                        zy_emit_1(code, INST_DIV, op2);
+                    else if (strcmp(statement->statement_name, "idiv") == 0)
+                        zy_emit_1(code, INST_IDIV, op2);
+                    else if (strcmp(statement->statement_name, "rem") == 0)
+                    {
+                        zy_emit_1(code, INST_DIV, op2);
+                        //zy_emit_2(code, INST_SHR
+                    }
+                    else if (strcmp(statement->statement_name, "irem") == 0)
+                    {
+                        zy_emit_1(code, INST_IDIV, op2);
+                    }
+                    else
+                        assert(((void)"FIXME", 0));
+                }
+                else if (strcmp(statement->statement_name, "mul") == 0 ||
+                         strcmp(statement->statement_name, "imul") == 0 ||
+                         strcmp(statement->statement_name, "add") == 0 ||
                          strcmp(statement->statement_name, "sub") == 0 ||
                          strcmp(statement->statement_name, "shl") == 0 ||
                          strcmp(statement->statement_name, "shr") == 0 ||
@@ -384,6 +435,8 @@ static byte_buffer * compile_file(Program * program)
                     if (encops_equal(op0, op2))
                     {
                         if (strcmp(statement->statement_name, "add") == 0 ||
+                            strcmp(statement->statement_name, "mul") == 0 ||
+                            strcmp(statement->statement_name, "imul") == 0 ||
                             strcmp(statement->statement_name, "fadd") == 0 ||
                             strcmp(statement->statement_name, "fmul") == 0)
                         {
@@ -406,6 +459,10 @@ static byte_buffer * compile_file(Program * program)
                         zy_emit_2(code, INST_ADD, op0, op2);
                     else if (strcmp(statement->statement_name, "sub") == 0)
                         zy_emit_2(code, INST_SUB, op0, op2);
+                    else if (strcmp(statement->statement_name, "mul") == 0)
+                        zy_emit_2(code, INST_IMUL, op0, op2);
+                    else if (strcmp(statement->statement_name, "imul") == 0)
+                        zy_emit_2(code, INST_IMUL, op0, op2);
                     else if (strcmp(statement->statement_name, "shl") == 0)
                         zy_emit_2(code, INST_SHL, op0, op2);
                     else if (strcmp(statement->statement_name, "shr") == 0)
@@ -462,7 +519,12 @@ static byte_buffer * compile_file(Program * program)
                         {
                             if (statement->output->type.variant == TYPE_F64 || op1_op.value->type.variant == TYPE_F64 ||
                                 statement->output->type.variant == TYPE_F32 || op1_op.value->type.variant == TYPE_F32)
-                                zy_emit_2(code, INST_MOVAPS, op0, op1);
+                            {
+                                if (value_is_basic_zero_constant(op1_op.value))
+                                    zy_emit_2(code, INST_XORPS, op0, op0);
+                                else
+                                    zy_emit_2(code, INST_MOVAPS, op0, op1);
+                            }
                             else
                                 zy_emit_2(code, INST_MOV, op0, op1);
                         }
@@ -547,7 +609,6 @@ static byte_buffer * compile_file(Program * program)
                         zy_emit_1(code, INST_JMP, op_dummy);
                         add_label_relocation(code->len - 4, target_op.text, 4);
                     }
-                    zy_emit_0(code, INST_NOP);
                 }
                 else if (strcmp(statement->statement_name, "if") == 0)
                 {
@@ -671,7 +732,6 @@ static byte_buffer * compile_file(Program * program)
                         zy_emit_1(code, INST_JMP, op_dummy);
                         add_label_relocation(code->len - 4, target_op.text, 4);
                     }
-                    zy_emit_0(code, INST_NOP);
                 }
                 else if (str_begins_with(statement->statement_name, "cmp_"))
                 {

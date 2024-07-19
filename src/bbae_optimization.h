@@ -143,6 +143,149 @@ void optimization_empty_block_removal(Program * program)
     }
 }
 
+size_t count_op_num_times_used(Operand * list, Value * value, size_t start, size_t count)
+{
+    size_t ret = 0;
+    for (size_t i = start; i < start + count; i++)
+    {
+        if (list[i].value == value)
+            ret += 1;
+    }
+    return ret;
+}
+
+void optimization_unused_block_arg_removal(Program * program)
+{
+    for (size_t f = 0; f < array_len(program->functions, Function *); f++)
+    {
+        Function * func = program->functions[f];
+        uint8_t did_work = 1;
+        while (did_work)
+        {
+            did_work = 0;
+            for (size_t b = 1; b < array_len(func->blocks, Block *); b++)
+            {
+                Block * block = func->blocks[b];
+                
+                for (size_t a = 0; a < array_len(block->args, Value *); a++)
+                {
+                    Value * arg = block->args[a];
+                    uint8_t non_jump_back_to_self_usage_exists = 0;
+                    for (size_t i = 0; i < array_len(arg->edges_out, Statement *); i++)
+                    {
+                        puts("-`-`- 2-`24-4`2-24` -    looking for args to remove...");
+                        Statement * statement = arg->edges_out[i];
+                        if (strcmp(statement->statement_name, "goto") == 0 && a + 1 < array_len(statement->args, Operand))
+                        {
+                            if (strcmp(statement->args[0].text, block->name) != 0 ||
+                                statement->args[a + 1].value != arg ||
+                                count_op_num_times_used(statement->args, arg, 1, array_len(statement->args, Operand) - 1) != 1)
+                            {
+                                non_jump_back_to_self_usage_exists = 1;
+                                break;
+                            }
+                        }
+                        else if (strcmp(statement->statement_name, "if") == 0 && a + 2 < array_len(statement->args, Operand))
+                        {
+                            size_t separator_index = find_separator_index(statement->args);
+                            assert(separator_index > 0);
+                            
+                            if (strcmp(statement->args[1].text, block->name) != 0 ||
+                                statement->args[a + 2].value != arg ||
+                                count_op_num_times_used(statement->args, arg, 2, separator_index - 2) != 1)
+                            {
+                                non_jump_back_to_self_usage_exists = 1;
+                                break;
+                            }
+                            
+                            if (separator_index + 2 + a < array_len(statement->args, Operand) &&
+                                (strcmp(statement->args[separator_index + 1].text, block->name) != 0 ||
+                                 statement->args[separator_index + 2 + a].value != arg ||
+                                 count_op_num_times_used(statement->args, arg, separator_index + 2, array_len(statement->args, Operand) - separator_index - 1) != 1))
+                            {
+                                non_jump_back_to_self_usage_exists = 1;
+                                break;
+                            }
+                        }
+                        else
+                        {
+                            non_jump_back_to_self_usage_exists = 1;
+                            break;
+                        }
+                    }
+                    if (!non_jump_back_to_self_usage_exists || array_len(arg->edges_out, Statement *) == 0)
+                    {
+                        for (size_t i = 0; i < array_len(arg->edges_out, Statement *); i++)
+                        {
+                            Statement * statement = arg->edges_out[i];
+                            if (strcmp(statement->statement_name, "goto") == 0)
+                            {
+                                if (strcmp(statement->args[0].text, block->name) == 0)
+                                {
+                                    disconnect_statement_from_operand(statement, statement->args[a + 1]);
+                                    array_erase(statement->args, Operand, a + 1);
+                                }
+                            }
+                            else if (strcmp(statement->statement_name, "if") == 0)
+                            {
+                                assert(a + 2 < array_len(statement->args, Operand));
+                                if (strcmp(statement->args[1].text, block->name) != 0)
+                                {
+                                    disconnect_statement_from_operand(statement, statement->args[a + 2]);
+                                    array_erase(statement->args, Operand, a + 2);
+                                }
+                                size_t separator_index = find_separator_index(statement->args);
+                                assert(separator_index > 0);
+                                assert(separator_index + 2 + a < array_len(statement->args, Operand));
+                                if (strcmp(statement->args[separator_index + 1].text, block->name) != 0)
+                                {
+                                    disconnect_statement_from_operand(statement, statement->args[separator_index + 2 + a]);
+                                    array_erase(statement->args, Operand, separator_index + 2 + a);
+                                }
+                            }
+                        }
+                        
+                        array_erase(block->args, Value *, a);
+                        did_work = 1;
+                        
+                        for (size_t i = 0; i < array_len(block->edges_in, Statement *); i++)
+                        {
+                            Statement * statement = block->edges_in[i];
+                            
+                            if (strcmp(statement->statement_name, "goto") == 0)
+                            {
+                                assert(strcmp(statement->args[0].text, block->name) == 0);
+                                assert(a + 1 < array_len(statement->args, Operand));
+                                disconnect_statement_from_operand(statement, statement->args[a + 1]);
+                                array_erase(statement->args, Operand, a + 1);
+                            }
+                            else if (strcmp(statement->statement_name, "if") == 0)
+                            {
+                                if (strcmp(statement->args[1].text, block->name) == 0)
+                                {
+                                    assert(a + 2 < array_len(statement->args, Operand));
+                                    disconnect_statement_from_operand(statement, statement->args[a + 2]);
+                                    array_erase(statement->args, Operand, a + 2);
+                                }
+                                size_t separator_index = find_separator_index(statement->args);
+                                assert(separator_index > 0);
+                                if (strcmp(statement->args[separator_index + 1].text, block->name) == 0)
+                                {
+                                    assert(separator_index + 2 + a < array_len(statement->args, Operand));
+                                    disconnect_statement_from_operand(statement, statement->args[separator_index + 2 + a]);
+                                    array_erase(statement->args, Operand, separator_index + 2 + a);
+                                }
+                            }
+                            else
+                                assert(0);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 void optimization_global_mem2reg(Program * program)
 {
     for (size_t f = 0; f < array_len(program->functions, Function *); f++)
@@ -266,17 +409,9 @@ void optimization_global_mem2reg(Program * program)
                         connect_statement_to_operand(statement, op);
                         
                         Operand op2 = new_op_val(newval);
-                        size_t separator_pos = 0;
-                        for (size_t i = 2; i < array_len(statement->args, Operand); i++)
-                        {
-                            if (statement->args[i].variant == OP_KIND_SEPARATOR)
-                            {
-                                separator_pos = i;
-                                array_insert(statement->args, Operand, i, op2);
-                                break;
-                            }
-                        }
+                        size_t separator_pos = find_separator_index(statement->args);
                         assert(separator_pos);
+                        array_insert(statement->args, Operand, separator_pos, op2);
                         connect_statement_to_operand(statement, op2);
                     }
                 }
