@@ -173,7 +173,6 @@ void optimization_unused_block_arg_removal(Program * program)
                     uint8_t non_jump_back_to_self_usage_exists = 0;
                     for (size_t i = 0; i < array_len(arg->edges_out, Statement *); i++)
                     {
-                        puts("-`-`- 2-`24-4`2-24` -    looking for args to remove...");
                         Statement * statement = arg->edges_out[i];
                         if (strcmp(statement->statement_name, "goto") == 0 && a + 1 < array_len(statement->args, Operand))
                         {

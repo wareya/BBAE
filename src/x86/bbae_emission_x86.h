@@ -447,6 +447,19 @@ static byte_buffer * compile_file(Program * program)
                         else
                             assert(((void)"FIXME", 0));
                     }
+                    
+                    uint8_t shift_mov_performed = 0;
+                    if (strcmp(statement->statement_name, "shl") == 0 ||
+                        strcmp(statement->statement_name, "shr") == 0 ||
+                        strcmp(statement->statement_name, "sar") == 0)
+                    {
+                        if (op2_op.value->variant != VALUE_CONST && op2_op.value->regalloc != REG_RCX)
+                        {
+                            shift_mov_performed = 1;
+                            zy_emit_2(code, INST_MOV, zy_reg(REG_RCX, type_size(op2_op.value->type)), op2);
+                        }
+                    }
+                    
                     if (!encops_equal(op0, op1))
                     {
                         if (statement->output->type.variant == TYPE_F64 || statement->output->type.variant == TYPE_F32)
@@ -464,9 +477,26 @@ static byte_buffer * compile_file(Program * program)
                     else if (strcmp(statement->statement_name, "imul") == 0)
                         zy_emit_2(code, INST_IMUL, op0, op2);
                     else if (strcmp(statement->statement_name, "shl") == 0)
-                        zy_emit_2(code, INST_SHL, op0, op2);
+                    {
+                        if (shift_mov_performed)
+                            zy_emit_2(code, INST_SHL, op0, zy_reg(REG_RCX, 1));
+                        else
+                            zy_emit_2(code, INST_SHL, op0, op2);
+                    }
                     else if (strcmp(statement->statement_name, "shr") == 0)
-                        zy_emit_2(code, INST_SHR, op0, op2);
+                    {
+                        if (shift_mov_performed)
+                            zy_emit_2(code, INST_SHR, op0, zy_reg(REG_RCX, 1));
+                        else
+                            zy_emit_2(code, INST_SHR, op0, op2);
+                    }
+                    else if (strcmp(statement->statement_name, "sar") == 0)
+                    {
+                        if (shift_mov_performed)
+                            zy_emit_2(code, INST_SAR, op0, zy_reg(REG_RCX, 1));
+                        else
+                            zy_emit_2(code, INST_SAR, op0, op2);
+                    }
                     else if (strcmp(statement->statement_name, "fadd") == 0 && statement->output->type.variant == TYPE_F32)
                         zy_emit_2(code, INST_ADDSS, op0, op2);
                     else if (strcmp(statement->statement_name, "fadd") == 0 && statement->output->type.variant == TYPE_F64)

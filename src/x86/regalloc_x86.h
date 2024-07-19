@@ -105,6 +105,18 @@ RegAllocRules regalloc_rule_determiner(Statement * statement)
             ret.clobbered_registers |= (1 << _ABI_RAX);
         }
     }
+    else if (strcmp(statement->statement_name, "shl") == 0 ||
+             strcmp(statement->statement_name, "shr") == 0 ||
+             strcmp(statement->statement_name, "sar") == 0 ||
+             strcmp(statement->statement_name, "shr_unsafe") == 0 ||
+             strcmp(statement->statement_name, "sar_unsafe") == 0)
+    {
+        if (statement->args[0].value->variant != VALUE_CONST)
+        {
+            ret.is_special = 1;
+            ret.clobbered_registers |= (1 << _ABI_RCX);
+        }
+    }
     else if (strcmp(statement->statement_name, "call") == 0 ||
              strcmp(statement->statement_name, "call_eval") == 0)
     {

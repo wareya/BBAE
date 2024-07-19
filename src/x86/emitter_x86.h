@@ -207,6 +207,7 @@ enum InstName {
     
     INST_SHL,
     INST_SHR,
+    INST_SAR,
     
     INST_SHUFPD,
     INST_SHUFPS,
@@ -374,6 +375,7 @@ static int name_to_mnemonic(int name)
         
         case INST_SHL       : return ZYDIS_MNEMONIC_SHL;
         case INST_SHR       : return ZYDIS_MNEMONIC_SHR;
+        case INST_SAR       : return ZYDIS_MNEMONIC_SAR;
         
         case INST_SHUFPD    : return ZYDIS_MNEMONIC_SHUFPD;
         case INST_SHUFPS    : return ZYDIS_MNEMONIC_SHUFPS;
