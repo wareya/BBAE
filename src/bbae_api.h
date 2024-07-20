@@ -1,6 +1,8 @@
 #ifndef BBAE_API
 #define BBAE_API
 
+#include "memory.h"
+
 #include "compiler_common.h"
 #include "bbae_construction.h"
 #include "bbae_optimization.h"
@@ -28,14 +30,22 @@ static void do_optimization(Program * program)
     puts("-----                    -----");
 }
 
-static byte_buffer * do_lowering(Program * program)
+static byte_buffer * do_lowering(Program * program, SymbolEntry ** symbollist)
 {
     do_regalloc(program);
     puts("-----   AFTER REGALLOC   -----");
     print_ir_to(0, program);
     puts("-----                    -----");
     allocate_stack_slots(program);
-    byte_buffer * code = compile_file(program);
+    
+    *symbollist = (SymbolEntry *)zero_alloc(0);
+    
+    byte_buffer * code = compile_file(program, symbollist);
+    
+    SymbolEntry func_symbol;
+    memset(&func_symbol, 0, sizeof(SymbolEntry));
+    array_push(*symbollist, SymbolEntry, func_symbol);
+    
     return code;
 }
 

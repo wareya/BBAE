@@ -10,10 +10,19 @@
 
 #include "memory.h"
 
+typedef struct _SymbolEntry
+{
+    const char * name;
+    size_t loc;
+    uint8_t kind; // 0 = invalid; 1 = function; 2 = static variable
+} SymbolEntry;
+
 // read the next token on the current line, return 0 if none
 // thrashes any previously-returned token. make copies!
 static char * find_next_token(const char ** b)
 {
+    printf("starting character... %02X\n", (uint8_t)**b);
+    
     static char token[4096];
     static size_t token_len;
     
@@ -23,14 +32,14 @@ static char * find_next_token(const char ** b)
     char * w = token;
     
     // skip leading spaces
-    while (is_space(**b))
+    while (**b != 0 && is_space(**b))
     {
         *b += 1;
         if (**b == 0)
             return 0;
     }
     
-    while (!is_newline(**b) && !is_space(**b) && **b != 0 && token_len < 4096 && !is_comment(*b))
+    while (**b != 0 && !is_newline(**b) && !is_space(**b) && token_len < 4096 && !is_comment(*b))
     {
         *w = **b;
         w += 1;
@@ -39,7 +48,7 @@ static char * find_next_token(const char ** b)
     }
     if (is_comment(*b))
     {
-        while (!is_newline(**b) && **b != 0)
+        while (**b != 0 && !is_newline(**b))
             *b += 1;
     }
     
@@ -54,14 +63,20 @@ static char * find_next_token(const char ** b)
 // thrashes any previously-returned token
 static char * find_next_token_anywhere(const char ** b)
 {
-    while ((is_newline(**b) || is_space(**b) || is_comment(*b)) && **b != 0)
+    printf("anywhere starting character... %02X\n", (uint8_t)**b);
+    
+    if (b == 0 || *b == 0 || **b == 0)
+        return 0;
+    
+    while (**b != 0 && (is_newline(**b) || is_space(**b) || is_comment(*b)))
     {
         if (is_comment(*b))
         {
-            while (!is_newline(**b) && **b != 0)
+            while (**b != 0 && !is_newline(**b))
                 *b += 1;
         }
-        *b += 1;
+        if (**b != 0)
+            *b += 1;
     }
     
     return find_next_token(b);
@@ -395,6 +410,8 @@ typedef struct _Function {
     Block * entry_block;
     
     uint8_t written_registers[256]; // list of registers that have been written to in the function. used to avoid clobbering callee-saved registers.
+    
+    uint8_t performs_calls;
 } Function;
 
 static Function * new_func(void)
@@ -647,6 +664,18 @@ static void add_statement_output(Statement * statement)
                  strcmp(statement->statement_name, "cmp_ge") == 0)
         {
             statement->output = make_value(basic_type(TYPE_I8));
+        }
+        else if (strcmp(statement->statement_name, "symbol_lookup_unsized") == 0 ||
+                 strcmp(statement->statement_name, "symbol_lookup") == 0)
+        {
+            statement->output = make_value(basic_type(TYPE_IPTR));
+        }
+        else if (strcmp(statement->statement_name, "call_eval") == 0 ||
+                 strcmp(statement->statement_name, "call") == 0)
+        {
+            Type type = statement->args[0].rawtype;
+            array_erase(statement->args, Operand, 0);
+            statement->output = make_value(type);
         }
         else
         {

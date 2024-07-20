@@ -356,7 +356,7 @@ inject any i agg // inject `any` into location at byte offset i in agg. agg must
 
 build agg_type any+ // build a value of an aggregate type by packing one or more values together. the values must add up to exactly the same size as the aggregate has. that is the only restriction.
 
-call_eval <type> i any* // zero or more instances of any value as function arguments
+call_eval <type> iptr any* // zero or more instances of any value as function arguments. iptr is function pointer. <type> is return type
 
 // The following operations do not generate any code of their own, but rather affect how optimizations work.
 
@@ -382,7 +382,7 @@ goto <label> any* // zero or more instances of any value as block arguments
 if i goto <label> any* // zero or more instances of any value as block arguments
 return <any>? // return any value, or none if the function doesn't return a value
 
-call <type> i any* // zero or more instances of any value as function arguments
+call <type> iptr any* // zero or more instances of any value as function arguments. iptr is function pointer. <type> is return type. return type is specified because it might require extra work, depending on the exact type and the ABI. for example, most ABIs require large returned structs to be passed in as a zeroth pointer argument.
 
 memcpy iptr iptr i // copy i bytes of data pointed to by the right iptr into the location at the left iptr. the two regions may not overlap.
 memmove iptr iptr i // copy i bytes of data pointed to by the right iptr into the location at the left iptr. the two regions MAY overlap. however, if the pointers are known to not alias each other, a memcpy may be emitted instead.

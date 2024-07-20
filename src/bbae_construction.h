@@ -287,6 +287,34 @@ static Statement * parse_statement(Program * program, const char ** cursor)
             
             return ret;
         }
+        else if (strcmp(ret->statement_name, "symbol_lookup_unsized") == 0)
+        {
+            const char * op1_text = strcpy_z(find_next_token(cursor));
+            Operand op1 = parse_op_text(&op1_text);
+            array_push(ret->args, Operand, op1);
+            return ret;
+        }
+        else if (strcmp(ret->statement_name, "call_eval") == 0)
+        {
+            const char * op1_text = strcpy_z(find_next_token(cursor));
+            Operand op1 = parse_op_type(&op1_text);
+            array_push(ret->args, Operand, op1);
+            
+            const char * op_text = find_next_token(cursor);
+            uint8_t first = 1;
+            while (op_text)
+            {
+                const char * text_copy = strcpy_z(op_text);
+                Operand op = parse_op_val(program, &text_copy);
+                assert(op.value);
+                if (first)
+                    assert(op.value->type.variant == TYPE_IPTR);
+                array_push(ret->args, Operand, op);
+                op_text = find_next_token(cursor);
+                first = 0;
+            }
+            return ret;
+        }
         else
         {
             printf("culprit: %s\n", ret->statement_name);
@@ -603,7 +631,9 @@ static Program * parse_file(const char * cursor)
         }
         
         find_end_of_line(&cursor);
+        printf("end of line at... %p\n", (void *)cursor);
         token = find_next_token_anywhere(&cursor);
+        printf("next token at... %p\n", (void *)cursor);
     }
     
     puts("finished parsing program!");

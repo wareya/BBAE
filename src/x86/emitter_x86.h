@@ -86,6 +86,8 @@ enum InstName {
     INST_BTR,
     INST_BTS,
     
+    INST_CALL,
+    
     INST_CMOVO,
     INST_CMOVNO,
     INST_CMOVB,
@@ -253,6 +255,8 @@ static int name_to_mnemonic(int name)
         case INST_BTC       : return ZYDIS_MNEMONIC_BTC;
         case INST_BTR       : return ZYDIS_MNEMONIC_BTR;
         case INST_BTS       : return ZYDIS_MNEMONIC_BTS;
+        
+        case INST_CALL      : return ZYDIS_MNEMONIC_CALL;
         
         case INST_CMOVO     : return ZYDIS_MNEMONIC_CMOVO;
         case INST_CMOVNO    : return ZYDIS_MNEMONIC_CMOVNO;
@@ -604,6 +608,14 @@ static void zy_emit_1(byte_buffer * bytes, int name, EncOperand op1)
 static void zy_emit_0(byte_buffer * bytes, int name)
 {
     zy_emit_n(bytes, name, 0, 0);
+}
+
+static void zy_emit_nops(byte_buffer * bytes, int count)
+{
+    assert(count <= 15);
+    uint8_t buf[16];
+    ZydisEncoderNopFill(buf, count);
+    bytes_push(bytes, buf, count);
 }
 
 #endif // _BBAE_EMITTER_H

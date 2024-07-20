@@ -1,0 +1,40 @@
+
+func mul_delta returns f64
+    arg y f64
+    y2 = fmul y 0.001f64
+    return y2
+endfunc
+
+func main returns f64
+    i = mov 1000000000i64
+    y = mov 0.0f64
+    vel = mov 0.0f64
+    g = mov 9.8f64
+    goto grav i y vel g
+block grav
+    arg i i64
+    arg y f64
+    arg vel f64
+    arg g f64
+    
+    mul_delta = symbol_lookup_unsized mul_delta
+    
+    gd = call_eval f64 mul_delta g
+    gd2 = fmul gd 0.5f64
+    vel2 = fadd vel gd2
+    
+    vd = call_eval f64 mul_delta vel2
+    y2 = fadd y vd
+    
+    gd3 = call_eval f64 mul_delta g
+    gd4 = fmul gd3 0.5f64
+    vel3 = fadd vel2 gd4
+    
+    i2 = sub i 1i64
+    cmp = cmp_g i2 0i64
+    if cmp goto grav i2 y2 vel3 g
+    goto exit y2
+block exit
+    arg y f64
+    return y
+endfunc

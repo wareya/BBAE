@@ -21,6 +21,9 @@ static void add_relocation(NameUsageInfo ** usages, uint64_t loc, const char * n
     
     array_push((*usages), NameUsageInfo, info);
 }
+
+static uint64_t reloc_illegal_dummy_value = 0xABADB007ABADB007;
+
 static void apply_relocations(NameUsageInfo ** usages, byte_buffer * code, int64_t (*target_lookup_func)(const char *, void *), void * userdata)
 {
     if (!*usages)
@@ -36,6 +39,8 @@ static void apply_relocations(NameUsageInfo ** usages, byte_buffer * code, int64
         //    assert(0); 
         //}
         int64_t target = target_lookup_func(info.name, userdata);
+        if (target == (int64_t)reloc_illegal_dummy_value)
+            continue;
         int64_t rewrite_loc = info.loc;
         if (info.size == 4)
         {
@@ -63,6 +68,7 @@ static void add_label_relocation(uint64_t loc, const char * name, uint8_t size)
 {
     add_relocation(&_emitter_label_usages, loc, name, size);
 }
+
 static int64_t get_block_loc_or_assert(const char * name, void * _func)
 {
     Function * func = (Function *)_func;
@@ -118,6 +124,27 @@ static void apply_static_relocations(byte_buffer * code, Program * program)
     }
     // apply relocations pointing at statics
     apply_relocations(&static_addr_relocations, code, get_static_or_assert, (void *)program);
+}
+
+static NameUsageInfo * _emitter_symbol_usages = 0;
+static void add_symbol_relocation(uint64_t loc, const char * name, uint8_t size)
+{
+    add_relocation(&_emitter_symbol_usages, loc, name, size);
+}
+
+static int64_t get_symbol_loc_or_dummy(const char * name, void * _list)
+{
+    SymbolEntry * symbollist = (SymbolEntry *)_list;
+    for (size_t i = 0; symbollist[i].name; i++)
+    {
+        if (strcmp(symbollist[i].name, name) == 0)
+            return symbollist[i].loc;
+    }
+    return reloc_illegal_dummy_value;
+}
+static void apply_symbol_relocations(byte_buffer * code, SymbolEntry * list)
+{
+    apply_relocations(&_emitter_symbol_usages, code, get_symbol_loc_or_dummy, (void *)list);
 }
 
 static void allocate_stack_slots(Program * program)
@@ -233,7 +260,17 @@ void reg_shuffle_single(byte_buffer * code, int64_t * out2in, uint8_t * out2in_c
         }
     }
 }
-void reg_shuffle(byte_buffer * code, Value ** block_args, Operand * args, size_t count)
+
+void do_reg_shuffle(byte_buffer * code, int64_t * out2in, uint8_t * out2in_color)
+{
+    for (size_t out = 0; out < 32; out++)
+    {
+        if (out2in[out] < 0)
+            continue;
+        reg_shuffle_single(code, out2in, out2in_color, out);
+    }
+}
+void reg_shuffle_block_args(byte_buffer * code, Value ** block_args, Operand * args, size_t count)
 {
     int64_t out2in[32];
     for (size_t i = 0; i < 32; i++)
@@ -266,15 +303,51 @@ void reg_shuffle(byte_buffer * code, Value ** block_args, Operand * args, size_t
         out2in[block_args[i]->regalloc] = args[i].value->regalloc;
     }
     
-    for (size_t out = 0; out < 32; out++)
-    {
-        if (out2in[out] < 0)
-            continue;
-        reg_shuffle_single(code, out2in, out2in_color, out);
-    }
+    do_reg_shuffle(code, out2in, out2in_color);
 }
-                    
-static byte_buffer * compile_file(Program * program)
+
+void reg_shuffle_call(byte_buffer * code, Statement * call)
+{
+    int64_t out2in[32];
+    for (size_t i = 0; i < 32; i++)
+        out2in[i] = -1;
+    uint8_t out2in_color[32]; // for cycle detection
+    memset(out2in_color, 0, sizeof(out2in_color));
+    
+    size_t count = array_len(call->args, Operand);
+    
+    abi_reset_state();
+    
+    for (size_t i = 1; i < count; i++)
+    {
+        Value * value = call->args[i].value;
+        assert(value);
+        if (value->variant == VALUE_CONST)
+        {
+            assert(((void)"FIXME", 0));
+            continue;
+        }
+        assert(value->variant == VALUE_SSA || value->variant == VALUE_ARG);
+        
+        assert(value->regalloced);
+        assert(((void)"spilled call args not yet supported", value->regalloc >= 0));
+        assert(value->regalloc < 32);
+        assert(type_is_basic(value->type));
+        
+        int64_t where = abi_get_next_arg_basic(type_is_float(value->type));
+        assert(((void)"on-stack call args not yet supported", where >= 0));
+        
+        // no MOV needed
+        if (value->regalloc == (uint64_t)where)
+            continue;
+        
+        out2in[where] = value->regalloc;
+    }
+    
+    do_reg_shuffle(code, out2in, out2in_color);
+}
+
+static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
 {
     byte_buffer * code = (byte_buffer *)malloc(sizeof(byte_buffer));
     memset(code, 0, sizeof(byte_buffer));
@@ -282,6 +355,16 @@ static byte_buffer * compile_file(Program * program)
     for (size_t f = 0; f < array_len(program->functions, Function *); f++)
     {
         Function * func = program->functions[f];
+        
+        if (code->len % 16)
+            zy_emit_nops(code, 16 - (code->len % 16));
+        
+        SymbolEntry func_symbol;
+        memset(&func_symbol, 0, sizeof(SymbolEntry));
+        func_symbol.name = strcpy_z(func->name);
+        func_symbol.loc = code->len;
+        func_symbol.kind = 1; // function
+        array_push(*symbollist, SymbolEntry, func_symbol);
         
         abi_get_callee_saved_regs(func->written_registers, 32);
         for (size_t i = 0; i < sizeof(func->written_registers); i++)
@@ -632,7 +715,7 @@ static byte_buffer * compile_file(Program * program)
                     assert(((void)"wrong number of arguments to block", ba_len == sa_len));
                     
                     if (reg_shuffle_needed(target_block->args, statement->args + 1, ba_len))
-                        reg_shuffle(code, target_block->args, statement->args + 1, ba_len);
+                        reg_shuffle_block_args(code, target_block->args, statement->args + 1, ba_len);
                     
                     if (strcmp(target_op.text, next_block->name) != 0)
                     {
@@ -702,7 +785,7 @@ static byte_buffer * compile_file(Program * program)
                         zy_emit_1(code, jcc_yin, op_dummy);
                         size_t jump_over_loc = code->len;
                         
-                        reg_shuffle(code, if_target_block->args, if_s_args, iba_len);
+                        reg_shuffle_block_args(code, if_target_block->args, if_s_args, iba_len);
                         
                         zy_emit_1(code, INST_JMP, op_dummy);
                         add_label_relocation(code->len - 4, target_op.text, 4);
@@ -711,7 +794,7 @@ static byte_buffer * compile_file(Program * program)
                         int32_t jump_over_len = jump_over_target - jump_over_loc;
                         memcpy(code->data + jump_over_loc - 4, &jump_over_len, 4);
                         
-                        reg_shuffle(code, else_target_block->args, else_s_args, eba_len);
+                        reg_shuffle_block_args(code, else_target_block->args, else_s_args, eba_len);
                         
                         if (strcmp(target_op2.text, next_block->name) != 0)
                         {
@@ -724,7 +807,7 @@ static byte_buffer * compile_file(Program * program)
                         zy_emit_1(code, jcc_yang, op_dummy);
                         add_label_relocation(code->len - 4, target_op.text, 4);
                         
-                        reg_shuffle(code, else_target_block->args, else_s_args, eba_len);
+                        reg_shuffle_block_args(code, else_target_block->args, else_s_args, eba_len);
                         
                         if (strcmp(target_op2.text, next_block->name) != 0)
                         {
@@ -737,7 +820,7 @@ static byte_buffer * compile_file(Program * program)
                         zy_emit_1(code, jcc_yin, op_dummy);
                         add_label_relocation(code->len - 4, target_op2.text, 4);
                         
-                        reg_shuffle(code, if_target_block->args, if_s_args, iba_len);
+                        reg_shuffle_block_args(code, if_target_block->args, if_s_args, iba_len);
                         
                         if (strcmp(target_op.text, next_block->name) != 0)
                         {
@@ -829,6 +912,47 @@ static byte_buffer * compile_file(Program * program)
                     else
                         zy_emit_2(code, INST_MOVQ, op0, op2);
                 }
+                else if (strcmp(statement->statement_name, "symbol_lookup_unsized") == 0)
+                {
+                    Operand op1_op = statement->args[0];
+                    assert(op1_op.variant == OP_KIND_TEXT);
+                    
+                    assert(statement->output);
+                    assert(statement->output->regalloced);
+                    
+                    EncOperand op0 = get_basic_encoperand(statement->output);
+                    
+                    const char * symbol = op1_op.text;
+                    
+                    EncOperand op_dummy = zy_mem(REG_RIP, 0x7FFFFFFF, 8);
+                    
+                    zy_emit_2(code, INST_LEA, op0, op_dummy);
+                    add_symbol_relocation(code->len - 4, symbol, 4);
+                }
+                else if (strcmp(statement->statement_name, "call_eval") == 0 ||
+                         strcmp(statement->statement_name, "call") == 0)
+                {
+                    Operand op_target = statement->args[0];
+                    assert(op_target.variant == OP_KIND_VALUE);
+                    
+                    assert(statement->output);
+                    assert(statement->output->regalloced);
+                    
+                    EncOperand target = get_basic_encoperand(op_target.value);
+                    EncOperand op0 = get_basic_encoperand(statement->output);
+                    
+                    reg_shuffle_call(code, statement);
+                    
+                    zy_emit_1(code, INST_CALL, target);
+                    
+                    Value * value = statement->output;
+                    if (type_is_intreg(value->type))
+                        zy_emit_2(code, INST_MOV, op0, zy_reg(REG_RAX, type_size(value->type)));
+                    else
+                        zy_emit_2(code, INST_MOVQ, op0, zy_reg(REG_XMM0, 8));
+                    
+                    func->performs_calls = 1;
+                }
                 else
                 {
                     printf("culprit: %s\n", statement->statement_name);
@@ -840,6 +964,8 @@ static byte_buffer * compile_file(Program * program)
     }
     
     apply_static_relocations(code, program);
+    
+    apply_symbol_relocations(code, *symbollist);
     
     return code;
 }

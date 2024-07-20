@@ -127,7 +127,9 @@ RegAllocRules regalloc_rule_determiner(Statement * statement)
             ret.allowed_output_registers = (1 << _ABI_XMM0);
         else
             assert(((void)"TODO", 0));
-        // call clobbers are determined by ABI and handled by machine code emitter, not regalloc
+        
+        //abi_reset_state();
+        ret.clobbered_registers = abi_get_clobber_mask();
     }
     
     return ret;
@@ -166,6 +168,12 @@ static void do_spill(Function * func, Block * block, Value ** reg_int_alloced, V
             // FIXME
             //if (!spillee->arg)
             {
+                if (temp >= _ABI_XMM0)
+                    reg_float_alloced[temp - _ABI_XMM0] = spillee;
+                else 
+                    reg_int_alloced[temp] = spillee;
+                
+                printf("fast spilling into %zu\n", temp);
                 spillee->regalloc = temp;
                 return;
             }
@@ -174,7 +182,7 @@ static void do_spill(Function * func, Block * block, Value ** reg_int_alloced, V
         }
         else
         {
-            printf("can't fast-spill %s because it has earlier users\n", spillee->arg ? spillee->arg : spillee->ssa->output_name);
+            //printf("can't fast-spill %s because it has earlier users\n", spillee->arg ? spillee->arg : spillee->ssa->output_name);
             // FIXME: support MOV-spilling. needs to rewrite other descendants.
             Statement * spill = new_statement();
             spill->output_name = make_temp_name();
@@ -190,6 +198,8 @@ static void do_spill(Function * func, Block * block, Value ** reg_int_alloced, V
                 reg_float_alloced[temp - _ABI_XMM0] = spill->output;
             else 
                 reg_int_alloced[temp] = spill->output;
+            
+            printf("mov spilling into %zu\n", temp);
             
             array_insert(block->statements, Statement *, *i, spill);
             *i += 1;
@@ -287,11 +297,14 @@ static void find_spillable(Statement * statement, uint8_t is_int, Value ** reg_i
     for (size_t n = 0; n < BBAE_REGISTER_COUNT; n++)
     {
         if (!((allowed_mask >> n) & 1))
+        {
+            printf("skipping checking spillable %zu because not allowed\n", n);
             continue;
+        }
         Value * spill_candidate = 0;
         if (is_int)
         {
-            if (!(reg_int_alloced[n] && reg_int_alloced[n] != (Value *)-1 && n != _ABI_RSP && n != _ABI_RBP))
+            if (!(reg_int_alloced[n] && reg_int_alloced[n] != (Value *)-1))
                 continue;
             spill_candidate = reg_int_alloced[n];
         }
@@ -303,8 +316,13 @@ static void find_spillable(Statement * statement, uint8_t is_int, Value ** reg_i
         }
         
         // FIXME: ????
+        /*
         if (ptr_array_find(statement->args, spill_candidate) != (size_t)-1)
+        {
+            printf("skipping checking spillable %zu because it's used as an operand\n", n);
             continue;
+        }
+        */
         
         uint64_t candidate_last_num = 0;
         for (size_t i = 0; i < array_len(spill_candidate->edges_out, Value *); i++)
@@ -494,9 +512,6 @@ static void do_regalloc_block(Function * func, Block * block)
     {
         Statement * statement = block->statements[i];
         
-        // free no-longer-used registers, except for reserved ones (RSP, RBP, R11, XMM5)
-        expire_unused_regs(reg_int_alloced, reg_float_alloced);
-        
         // tick the usage count of the statement's operands
         for (size_t j = 0; j < array_len(statement->args, Operand); j++)
         {
@@ -507,6 +522,9 @@ static void do_regalloc_block(Function * func, Block * block)
                 assert(arg->alloced_use_count <= array_len(arg->edges_out, Value *));
             }
         }
+        
+        // free no-longer-used registers, except for reserved ones (RSP, RBP, R11, XMM5)
+        expire_unused_regs(reg_int_alloced, reg_float_alloced);
         
         // skip this statement if it doesn't have an output to allocate
         if (!statement->output)
@@ -527,6 +545,8 @@ static void do_regalloc_block(Function * func, Block * block)
             strcmp(statement->statement_name, "fmul") == 0)
             op_is_commutative = 1;
         
+        uint64_t allow_mask = is_special ? rules.allowed_output_registers : 0xFFFFFFFF;
+        
         // reuse an operand register if possible
         for (size_t j = 0; j < array_len(statement->args, Operand); j++)
         {
@@ -540,7 +560,7 @@ static void do_regalloc_block(Function * func, Block * block)
                 if (is_int != type_is_intreg(arg->type))
                     continue;
                 
-                if (is_special && ((~rules.allowed_output_registers >> arg->regalloc) & 1))
+                if (((~allow_mask) >> arg->regalloc) & 1)
                     continue;
                 
                 statement->output->regalloc = arg->regalloc;
@@ -562,27 +582,37 @@ static void do_regalloc_block(Function * func, Block * block)
             continue;
         }
         
-        uint64_t allow_mask = is_special ? rules.allowed_output_registers : 0xFFFFFFFF;
-        
         int64_t where;
         if (is_int)
             where = first_empty(reg_int_alloced, BBAE_REGISTER_COUNT, allow_mask);
         else
-            where = first_empty(reg_float_alloced, BBAE_REGISTER_COUNT, allow_mask >> 16) + _ABI_XMM0;
+        {
+            where = first_empty(reg_float_alloced, BBAE_REGISTER_COUNT, allow_mask >> 16);
+            if (where >= 0)
+                where += _ABI_XMM0;
+        }
         
         // spill a register away if needed
         if (where < 0)
         {
+            printf("spilling away a register to use for %s...\n", statement->output_name);
+            
             int64_t to_spill_reg = -1;
             uint64_t to_spill_num = 0;
-            find_spillable(statement, is_int, reg_int_alloced, reg_float_alloced, &to_spill_reg, &to_spill_num, rules.allowed_output_registers);
+            find_spillable(statement, is_int, reg_int_alloced, reg_float_alloced, &to_spill_reg, &to_spill_num, is_int ? allow_mask : (allow_mask >> 16));
             assert(to_spill_reg >= 0);
+            assert(to_spill_reg < 16);
             
             Value * spillee;
             if (is_int)
                 spillee = reg_int_alloced[to_spill_reg];
             else
-                spillee = reg_float_alloced[to_spill_reg - _ABI_XMM0];
+            {
+                spillee = reg_float_alloced[to_spill_reg];
+                to_spill_reg += _ABI_XMM0;
+            }
+            
+            assert(spillee);
             
             where = spillee->regalloc;
             
@@ -591,7 +621,7 @@ static void do_regalloc_block(Function * func, Block * block)
             do_spill(func, block, reg_int_alloced, reg_float_alloced, spillee, to_spill_reg, to_spill_num, (~rules.clobbered_registers) & (~(1 << where)), &i);
             
             if (is_special)
-                assert((rules.allowed_output_registers >> where) & 1);
+                assert((allow_mask >> where) & 1);
         }
         
         if (where >= _ABI_XMM0)
@@ -628,15 +658,22 @@ static void do_regalloc_block(Function * func, Block * block)
                 else 
                     alloc = reg_int_alloced[reg];
                 
+                if (!alloc || alloc == (Value *) -1)
+                    continue;
+                
                 // don't want to do anything if the reg is used 
                 if (alloc == statement->output)
                     continue;
+                
                 // no users
                 if (array_len(alloc->edges_out, Statement *) == 0)
                     continue;
+                
                 // clobbered, but dies in or before current statement
                 if (alloc->edges_out[array_len(alloc->edges_out, Statement *) - 1]->num <= statement->num)
                     continue;
+                
+                printf("spilling %s because it's clobbered...\n", alloc->ssa ? alloc->ssa->output_name : alloc->arg);
                 
                 // only need to do anything for this reg if it's allocated
                 if (alloc && alloc != (Value *)-1)

@@ -53,7 +53,10 @@ int main(int argc, char ** argv)
     
     Program * program = parse(buffer);
     do_optimization(program);
-    byte_buffer * code = do_lowering(program);
+    
+    SymbolEntry * symbollist = 0;
+    byte_buffer * code = do_lowering(program, &symbollist);
+    assert(symbollist);
     
     assert(code);
     if (code->len == 0)
@@ -70,12 +73,23 @@ int main(int argc, char ** argv)
     
     uint8_t * jit_code = copy_as_executable(code->data, code->len);
     
+    ptrdiff_t loc = -1;
+    for (size_t i = 0; symbollist[i].name; i++)
+    {
+        if (strcmp(symbollist[i].name, "main") == 0)
+        {
+            loc = symbollist[i].loc;
+            break;
+        }
+    }
+    assert(loc >= 0);
+    
     printf("-- %p\n", (void *)jit_code);
     
     // suppress non-posix-compliant gcc function pointer casting warning
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
-    double (*jit_main) (int, int) = (double(*)(int, int))(void *)(jit_code);
+    double (*jit_main) (int, int) = (double(*)(int, int))(void *)(&jit_code[loc]);
 #pragma GCC diagnostic pop
     
     assert(jit_main);
