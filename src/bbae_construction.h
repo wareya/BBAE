@@ -11,7 +11,7 @@ enum BBAE_PARSER_STATE {
     PARSER_STATE_BLOCK,
 };
 
-uint8_t check_for_redefinition(Program * program, char * name)
+static uint8_t check_for_redefinition(Program * program, char * name)
 {
     Function * func = program->current_func;
     Block * block = program->current_block;
@@ -45,7 +45,7 @@ uint8_t check_for_redefinition(Program * program, char * name)
     return 0;
 }
 
-void assert_no_redefinition(Program * program, char * name)
+static void assert_no_redefinition(Program * program, char * name)
 {
     if (check_for_redefinition(program, name))
     {
@@ -664,7 +664,7 @@ static Program * parse_file(const char * cursor)
 }
 
 // split blocks if they have any conditional jumps
-void split_blocks(Program * program)
+static void split_blocks(Program * program)
 {
     // edges aren't connected yet, so we don't have to repair them
     for (size_t f = 0; f < array_len(program->functions, Function *); f++)
@@ -790,10 +790,66 @@ void split_blocks(Program * program)
     }
 }
 
-void connect_graphs(Program * program)
+static void block_edges_disconnect(Program * program)
 {
-    split_blocks(program);
-    
+    for (size_t f = 0; f < array_len(program->functions, Function *); f++)
+    {
+        Function * func = program->functions[f];
+        for (size_t b = 1; b < array_len(func->blocks, Block *); b++)
+        {
+            Block * block = func->blocks[b];
+            while (array_len(block->edges_in, Statement *) > 0)
+                array_erase(block->edges_in, Statement *, array_len(block->edges_in, Statement *) - 1);
+        }
+    }
+}
+
+static void block_edges_connect(Program * program)
+{
+    for (size_t f = 0; f < array_len(program->functions, Function *); f++)
+    {
+        Function * func = program->functions[f];
+        for (size_t b = 0; b < array_len(func->blocks, Block *); b++)
+        {
+            Block * block = func->blocks[b];
+            for (size_t i = 0; i < array_len(block->statements, Statement *); i++)
+            {
+                Statement * statement = block->statements[i];
+                assert(statement->statement_name);
+                if (strcmp(statement->statement_name, "goto") == 0)
+                {
+                    assert(statement->args[0].text);
+                    assert(statement->block);
+                    Block * target = find_block(func, statement->args[0].text);
+                    assert(target);
+                    array_push(target->edges_in, Statement *, statement);
+                }
+                if (strcmp(statement->statement_name, "if") == 0)
+                {
+                    assert(statement->args[1].text);
+                    assert(statement->block);
+                    Block * target = find_block(func, statement->args[1].text);
+                    assert(target);
+                    array_push(target->edges_in, Statement *, statement);
+                    
+                    size_t separator_pos = find_separator_index(statement->args);
+                    // block splitting is required to have happened before now
+                    assert(separator_pos != (size_t)-1);
+                    
+                    assert(statement->args[separator_pos + 1].text);
+                    assert(statement->block);
+                    target = find_block(func, statement->args[separator_pos + 1].text);
+                    assert(target);
+                    array_push(target->edges_in, Statement *, statement);
+                }
+            }
+        }
+    }
+}
+
+
+static void block_statements_connect(Program * program)
+{
     for (size_t f = 0; f < array_len(program->functions, Function *); f++)
     {
         Function * func = program->functions[f];
@@ -806,35 +862,17 @@ void connect_graphs(Program * program)
                 for (size_t n = 0; n < array_len(statement->args, Operand); n++)
                     connect_statement_to_operand(statement, statement->args[n]);
                 
-                if (statement->statement_name)
-                {
-                    if (strcmp(statement->statement_name, "goto") == 0)
-                    {
-                        assert(statement->args[0].text);
-                        assert(statement->block);
-                        Block * target = find_block(func, statement->args[0].text);
-                        array_push(target->edges_in, Statement *, statement);
-                    }
-                    if (strcmp(statement->statement_name, "if") == 0)
-                    {
-                        assert(statement->args[1].text);
-                        assert(statement->block);
-                        Block * target = find_block(func, statement->args[1].text);
-                        array_push(target->edges_in, Statement *, statement);
-                        
-                        size_t separator_pos = find_separator_index(statement->args);
-                        // block splitting is required to have happened before now
-                        assert(separator_pos != (size_t)-1);
-                        
-                        assert(statement->args[separator_pos + 1].text);
-                        assert(statement->block);
-                        target = find_block(func, statement->args[separator_pos + 1].text);
-                        array_push(target->edges_in, Statement *, statement);
-                    }
-                }
             }
         }
     }
+}
+    
+
+static void connect_graphs(Program * program)
+{
+    split_blocks(program);
+    block_statements_connect(program);
+    block_edges_connect(program);
 }
 
 static void validate_links(Program * program)

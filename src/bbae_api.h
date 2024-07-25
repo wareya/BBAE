@@ -26,7 +26,7 @@ static void do_optimization(Program * program)
     optimization_empty_block_removal(program);
     optimization_function_inlining(program);
     optimization_global_mem2reg(program);
-    optimization_unused_block_arg_removal(program);
+    optimization_unused_value_removal(program);
     optimization_empty_block_removal(program);
     puts("----- AFTER OPTIMIZATION -----");
     print_ir_to(0, program);

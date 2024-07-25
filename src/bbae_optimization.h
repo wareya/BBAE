@@ -68,6 +68,13 @@ static void _remap_args_span(Value ** block_args, Operand * exit_args, Statement
         connect_statement_to_operand(entry, op);
     }
 }
+
+static void _block_edges_fix(Program * program)
+{
+    block_edges_disconnect(program);
+    block_edges_connect(program);
+}
+
 static void optimization_empty_block_removal(Program * program)
 {
     for (size_t f = 0; f < array_len(program->functions, Function *); f++)
@@ -84,6 +91,7 @@ static void optimization_empty_block_removal(Program * program)
             if (strcmp(exit->statement_name, "goto") == 0)
             {
                 Block * target_block = find_block(func, exit->args[0].text);
+                assert(target_block);
                 size_t target_block_in_edge_index = (size_t)-1;
                 for (size_t i = 0; i < array_len(target_block->edges_in, Statement *); i++)
                 {
@@ -152,6 +160,7 @@ static void optimization_empty_block_removal(Program * program)
             }
         }
     }
+    _block_edges_fix(program);
 }
 
 static size_t count_op_num_times_used(Operand * list, Value * value, size_t start, size_t count)
@@ -165,7 +174,7 @@ static size_t count_op_num_times_used(Operand * list, Value * value, size_t star
     return ret;
 }
 
-static void optimization_unused_block_arg_removal(Program * program)
+static void optimization_unused_value_removal(Program * program)
 {
     for (size_t f = 0; f < array_len(program->functions, Function *); f++)
     {
@@ -174,9 +183,33 @@ static void optimization_unused_block_arg_removal(Program * program)
         while (did_work)
         {
             did_work = 0;
-            for (size_t b = 1; b < array_len(func->blocks, Block *); b++)
+            for (size_t b = 0; b < array_len(func->blocks, Block *); b++)
             {
                 Block * block = func->blocks[b];
+                
+                for (size_t i = 0; i < array_len(block->statements, Statement *) - 1; i++)
+                {
+                    Statement * statement = block->statements[i];
+                    if (statement->output && array_len(statement->output->edges_out, Statement *) == 0)
+                    {
+                        // FIXME: side effects system
+                        if (strcmp(statement->statement_name, "call_eval") == 0)
+                            continue;
+                        // FIXME check for volatile loads
+                        // remove instruction if it has no outputs or side effects
+                        
+                        for (size_t i = 0; i < array_len(statement->args, Operand); i++)
+                            disconnect_statement_from_operand(statement, statement->args[i]);
+                        
+                        array_erase(block->statements, Statement *, i);
+                        i -= 1;
+                        
+                        did_work = 1;
+                    }
+                }
+                
+                if (b == 0)
+                    continue;
                 
                 for (size_t a = 0; a < array_len(block->args, Value *); a++)
                 {
@@ -711,6 +744,7 @@ static void optimization_function_inlining(Program * program)
                 array_insert(func->blocks, Block *, b + i + 1, cloned->blocks[i]);
         }
     }
+    _block_edges_fix(program);
 }
 
 #endif // BBAE_OPTIMIZATION

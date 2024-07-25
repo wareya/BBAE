@@ -275,7 +275,6 @@ void reg_shuffle_single(byte_buffer * code, int64_t * in2out, uint8_t * in2out_c
 
 void do_reg_shuffle(byte_buffer * code, int64_t * in2out, uint8_t * in2out_color)
 {
-    zy_emit_nops(code, 1);
     puts("----");
     for (size_t out = 0; out < 32; out++)
     {
@@ -283,7 +282,6 @@ void do_reg_shuffle(byte_buffer * code, int64_t * in2out, uint8_t * in2out_color
             continue;
         reg_shuffle_single(code, in2out, in2out_color, out);
     }
-    zy_emit_nops(code, 1);
 }
 void reg_shuffle_block_args(byte_buffer * code, Value ** block_args, Operand * args, size_t count)
 {
