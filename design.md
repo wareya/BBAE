@@ -11,9 +11,9 @@ Single BBAE files are analogous to single C translation units. They contain glob
 - floats: `f32`, `f64`
 - aggregates
 
-The alignment requirements of the first 6 types (i.e. excluding aggregates) are implementation-defined. Integers have no signedness. Floats are binary IEEE 754 floats.
+The alignment requirements of the non-aggregate types are implementation-defined. Integers have no signedness. Floats are binary IEEE 754 floats.
 
-Pointers the same size and can contain the same set of bit patterns as one specific integer type. Which type they're equivalent to is something that depends on the target platform. They are given the unique type iptr, which is an actual type and not just a "typedef".
+Pointers are the same size as, and can contain the same set of bit patterns as, one specific integer type. Which type they're equivalent to is something that depends on the target platform, and does not vary within a given program. They are given the unique type iptr, which is an actual type and not just a "typedef".
 
 Aggregate types are defined like:
 
@@ -27,7 +27,7 @@ Or:
 { packed align.8 i.8 f.4 i.4 }
 ```
 
-i.8 specifies a span of 8 bytes that have integer likeness.
+`i.8` specifies a span of 8 bytes that have integer likeness. `f.8` specifies a span of 8 bytes that have floating-point likeness. The dot is to ensure that the byte count number is not confused as being a bit count number.
 
 Likeness is only used at function call boundaries. Some ABIs require knowing whether a given chunk of an aggregate contains floats, and if so, how many.
 
