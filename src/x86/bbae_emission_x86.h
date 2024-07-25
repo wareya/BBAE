@@ -198,6 +198,7 @@ static EncOperand get_basic_encoperand(Value * value)
 
 uint8_t reg_shuffle_needed(Value ** block_args, Operand * args, size_t count)
 {
+    return 1;
     for (size_t i = 0; i < count; i++)
     {
         assert(args[i].value);
@@ -229,7 +230,7 @@ void reg_shuffle_single(byte_buffer * code, int64_t * in2out, uint8_t * in2out_c
     else
     {
         // hit a cycle! mov into temp register. will be mov'd out of at the end of the cycle
-        if (in2out_color[in])
+        if (in2out_color[out])
         {
             puts("b");
             if (out <= REG_R15)
@@ -243,7 +244,8 @@ void reg_shuffle_single(byte_buffer * code, int64_t * in2out, uint8_t * in2out_c
                 zy_emit_2(code, INST_MOVAPS, reg_out, reg_in);
             }
             
-            in2out_color[in] = 2;
+            in2out[in] = -1;
+            in2out_color[out] = 2;
         }
         else
         {
@@ -273,6 +275,7 @@ void reg_shuffle_single(byte_buffer * code, int64_t * in2out, uint8_t * in2out_c
 
 void do_reg_shuffle(byte_buffer * code, int64_t * in2out, uint8_t * in2out_color)
 {
+    zy_emit_nops(code, 1);
     puts("----");
     for (size_t out = 0; out < 32; out++)
     {
@@ -280,6 +283,7 @@ void do_reg_shuffle(byte_buffer * code, int64_t * in2out, uint8_t * in2out_color
             continue;
         reg_shuffle_single(code, in2out, in2out_color, out);
     }
+    zy_emit_nops(code, 1);
 }
 void reg_shuffle_block_args(byte_buffer * code, Value ** block_args, Operand * args, size_t count)
 {
@@ -647,10 +651,16 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
                                 if (value_is_basic_zero_constant(op1_op.value))
                                     zy_emit_2(code, INST_XORPS, op0, op0);
                                 else
-                                    zy_emit_2(code, INST_MOVAPS, op0, op1);
+                                {
+                                    if (!op1_op.value->regalloced || !statement->output->regalloced || statement->output->regalloc != op1_op.value->regalloc)
+                                        zy_emit_2(code, INST_MOVAPS, op0, op1);
+                                }
                             }
                             else
-                                zy_emit_2(code, INST_MOV, op0, op1);
+                            {
+                                if (!op1_op.value->regalloced || !statement->output->regalloced || statement->output->regalloc != op1_op.value->regalloc)
+                                    zy_emit_2(code, INST_MOV, op0, op1);
+                            }
                         }
                     }
                 }

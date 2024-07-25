@@ -806,6 +806,8 @@ void print_ir_to(FILE * f, Program * program)
                         {
                             if (type_is_int(value->type))
                                 fprintf(f, " %zu%s", value->constant, type_to_static_string(value->type));
+                            else if (value->type.variant == TYPE_IPTR)
+                                fprintf(f, " %zu%s", value->constant, type_to_static_string(value->type));
                             else if (value->type.variant == TYPE_F64)
                                 fprintf(f, " %f%s", *(double *)&value->constant, type_to_static_string(value->type));
                             else if (value->type.variant == TYPE_F32)
@@ -817,6 +819,10 @@ void print_ir_to(FILE * f, Program * program)
                     else
                         assert(0);
                 }
+                
+                if (statement->output)
+                    fprintf(f, " # edges_out size: %zu", array_len(statement->output->edges_out, Statement *));
+                
                 fprintf(f, "\n");
             }
         }

@@ -709,7 +709,6 @@ static void optimization_function_inlining(Program * program)
             // insert blocks from inlined function into outer function
             for (size_t i = 0; i < array_len(cloned->blocks, Block *); i++)
                 array_insert(func->blocks, Block *, b + i + 1, cloned->blocks[i]);
-            
         }
     }
 }

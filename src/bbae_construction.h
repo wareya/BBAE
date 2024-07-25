@@ -653,9 +653,9 @@ static Program * parse_file(const char * cursor)
         }
         
         find_end_of_line(&cursor);
-        printf("end of line at... %p\n", (void *)cursor);
+        //printf("end of line at... %p\n", (void *)cursor);
         token = find_next_token_anywhere(&cursor);
-        printf("next token at... %p\n", (void *)cursor);
+        //printf("next token at... %p\n", (void *)cursor);
     }
     
     puts("finished parsing program!");
@@ -849,6 +849,39 @@ static void validate_links(Program * program)
             {
                 Statement * statement = block->statements[i];
                 assert(statement->block == block);
+                if (strcmp(statement->statement_name, "goto") == 0)
+                {
+                    assert(array_len(statement->args, Value *) > 0);
+                    assert(statement->args[0].variant == OP_KIND_TEXT);
+                    for (size_t i = 1; i < array_len(statement->args, Operand); i++)
+                    {
+                        Operand op = statement->args[i];
+                        assert(op.variant == OP_KIND_VALUE);
+                    }
+                    Block * next = find_block(func, statement->args[0].text);
+                    assert(next);
+                    size_t block_arg_count = array_len(next->args, Value *);
+                    size_t statement_arg_count = array_len(statement->args, Operand);
+                    assert(block_arg_count == statement_arg_count - 1);
+                }
+                if (statement->output)
+                {
+                    for (size_t e = 0; e < array_len(statement->output->edges_out, Statement *); e++)
+                    {
+                        Statement * other = statement->output->edges_out[e];
+                        assert(other->block == block);
+                        uint8_t found = 0;
+                        for (size_t i = 0; i < array_len(block->statements, Statement *); i++)
+                        {
+                            if (block->statements[i] == other)
+                            {
+                                found = 1;
+                                break;
+                            }
+                        }
+                        assert(found);
+                    }
+                }
                 for (size_t a = 0; a < array_len(statement->args, Operand); a++)
                 {
                     Operand op = statement->args[a];
@@ -857,14 +890,26 @@ static void validate_links(Program * program)
                         if (op.value->ssa)
                             assert(op.value->ssa->block == block);
                         else if (op.value->arg)
-                            {} // FIXME
+                        {
+                            uint8_t found = 0;
+                            size_t ba_count = (b != 0) ? array_len(block->args, Value *) : array_len(func->args, Value *);
+                            for (size_t ba = 0; ba < ba_count; ba++)
+                            {
+                                Value * block_arg = (b != 0) ? block->args[ba] : func->args[ba];
+                                if (strcmp(block_arg->arg, op.value->arg) == 0)
+                                {
+                                    found = 1;
+                                    break;
+                                }
+                            }
+                            assert(found);
+                        }
                     }
                 }
             }
         }
     }
 }
-
 
 static void verify_coherency(Program * program)
 {
