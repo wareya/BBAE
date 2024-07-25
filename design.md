@@ -371,6 +371,10 @@ ptralias_curse iptr // Evaluates to iptr, but with no aliasing (i.e. is assumed 
 ptr_to_i64 iptr // returns an i64 with the same value as the given pointer
 int_to_ptr_blessed i // returns an iptr with the same value as an integer, and universal aliasing. primarily used for int-punned pointers.
 int_to_ptr_cursed i // returns an iptr with the same value as an integer, and no aliasing. primarily used for offsets.
+
+symbol_lookup <raw text> <int literal> // does implementation-defined symbol lookup, returning an iptr (must be able to find functions, globals and static defined in the current module)
+symbol_lookup_unsized <raw text> // same, but without an aliasing region size
+// see rest of documentation for explanation of the difference between symbol_lookup and symbol_lookup_unsized
 ```
 
 ------

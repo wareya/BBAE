@@ -21,7 +21,7 @@ typedef struct _SymbolEntry
 // thrashes any previously-returned token. make copies!
 static char * find_next_token(const char ** b)
 {
-    printf("starting character... %02X\n", (uint8_t)**b);
+    //printf("starting character... %02X\n", (uint8_t)**b);
     
     static char token[4096];
     static size_t token_len;
@@ -63,7 +63,7 @@ static char * find_next_token(const char ** b)
 // thrashes any previously-returned token
 static char * find_next_token_anywhere(const char ** b)
 {
-    printf("anywhere starting character... %02X\n", (uint8_t)**b);
+    //printf("anywhere starting character... %02X\n", (uint8_t)**b);
     
     if (b == 0 || *b == 0 || **b == 0)
         return 0;
@@ -299,8 +299,8 @@ typedef struct _Value {
     const char * arg;
     struct _StackSlot * slotinfo;
     
+    // array
     struct _Statement ** edges_out;
-    //struct _Statement * last_edge;
     
     // number of outward edges that have been used
     // used during register allocation to estimate live range
@@ -371,8 +371,6 @@ typedef struct _Block {
     Value ** args;
     // statements that enter into this block (array)
     Statement ** edges_in;
-    // statements that transfer control flow away from themselves
-    Statement ** edges_out;
     // statements within the block (array)
     Statement ** statements;
     // where the block starts within its associated byte buffer
@@ -384,7 +382,6 @@ static Block * new_block(void)
     Block * block = zero_alloc(sizeof(Block));
     block->args = (Value **)zero_alloc(0);
     block->edges_in = (Statement **)zero_alloc(0);
-    block->edges_out = (Statement **)zero_alloc(0);
     block->statements = (Statement **)zero_alloc(0);
     return block;
 }
@@ -411,7 +408,9 @@ typedef struct _Function {
     
     uint8_t written_registers[256]; // list of registers that have been written to in the function. used to avoid clobbering callee-saved registers.
     
-    uint8_t performs_calls;
+    // metadata used by some optimizations
+    size_t statement_count; // inlining heuristic
+    uint8_t performs_calls; // inlining heuristic
 } Function;
 
 static Function * new_func(void)
@@ -425,6 +424,8 @@ static Function * new_func(void)
 
 static Block * find_block(Function * func, const char * name)
 {
+    if (name == 0)
+        return 0;
     for (size_t b = 0; b < array_len(func->blocks, Block *); b++)
     {
         Block * block = func->blocks[b];
@@ -450,6 +451,18 @@ typedef struct _Program {
     Function * current_func;
     Block * current_block;
 } Program;
+
+static Function * find_func(Program * program, const char * name)
+{
+    if (name == 0)
+        return 0;
+    for (size_t i = 0; i < array_len(program->functions, Function *); i++)
+    {
+        if (strcmp(program->functions[i]->name, name) == 0)
+            return program->functions[i];
+    }
+    return 0;
+}
 
 static void add_static_i8(Program * program, const char * name, uint8_t value)
 {
@@ -719,7 +732,7 @@ size_t find_separator_index(Operand * args)
         if (args[i].variant == OP_KIND_SEPARATOR)
             return i;
     }
-    return 0;
+    return (size_t)-1;
 }
 
 void print_ir_to(FILE * f, Program * program)
@@ -763,6 +776,9 @@ void print_ir_to(FILE * f, Program * program)
                 
                 for (size_t j = 0; j < array_len(statement->args, Operand); j++)
                 {
+                    if (j == 1 && strcmp(statement->statement_name, "if") == 0)
+                        fprintf(f, " goto");
+                    
                     Operand op = statement->args[j];
                     if (op.variant == OP_KIND_INVALID)
                         fprintf(f, " <invalidoperand>");
@@ -802,6 +818,7 @@ void print_ir_to(FILE * f, Program * program)
                 fprintf(f, "\n");
             }
         }
+        fprintf(f, "endfunc\n");
     }
     fflush(f);
 }

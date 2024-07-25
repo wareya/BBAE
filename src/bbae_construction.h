@@ -368,6 +368,26 @@ static Statement * parse_statement(Program * program, const char ** cursor)
                 next = find_next_token(cursor);
             }
             
+            if (next && strcmp(next, "else") == 0)
+            {
+                Operand op = new_op_separator();
+                array_push(ret->args, Operand, op);
+                
+                const char * op2_text = strcpy_z(find_next_token(cursor));
+                assert(op2_text);
+                Operand op2 = parse_op_text(&op2_text);
+                array_push(ret->args, Operand, op2);
+                
+                const char * next = find_next_token(cursor);
+                while (next && strcmp(next, "") != 0)
+                {
+                    next = strcpy_z(next);
+                    Operand op = parse_op_val(program, &next);
+                    array_push(ret->args, Operand, op);
+                    next = find_next_token(cursor);
+                }
+            }
+            
             return ret;
         }
         else if (strcmp(ret->statement_name, "goto") == 0)
@@ -499,7 +519,7 @@ static Program * parse_file(const char * cursor)
                 program->current_func->name = strcpy_z(token);
                 
                 token = find_next_token(&cursor);
-                if (token && strcmp(token, "returns"))
+                if (token && strcmp(token, "returns") == 0)
                     program->current_func->return_type = parse_type(&cursor);
                 
                 state = PARSER_STATE_FUNCARGS;
@@ -660,6 +680,7 @@ void split_blocks(Program * program)
             
             Value ** args = (block == func->entry_block) ? func->args : block->args;
             
+            // collect arg live ranges
             for (size_t i = 0; i < array_len(args, Value *); i++)
             {
                 Value * arg = args[i];
@@ -670,6 +691,7 @@ void split_blocks(Program * program)
                 array_push(output_latest_use, uint64_t, (uint64_t)(int64_t)-1);
             }
             
+            // find branches, if any, while collecting SSA var live ranges
             uint8_t branch_found = 0;
             for (size_t i = 0; i < array_len(block->statements, Statement *); i++)
             {
@@ -686,7 +708,10 @@ void split_blocks(Program * program)
                 }
                 
                 if (strcmp(statement->statement_name, "if") == 0)
-                    branch_found = 1;
+                {
+                    if (find_separator_index(statement->args) == (size_t)-1)
+                        branch_found = 1;
+                }
                 
                 for (size_t j = 0; j < array_len(statement->args, Operand); j++)
                 {
@@ -694,13 +719,16 @@ void split_blocks(Program * program)
                     if (arg && (arg->variant == VALUE_ARG || arg->variant == VALUE_SSA))
                     {
                         uint64_t k = arg->temp;
-                        //assert(outputs[k] == arg);
                         if (outputs[k] == arg)
                             output_latest_use[k] = i;
                     }
                 }
             }
             
+            if (!branch_found)
+                continue;
+            
+            // finally, actually split the block
             for (size_t i = 0; i < array_len(block->statements, Statement *); i++)
             {
                 Statement * branch = block->statements[i];
@@ -737,12 +765,9 @@ void split_blocks(Program * program)
                             }
                         }
                     }
-                    
                     array_insert(func->blocks, Block *, b + 1, next_block);
-                    //array_push(next_block->edges_in, Statement *, branch);
                     
                     break;
-                    //assert(((void)"TODO: split block, convey arguments", 0));
                 }
             }
         }
@@ -773,7 +798,6 @@ void connect_graphs(Program * program)
                         assert(statement->block);
                         Block * target = find_block(func, statement->args[0].text);
                         array_push(target->edges_in, Statement *, statement);
-                        array_push(statement->block->edges_out, Statement *, statement);
                     }
                     if (strcmp(statement->statement_name, "if") == 0)
                     {
@@ -781,28 +805,42 @@ void connect_graphs(Program * program)
                         assert(statement->block);
                         Block * target = find_block(func, statement->args[1].text);
                         array_push(target->edges_in, Statement *, statement);
-                        array_push(statement->block->edges_out, Statement *, statement);
                         
-                        size_t separator_pos = 0;
-                        for (size_t i = 2; i < array_len(statement->args, Operand); i++)
-                        {
-                            if (statement->args[i].variant == OP_KIND_SEPARATOR)
-                            {
-                                separator_pos = i;
-                                break;
-                            }
-                        }
+                        size_t separator_pos = find_separator_index(statement->args);
                         // block splitting is required to have happened before now
-                        assert(separator_pos);
+                        assert(separator_pos != (size_t)-1);
                         
                         assert(statement->args[separator_pos + 1].text);
                         assert(statement->block);
                         target = find_block(func, statement->args[separator_pos + 1].text);
                         array_push(target->edges_in, Statement *, statement);
-                        array_push(statement->block->edges_out, Statement *, statement);
                     }
                 }
             }
+        }
+    }
+}
+
+static void verify_coherency(Program * program)
+{
+    for (size_t f = 0; f < array_len(program->functions, Function *); f++)
+    {
+        Function * func = program->functions[f];
+        for (size_t b = 0; b < array_len(func->blocks, Block *); b++)
+        {
+            Block * block = func->blocks[b];
+            assert(array_len(block->statements, Statement *) >= 1);
+            for (size_t i = 0; i < array_len(block->statements, Statement *) - 1; i++)
+            {
+                Statement * statement = block->statements[i];
+                assert(strcmp(statement->statement_name, "if") != 0);
+                assert(strcmp(statement->statement_name, "goto") != 0);
+                assert(strcmp(statement->statement_name, "return") != 0);
+            }
+            Statement * last = array_last(block->statements, Statement *);
+            assert(strcmp(last->statement_name, "if") == 0 ||
+                   strcmp(last->statement_name, "goto") == 0 ||
+                   strcmp(last->statement_name, "return") == 0);
         }
     }
 }

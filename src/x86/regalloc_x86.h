@@ -519,7 +519,8 @@ static void do_regalloc_block(Function * func, Block * block)
             if (arg && arg->variant != VALUE_CONST)
             {
                 arg->alloced_use_count += 1;
-                assert(arg->alloced_use_count <= array_len(arg->edges_out, Value *));
+                size_t len = array_len(arg->edges_out, Value *);
+                assert(arg->alloced_use_count <= len);
             }
         }
         

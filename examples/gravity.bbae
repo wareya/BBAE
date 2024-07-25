@@ -23,12 +23,14 @@ block grav
     gd2 = fmul gd 0.5f64
     vel2 = fadd vel gd2
     
-    vd = call_eval f64 mul_delta vel2
+    #vd = call_eval f64 mul_delta vel2
+    vd = fmul vel2 0.001f64
     y2 = fadd y vd
     
-    gd3 = call_eval f64 mul_delta g
-    gd4 = fmul gd3 0.5f64
-    vel3 = fadd vel2 gd4
+    #gd3 = call_eval f64 mul_delta g
+    #gd4 = fmul gd3 0.5f64
+    #vel3 = fadd vel2 gd4
+    vel3 = fadd vel2 gd2
     
     i2 = sub i 1i64
     cmp = cmp_g i2 0i64

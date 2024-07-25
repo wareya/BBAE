@@ -1,6 +1,10 @@
 #ifndef BBAE_EMISSION
 #define BBAE_EMISSION
 
+// Root file for the X86 backend, exposed to bbae_api.h.
+// NOTE: Despite the name, this is a AMD64/x86_64 (64-bit only) backend. x86 is an architecture family, not a specific architecture.
+// Other _x86 files
+
 #include "regalloc_x86.h"
 #include "emitter_x86.h"
 #include "../compiler_common.h"
@@ -204,27 +208,30 @@ uint8_t reg_shuffle_needed(Value ** block_args, Operand * args, size_t count)
     }
     return 0;
 }
-void reg_shuffle_single(byte_buffer * code, int64_t * out2in, uint8_t * out2in_color, size_t out)
+void reg_shuffle_single(byte_buffer * code, int64_t * in2out, uint8_t * in2out_color, size_t in)
 {
-    int64_t in = out2in[out];
+    int64_t out = in2out[in];
     EncOperand reg_scratch_int = zy_reg(REG_R11, 8);
     EncOperand reg_scratch_float = zy_reg(REG_XMM5, 8);
     
     EncOperand reg_out = zy_reg(out, 8);
     EncOperand reg_in = zy_reg(in, 8);
     
-    if (out2in[in] < 0)
+    if (in2out[out] < 0) // not a typo
     {
+        puts("a");
         if (in <= REG_R15)
             zy_emit_2(code, INST_MOV, reg_out, reg_in);
         else
             zy_emit_2(code, INST_MOVAPS, reg_out, reg_in);
+        in2out[in] = -1;
     }
     else
     {
         // hit a cycle! mov into temp register. will be mov'd out of at the end of the cycle
-        if (out2in_color[out])
+        if (in2out_color[in])
         {
+            puts("b");
             if (out <= REG_R15)
             {
                 zy_emit_2(code, INST_MOV, reg_scratch_int, reg_out);
@@ -236,14 +243,16 @@ void reg_shuffle_single(byte_buffer * code, int64_t * out2in, uint8_t * out2in_c
                 zy_emit_2(code, INST_MOVAPS, reg_out, reg_in);
             }
             
-            out2in_color[out] = 2;
+            in2out_color[in] = 2;
         }
         else
         {
-            out2in_color[out] = 1;
-            reg_shuffle_single(code, out2in, out2in_color, in);
-            if (out2in_color[out] == 2)
+            puts("c");
+            in2out_color[in] = 1;
+            reg_shuffle_single(code, in2out, in2out_color, out);
+            if (in2out_color[in] == 2)
             {
+                puts("d");
                 if (in <= REG_R15)
                     zy_emit_2(code, INST_MOV, reg_out, reg_scratch_int);
                 else
@@ -251,32 +260,34 @@ void reg_shuffle_single(byte_buffer * code, int64_t * out2in, uint8_t * out2in_c
             }
             else
             {
+                puts("e");
                 if (in <= REG_R15)
                     zy_emit_2(code, INST_MOV, reg_out, reg_in);
                 else
                     zy_emit_2(code, INST_MOVAPS, reg_out, reg_in);
             }
-            out2in[out] = -1;
+            in2out[in] = -1;
         }
     }
 }
 
-void do_reg_shuffle(byte_buffer * code, int64_t * out2in, uint8_t * out2in_color)
+void do_reg_shuffle(byte_buffer * code, int64_t * in2out, uint8_t * in2out_color)
 {
+    puts("----");
     for (size_t out = 0; out < 32; out++)
     {
-        if (out2in[out] < 0)
+        if (in2out[out] < 0)
             continue;
-        reg_shuffle_single(code, out2in, out2in_color, out);
+        reg_shuffle_single(code, in2out, in2out_color, out);
     }
 }
 void reg_shuffle_block_args(byte_buffer * code, Value ** block_args, Operand * args, size_t count)
 {
-    int64_t out2in[32];
+    int64_t in2out[32];
     for (size_t i = 0; i < 32; i++)
-        out2in[i] = -1;
-    uint8_t out2in_color[32]; // for cycle detection
-    memset(out2in_color, 0, sizeof(out2in_color));
+        in2out[i] = -1;
+    uint8_t in2out_color[32]; // for cycle detection
+    memset(in2out_color, 0, sizeof(in2out_color));
     
     for (size_t i = 0; i < count; i++)
     {
@@ -300,19 +311,19 @@ void reg_shuffle_block_args(byte_buffer * code, Value ** block_args, Operand * a
         if (block_args[i]->regalloc == args[i].value->regalloc)
             continue;
         
-        out2in[block_args[i]->regalloc] = args[i].value->regalloc;
+        in2out[args[i].value->regalloc] = block_args[i]->regalloc;
     }
     
-    do_reg_shuffle(code, out2in, out2in_color);
+    do_reg_shuffle(code, in2out, in2out_color);
 }
 
 void reg_shuffle_call(byte_buffer * code, Statement * call)
 {
-    int64_t out2in[32];
+    int64_t in2out[32];
     for (size_t i = 0; i < 32; i++)
-        out2in[i] = -1;
-    uint8_t out2in_color[32]; // for cycle detection
-    memset(out2in_color, 0, sizeof(out2in_color));
+        in2out[i] = -1;
+    uint8_t in2out_color[32]; // for cycle detection
+    memset(in2out_color, 0, sizeof(in2out_color));
     
     size_t count = array_len(call->args, Operand);
     
@@ -341,10 +352,10 @@ void reg_shuffle_call(byte_buffer * code, Statement * call)
         if (value->regalloc == (uint64_t)where)
             continue;
         
-        out2in[where] = value->regalloc;
+        in2out[value->regalloc] = where;
     }
     
-    do_reg_shuffle(code, out2in, out2in_color);
+    do_reg_shuffle(code, in2out, in2out_color);
 }
 
 static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)

@@ -2,8 +2,9 @@
 #include <stdint.h>
 #include <stddef.h>
 
-double mul_delta(double x)
+__attribute__((noinline)) double mul_delta(double x)
 {
+    asm ("");
     return x * 0.001;
 }
 

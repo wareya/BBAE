@@ -211,6 +211,7 @@ static uint64_t abi_get_clobber_mask(void)
     }
     return clobber;
 }
+
 // Values with indexes corresponding to callee-saved registers are multiplied by 2.
 static void abi_get_callee_saved_regs(uint8_t * registers, size_t max_count)
 {

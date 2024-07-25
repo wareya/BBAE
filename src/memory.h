@@ -88,6 +88,18 @@ static void free_all_compiler_allocs(void)
     }
 }
 
+static void * zero_alloc_clone(void * buf)
+{
+    uint8_t * old_alloc = alloc_base_loc(buf);
+    uint64_t size = *alloc_get_size(old_alloc);
+    uint8_t * new_alloc = (uint8_t *)zero_alloc(size) - ALLOC_PREFIX_SIZE;
+    assert(new_alloc);
+    
+    memcpy(new_alloc, old_alloc, size + ALLOC_PREFIX_SIZE);
+    
+    return alloc_data_loc(new_alloc);
+}
+
 #define array_len(ARRAY, TYPE) \
     ((*alloc_get_size(alloc_base_loc((uint8_t *)(ARRAY)))) / sizeof(TYPE))
 
@@ -95,6 +107,9 @@ static void free_all_compiler_allocs(void)
     (ARRAY = ((TYPE *)zero_realloc((uint8_t *)(ARRAY), *alloc_get_size(alloc_base_loc((uint8_t *)(ARRAY))) + sizeof(TYPE))), \
      ((TYPE *)(ARRAY))[array_len((uint8_t *)(ARRAY), TYPE) - 1] = (VAL) \
     )
+
+#define array_last(ARRAY, TYPE) \
+    (assert(array_len(ARRAY, TYPE) > 0), (ARRAY)[array_len(ARRAY, TYPE) - 1])
 
 static void array_erase_impl(uint8_t ** array, size_t item_size, size_t index)
 {
@@ -239,6 +254,18 @@ static void to_newline(const char ** b)
 {
     while (!is_newline(**b))
         *b += 1;
+}
+
+static char * string_concat(const char * a, const char * b)
+{
+    size_t len_a = strlen(a);
+    size_t len_b = strlen(b);
+    
+    char * ret = (char *)zero_alloc(len_a + len_b + 1);
+    memcpy(ret, a, len_a);
+    memcpy(ret + len_a, b, len_b);
+    
+    return ret;
 }
 
 #endif // _BBAE_MEMORY_H
