@@ -1,8 +1,8 @@
 
 func mul_delta returns f64
-    arg y f64
-    y2 = fmul y 0.001f64
-    return y2
+    arg n f64
+    n2 = fmul n 0.001f64
+    return n2
 endfunc
 
 func main returns f64
@@ -19,12 +19,8 @@ block grav
     
     mul_delta = symbol_lookup_unsized mul_delta
     
-    d = mov 0.001f64
-    h = mov 0.5f64
-    
-    #gd = call_eval f64 mul_delta g
-    gd = fmul g d
-    gd2 = fmul gd h
+    gd = call_eval f64 mul_delta g
+    gd2 = fmul gd 0.5f64
     vel2 = fadd vel gd2
     
     #vd = call_eval f64 mul_delta vel2

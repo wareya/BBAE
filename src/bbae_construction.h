@@ -754,24 +754,24 @@ void split_blocks(Program * program)
                         Value * value = outputs[a];
                         if (output_latest_use[a] <= (int64_t)i)
                         {
-                            printf("--- skipping rewriting operand %s because %zu vs %zu\n", value->ssa ? value->ssa->output_name : value->arg, output_latest_use[a], i);
+                            //printf("--- skipping rewriting operand %s because %zu vs %zu\n", value->ssa ? value->ssa->output_name : value->arg, output_latest_use[a], i);
                             continue;
                         }
-                        printf("--- YES rewriting operand %s because %zu vs %zu\n", value->ssa ? value->ssa->output_name : value->arg, output_latest_use[a], i);
+                        //printf("--- YES rewriting operand %s because %zu vs %zu\n", value->ssa ? value->ssa->output_name : value->arg, output_latest_use[a], i);
                         
-                        Value * arg = make_value(outputs[a]->type);
+                        Value * arg = make_value(value->type);
                         arg->variant = VALUE_ARG;
                         printf("creating dummy block arg with name %s\n", output_names[a]);
                         arg->arg = output_names[a];
                         
                         array_push(next_block->args, Value *, arg);
-                        array_push(branch->args, Operand, new_op_val(outputs[a]));
+                        array_push(branch->args, Operand, new_op_val(value));
                         for (size_t j = 0; j < array_len(next_block->statements, Statement *); j++)
                         {
                             Statement * statement = next_block->statements[j];
                             for (size_t n = 0; n < array_len(statement->args, Operand); n++)
                             {
-                                if (statement->args[n].variant == OP_KIND_VALUE && statement->args[n].value == outputs[a])
+                                if (statement->args[n].variant == OP_KIND_VALUE && statement->args[n].value == value)
                                 {
                                     printf("replaced a usage of %s in statement type %s\n", output_names[a], statement->statement_name);
                                     disconnect_statement_from_operand(statement, statement->args[n]);

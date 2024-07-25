@@ -53,6 +53,14 @@ static void * zero_alloc(size_t n)
 }
 static void * zero_realloc(uint8_t * buf, size_t n)
 {
+    if (0)
+    {
+        void * new = zero_alloc(n);
+        uint64_t l = *alloc_get_size(alloc_base_loc(buf));
+        memcpy(new, buf, n < l ? n : l);
+        return new;
+    }
+    
     n += ALLOC_PREFIX_SIZE;
     
     uint8_t * old_alloc = alloc_base_loc(buf);
@@ -82,7 +90,7 @@ static void free_all_compiler_allocs(void)
 {
     while (alloc_list)
     {
-        uint8_t * alloc_next = *(uint8_t **)alloc_list;
+        uint8_t * alloc_next = *alloc_get_prev_ptr(alloc_list);
         free(alloc_list);
         alloc_list = alloc_next;
     }

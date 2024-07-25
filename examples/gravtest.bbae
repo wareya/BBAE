@@ -1,9 +1,16 @@
 
+func mul_delta returns f64
+    arg y f64
+    __bbae_temp_1 = mov 0.001000f64
+    y2 = fmul y __bbae_temp_1
+    return y2
+endfunc
 func main returns f64
-    stack_slot __bbae_temp_6_i 8
-    stack_slot __bbae_temp_7_y 8
-    stack_slot __bbae_temp_8_vel 8
-    stack_slot __bbae_temp_9_g 8
+    __bbae_temp_20 = mov <aggregate>
+    __bbae_temp_18 = mov 0.000000f64
+    __bbae_temp_16 = mov 0.000000f64
+    __bbae_temp_14 = mov 0.000000f64
+    __bbae_temp_12 = mov 0i64
     i = mov 1000000000i64
     y = mov 0.000000f64
     vel = mov 0.000000f64
@@ -14,22 +21,35 @@ block grav
     arg y f64
     arg vel f64
     arg g f64
-    store __bbae_temp_6_i i
-    store __bbae_temp_7_y y
-    store __bbae_temp_8_vel vel
-    store __bbae_temp_9_g g
-    goto __bbae_temp_11_mul_delta g
+    mul_delta = symbol_lookup_unsized mul_delta
+    __bbae_temp_13 = mov i
+    __bbae_temp_15 = mov y
+    __bbae_temp_17 = mov vel
+    __bbae_temp_19 = mov g
+    __bbae_temp_21 = mov mul_delta
+    goto __bbae_temp_11_mul_delta g __bbae_temp_13 __bbae_temp_15 __bbae_temp_17 __bbae_temp_19 __bbae_temp_21
 block __bbae_temp_11_mul_delta
     arg y f64
+    arg __bbae_temp_12 i64
+    arg __bbae_temp_14 f64
+    arg __bbae_temp_16 f64
+    arg __bbae_temp_18 f64
+    arg __bbae_temp_20 iptr
     __bbae_temp_1 = mov 0.001000f64
     y2 = fmul y __bbae_temp_1
-    goto __bbae_temp_5 y2
+    goto __bbae_temp_5 y2 __bbae_temp_12 __bbae_temp_14 __bbae_temp_16 __bbae_temp_18 __bbae_temp_20
 block __bbae_temp_5
     arg gd f64
-    g = load f64 __bbae_temp_9_g
-    vel = load f64 __bbae_temp_8_vel
-    y = load f64 __bbae_temp_7_y
-    i = load i64 __bbae_temp_6_i
+    arg __bbae_temp_12 i64
+    arg __bbae_temp_14 f64
+    arg __bbae_temp_16 f64
+    arg __bbae_temp_18 f64
+    arg __bbae_temp_20 iptr
+    mul_delta = mov __bbae_temp_20
+    g = mov __bbae_temp_18
+    vel = mov __bbae_temp_16
+    y = mov __bbae_temp_14
+    i = mov __bbae_temp_12
     __bbae_temp_2 = mov 0.500000f64
     gd2 = fmul gd __bbae_temp_2
     vel2 = fadd vel gd2

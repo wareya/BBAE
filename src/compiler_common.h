@@ -188,8 +188,8 @@ const char * type_to_static_string(Type type)
         return "f32";
     if (type.variant == TYPE_F64)
         return "f64";
-    if (type.variant == TYPE_I32)
-        return "i32";
+    if (type.variant == TYPE_IPTR)
+        return "iptr";
     if (type.variant == TYPE_AGG)
         return "<aggregatetype>";
     if (type.variant == TYPE_INVALID)

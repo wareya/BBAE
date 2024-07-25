@@ -25,7 +25,7 @@ static void do_optimization(Program * program)
     validate_links(program);
     optimization_empty_block_removal(program);
     optimization_function_inlining(program);
-    optimization_global_mem2reg(program);
+    //optimization_global_mem2reg(program);
     optimization_unused_block_arg_removal(program);
     optimization_empty_block_removal(program);
     puts("----- AFTER OPTIMIZATION -----");
@@ -35,6 +35,7 @@ static void do_optimization(Program * program)
 
 static byte_buffer * do_lowering(Program * program, SymbolEntry ** symbollist)
 {
+    validate_links(program);
     verify_coherency(program);
     do_regalloc(program);
     puts("-----   AFTER REGALLOC   -----");

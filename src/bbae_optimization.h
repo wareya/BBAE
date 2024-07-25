@@ -357,6 +357,7 @@ static void optimization_global_mem2reg(Program * program)
                     init->output_name = name;
                     init->output = newval;
                     init->statement_name = strcpy_z("mov");
+                    
                     // TODO: use poison value instead of 0?
                     Value * default_val = make_const_value(type.variant, 0);
                     Operand op = new_op_val(default_val);
@@ -561,6 +562,8 @@ static void optimization_function_inlining(Program * program)
             Block * next_block = new_block();
             next_block->name = make_temp_name();
             next_block->statements = array_chop(block->statements, Statement *, call_index+1);
+            for (size_t s = 0; s < array_len(next_block->statements, Statement *); s++)
+                next_block->statements[s]->block = next_block;
             
             printf("splitting block %s at instruction %zu\n", block->name, call_index);
             printf("left len: %zu\n", array_len(block->statements, Statement *));
@@ -586,6 +589,7 @@ static void optimization_function_inlining(Program * program)
                 connect_statement_to_operand(store, array_last(store->args, Operand));
                 
                 array_insert(block->statements, Statement *, call_index, store);
+                store->block = block;
                 call_index += 1;
                 
                 Statement * load = new_statement();
@@ -598,6 +602,7 @@ static void optimization_function_inlining(Program * program)
                 add_statement_output(load);
                 
                 array_insert(next_block->statements, Statement *, 0, load);
+                load->block = next_block;
                 
                 Value * load_output = load->output;
                 

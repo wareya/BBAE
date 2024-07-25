@@ -360,7 +360,7 @@ void reg_shuffle_call(byte_buffer * code, Statement * call)
 
 static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
 {
-    byte_buffer * code = (byte_buffer *)malloc(sizeof(byte_buffer));
+    byte_buffer * code = (byte_buffer *)zero_alloc(sizeof(byte_buffer));
     memset(code, 0, sizeof(byte_buffer));
     
     for (size_t f = 0; f < array_len(program->functions, Function *); f++)
