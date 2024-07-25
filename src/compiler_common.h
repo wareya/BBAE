@@ -820,8 +820,8 @@ void print_ir_to(FILE * f, Program * program)
                         assert(0);
                 }
                 
-                if (statement->output)
-                    fprintf(f, " # edges_out size: %zu", array_len(statement->output->edges_out, Statement *));
+                //if (statement->output)
+                //    fprintf(f, " # edges_out size: %zu", array_len(statement->output->edges_out, Statement *));
                 
                 fprintf(f, "\n");
             }
