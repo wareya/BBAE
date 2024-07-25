@@ -19,8 +19,12 @@ block grav
     
     mul_delta = symbol_lookup_unsized mul_delta
     
-    gd = call_eval f64 mul_delta g
-    gd2 = fmul gd 0.5f64
+    d = mov 0.001f64
+    h = mov 0.5f64
+    
+    #gd = call_eval f64 mul_delta g
+    gd = fmul g d
+    gd2 = fmul gd h
     vel2 = fadd vel gd2
     
     #vd = call_eval f64 mul_delta vel2

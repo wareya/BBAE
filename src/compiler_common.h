@@ -774,7 +774,9 @@ void print_ir_to(FILE * f, Program * program)
                 else
                     fprintf(f, "    %s", statement->statement_name);
                 
-                for (size_t j = 0; j < array_len(statement->args, Operand); j++)
+                size_t opcount = array_len(statement->args, Operand);
+                
+                for (size_t j = 0; j < opcount; j++)
                 {
                     if (j == 1 && strcmp(statement->statement_name, "if") == 0)
                         fprintf(f, " goto");

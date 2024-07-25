@@ -1,10 +1,4 @@
 
-func mul_delta returns f64
-    arg y f64
-    __bbae_temp_1 = mov 0.001000f64
-    y2 = fmul y __bbae_temp_1
-    return y2
-endfunc
 func main returns f64
     stack_slot __bbae_temp_6_i 8
     stack_slot __bbae_temp_7_y 8
@@ -36,11 +30,11 @@ block __bbae_temp_5
     vel = load f64 __bbae_temp_8_vel
     y = load f64 __bbae_temp_7_y
     i = load i64 __bbae_temp_6_i
-    half = mov 0.500000f64
-    gd2 = fmul gd half
+    __bbae_temp_2 = mov 0.500000f64
+    gd2 = fmul gd __bbae_temp_2
     vel2 = fadd vel gd2
-    delta = mov 0.001000f64
-    vd = fmul vel2 delta
+    __bbae_temp_3 = mov 0.001000f64
+    vd = fmul vel2 __bbae_temp_3
     y2 = fadd y vd
     vel3 = fadd vel2 gd2
     i2 = sub i 1i64

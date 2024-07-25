@@ -441,6 +441,7 @@ static void legalize_last_statement_operands(Block * block)
                 char * str = make_temp_name();
                 s->output_name = str;
                 s->statement_name = strcpy_z("mov");
+                s->block = block;
                 
                 // move around args
                 array_push(s->args, Operand, statement->args[i]);
@@ -480,6 +481,7 @@ static void legalize_last_statement_operands(Block * block)
         char * str = make_temp_name();
         s->output_name = str;
         s->statement_name = strcpy_z("mov");
+        s->block = block;
         
         // move around args
         array_push(s->args, Operand, statement->args[i]);
@@ -676,7 +678,7 @@ void split_blocks(Program * program)
             // so that we can pass along the right arguments to the secondary blocks
             const char ** output_names = (const char **)zero_alloc(0);
             Value ** outputs = (Value **)zero_alloc(0);
-            uint64_t * output_latest_use = (uint64_t *)zero_alloc(0);
+            int64_t * output_latest_use = (int64_t *)zero_alloc(0);
             
             Value ** args = (block == func->entry_block) ? func->args : block->args;
             
@@ -688,7 +690,7 @@ void split_blocks(Program * program)
                 arg->temp = array_len(output_latest_use, uint64_t);
                 array_push(output_names, const char *, arg->arg);
                 array_push(outputs, Value *, arg);
-                array_push(output_latest_use, uint64_t, (uint64_t)(int64_t)-1);
+                array_push(output_latest_use, int64_t, -1);
             }
             
             // find branches, if any, while collecting SSA var live ranges
@@ -704,7 +706,7 @@ void split_blocks(Program * program)
                     statement->output->temp = array_len(output_latest_use, uint64_t);
                     array_push(output_names, const char *, statement->output_name);
                     array_push(outputs, Value *, statement->output);
-                    array_push(output_latest_use, uint64_t, (uint64_t)(int64_t)-1);
+                    array_push(output_latest_use, int64_t, -1);
                 }
                 
                 if (strcmp(statement->statement_name, "if") == 0)
@@ -737,6 +739,8 @@ void split_blocks(Program * program)
                     Block * next_block = new_block();
                     next_block->name = make_temp_name();
                     next_block->statements = array_chop(block->statements, Statement *, i+1);
+                    for (size_t s = 0; s < array_len(next_block->statements, Statement *); s++)
+                        next_block->statements[s]->block = next_block;
                     
                     printf("splitting block %s at instruction %zu\n", block->name, i);
                     printf("left len: %zu\n", array_len(block->statements, Statement *));
@@ -747,12 +751,19 @@ void split_blocks(Program * program)
                     
                     for (size_t a = 0; a < array_len(output_latest_use, uint64_t); a++)
                     {
-                        if (output_latest_use[a] <= i)
+                        Value * value = outputs[a];
+                        if (output_latest_use[a] <= (int64_t)i)
+                        {
+                            printf("--- skipping rewriting operand %s because %zu vs %zu\n", value->ssa ? value->ssa->output_name : value->arg, output_latest_use[a], i);
                             continue;
+                        }
+                        printf("--- YES rewriting operand %s because %zu vs %zu\n", value->ssa ? value->ssa->output_name : value->arg, output_latest_use[a], i);
+                        
                         Value * arg = make_value(outputs[a]->type);
                         arg->variant = VALUE_ARG;
                         printf("creating dummy block arg with name %s\n", output_names[a]);
                         arg->arg = output_names[a];
+                        
                         array_push(next_block->args, Value *, arg);
                         array_push(branch->args, Operand, new_op_val(outputs[a]));
                         for (size_t j = 0; j < array_len(next_block->statements, Statement *); j++)
@@ -761,7 +772,12 @@ void split_blocks(Program * program)
                             for (size_t n = 0; n < array_len(statement->args, Operand); n++)
                             {
                                 if (statement->args[n].variant == OP_KIND_VALUE && statement->args[n].value == outputs[a])
+                                {
+                                    printf("replaced a usage of %s in statement type %s\n", output_names[a], statement->statement_name);
+                                    disconnect_statement_from_operand(statement, statement->args[n]);
                                     statement->args[n].value = arg;
+                                    connect_statement_to_operand(statement, statement->args[n]);
+                                }
                             }
                         }
                     }
@@ -820,6 +836,35 @@ void connect_graphs(Program * program)
         }
     }
 }
+
+static void validate_links(Program * program)
+{
+    for (size_t f = 0; f < array_len(program->functions, Function *); f++)
+    {
+        Function * func = program->functions[f];
+        for (size_t b = 0; b < array_len(func->blocks, Block *); b++)
+        {
+            Block * block = func->blocks[b];
+            for (size_t i = 0; i < array_len(block->statements, Statement *); i++)
+            {
+                Statement * statement = block->statements[i];
+                assert(statement->block == block);
+                for (size_t a = 0; a < array_len(statement->args, Operand); a++)
+                {
+                    Operand op = statement->args[a];
+                    if (op.value)
+                    {
+                        if (op.value->ssa)
+                            assert(op.value->ssa->block == block);
+                        else if (op.value->arg)
+                            {} // FIXME
+                    }
+                }
+            }
+        }
+    }
+}
+
 
 static void verify_coherency(Program * program)
 {

@@ -6,26 +6,29 @@
 
 static Operand * _remap_args(Value ** block_args, Operand * exit_args, Operand * entry_args)
 {
-    size_t entry_count = array_len(block_args, Value *);
+    size_t block_arg_count = array_len(block_args, Value *);
     size_t exit_count = array_len(exit_args, Operand);
+    assert(exit_count > 0);
     
     Operand * args_copy = (Operand *)zero_alloc(0);
     array_push(args_copy, Operand, exit_args[0]);
     
     for (size_t i = 1; i < exit_count; i++)
     {
-        Operand op = exit_args[i];
-        for (size_t j = 0; j < entry_count; j++)
+        Operand op_dummy = new_op_separator();
+        Operand op = op_dummy;
+        Operand exit_op = exit_args[i];
+        for (size_t j = 0; j < block_arg_count; j++)
         {
             Value * block_arg = block_args[j];
-            Operand entry_op = entry_args[j];
-            if (op.value == block_arg)
+            if (exit_op.value == block_arg)
             {
+                Operand entry_op = entry_args[j];
                 op = entry_op;
                 break;
             }
         }
-        assert(memcmp(&op, &exit_args[i], sizeof(Operand)) != 0);
+        assert(memcmp(&op, &op_dummy, sizeof(Operand)) != 0);
         array_push(args_copy, Operand, op);
     }
     
@@ -47,18 +50,21 @@ static void _remap_args_span(Value ** block_args, Operand * exit_args, Statement
     
     Operand * new_args = _remap_args(block_args, exit_args, entry->args + offset);
     
+    Operand label = new_args[0];
+    assert(label.variant == OP_KIND_TEXT);
+    entry->args[entry_label_offset] = label;
+    assert(array_len(exit_args, Operand) == array_len(new_args, Operand));
+    
     for (size_t i = 0; i < block_arg_count; i++)
     {
-        disconnect_statement_from_operand(entry, entry->args[i + offset]);
+        disconnect_statement_from_operand(entry, entry->args[offset]);
         array_erase(entry->args, Operand, offset);
     }
     
-    entry->args[entry_label_offset] = new_args[0];
-    
-    for (size_t i = 0; i < block_arg_count; i++)
+    for (size_t i = 1; i < array_len(exit_args, Operand); i++)
     {
-        Operand op = new_args[i + 1];
-        array_insert(entry->args, Operand, offset + i, op);
+        Operand op = new_args[i];
+        array_insert(entry->args, Operand, offset + i - 1, op);
         connect_statement_to_operand(entry, op);
     }
 }
@@ -70,6 +76,7 @@ static void optimization_empty_block_removal(Program * program)
         for (size_t b = 1; b < array_len(func->blocks, Block *); b++)
         {
             Block * block = func->blocks[b];
+            assert(array_len(block->statements, Statement *) > 0);
             if (array_len(block->statements, Statement *) != 1)
                 continue;
             Statement * exit = block->statements[0];
@@ -115,6 +122,7 @@ static void optimization_empty_block_removal(Program * program)
                         // need to make sure the separator exists
                         size_t separator_index = find_separator_index(entry->args);
                         assert(separator_index != (size_t)-1);
+                        assert(entry->args[1].variant == OP_KIND_TEXT);
                         
                         uint8_t filled_once = 0;
                         
@@ -128,6 +136,8 @@ static void optimization_empty_block_removal(Program * program)
                         // need to recalculate because it might have moved
                         separator_index = find_separator_index(entry->args);
                         assert(separator_index != (size_t)-1);
+                        
+                        assert(entry->args[separator_index + 1].variant == OP_KIND_TEXT);
                         
                         if (strcmp(entry->args[separator_index + 1].text, block->name) == 0)
                         {
