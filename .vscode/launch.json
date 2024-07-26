@@ -10,9 +10,9 @@
             "request": "launch",
             "name": "Debug (LLDB)",
             "program": "${workspaceFolder}/a.exe",
-            "args": ["examples/gravity.bbae"],
+            //"args": ["examples/gravity.bbae"],
             //"args": ["examples/gravtest.bbae"],
-            //"args": ["examples/too_simple.bbae"],
+            "args": ["examples/too_simple.bbae"],
             "cwd": "${workspaceFolder}"
         },
     ]

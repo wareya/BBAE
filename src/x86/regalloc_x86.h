@@ -18,9 +18,19 @@
 #define BBAE_REGISTER_COUNT (16)
 #endif
 
-static int64_t first_empty(Value ** array, size_t len, uint64_t allow_mask)
+static int64_t first_empty(Value ** array, size_t len, uint64_t allow_mask, uint8_t does_calls, uint8_t is_float)
 {
-    // TODO: if block has no calls in it, prefer non-callee-saved registers
+    // prefer non-callee-saved registers if the function we're in doesn't do any calls
+    if (!does_calls)
+    {
+        uint64_t clobber_mask = abi_get_clobber_mask();
+        if (is_float)
+            clobber_mask >>= 16;
+        
+        int64_t found = first_empty(array, len, allow_mask & clobber_mask, 1, is_float);
+        if (found >= 0)
+            return found;
+    }
     int64_t found = -1;
     for (size_t n = 0; n < len; n++)
     {
@@ -157,9 +167,13 @@ static void do_spill(Function * func, Block * block, Value ** reg_int_alloced, V
     // first use is after current statement
     int64_t temp = -1;
     if (spillee->regalloc <= _ABI_R15)
-        temp = first_empty(reg_int_alloced, BBAE_REGISTER_COUNT, allowed_mask);
+        temp = first_empty(reg_int_alloced, BBAE_REGISTER_COUNT, allowed_mask, func->performs_calls, 0);
     else
-        temp = first_empty(reg_float_alloced, BBAE_REGISTER_COUNT, allowed_mask >> 16) + _ABI_XMM0;
+    {
+        temp = first_empty(reg_float_alloced, BBAE_REGISTER_COUNT, allowed_mask >> 16, func->performs_calls, 1);
+        if (temp >= 0)
+            temp += _ABI_XMM0;
+    }
     
     if (temp >= 0)
     {
@@ -371,7 +385,7 @@ static void regalloc_func_args(Function * func, Value ** reg_int_alloced, Value 
     }
 }
 
-static void regalloc_block_args(Block * block, Value ** reg_int_alloced, Value ** reg_float_alloced)
+static void regalloc_block_args(Function * func, Block * block, Value ** reg_int_alloced, Value ** reg_float_alloced)
 {
     for (size_t i = 0; i < array_len(block->args, Value *); i++)
     {
@@ -432,9 +446,13 @@ static void regalloc_block_args(Block * block, Value ** reg_int_alloced, Value *
         if (!where_found)
         {
             if (type_is_intreg(value->type))
-                where = first_empty(reg_int_alloced, BBAE_REGISTER_COUNT, 0xFFFF);
+                where = first_empty(reg_int_alloced, BBAE_REGISTER_COUNT, 0xFFFF, func->performs_calls, 0);
             else if (type_is_float(value->type))
-                where = first_empty(reg_float_alloced, BBAE_REGISTER_COUNT, 0xFFFF) + _ABI_XMM0;
+            {
+                where = first_empty(reg_float_alloced, BBAE_REGISTER_COUNT, 0xFFFF, func->performs_calls, 1);
+                if (where >= 0)
+                    where += _ABI_XMM0;
+            }
             else
                 assert(((void)"TODO", 0));
         }
@@ -550,7 +568,7 @@ static void do_regalloc_block(Function * func, Block * block)
     else
     {
         // allocate block arguments
-        regalloc_block_args(block, reg_int_alloced, reg_float_alloced);
+        regalloc_block_args(func, block, reg_int_alloced, reg_float_alloced);
     }
     
     // give statements numbers for spill heuristic
@@ -619,10 +637,10 @@ static void do_regalloc_block(Function * func, Block * block)
         
         int64_t where;
         if (is_int)
-            where = first_empty(reg_int_alloced, BBAE_REGISTER_COUNT, allow_mask);
+            where = first_empty(reg_int_alloced, BBAE_REGISTER_COUNT, allow_mask, func->performs_calls, 0);
         else
         {
-            where = first_empty(reg_float_alloced, BBAE_REGISTER_COUNT, allow_mask >> 16);
+            where = first_empty(reg_float_alloced, BBAE_REGISTER_COUNT, allow_mask >> 16, func->performs_calls, 1);
             if (where >= 0)
                 where += _ABI_XMM0;
         }
@@ -731,7 +749,15 @@ static void do_regalloc(Program * program)
             Block * block = func->blocks[b];
             do_regalloc_block(func, block);
             // FIXME
-            // func->written_registers[where] = 1;
+            for (size_t i = 0; i < array_len(block->statements, Statement *); i++)
+            {
+                Value * output = block->statements[i]->output;
+                if (output)
+                {
+                    assert(output->regalloced);
+                    func->written_registers[output->regalloc] = 1;
+                }
+            }
         }
     }
 }

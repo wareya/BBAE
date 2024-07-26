@@ -424,7 +424,7 @@ typedef struct _Function {
     
     // metadata used by some optimizations
     size_t statement_count; // inlining heuristic
-    uint8_t performs_calls; // inlining heuristic
+    uint8_t performs_calls; // inlining heuristic and regalloc heuristic
 } Function;
 
 static Function * new_func(void)
