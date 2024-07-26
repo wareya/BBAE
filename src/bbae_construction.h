@@ -847,7 +847,6 @@ static void block_edges_connect(Program * program)
     }
 }
 
-
 static void block_statements_connect(Program * program)
 {
     for (size_t f = 0; f < array_len(program->functions, Function *); f++)
@@ -866,7 +865,6 @@ static void block_statements_connect(Program * program)
         }
     }
 }
-    
 
 static void connect_graphs(Program * program)
 {

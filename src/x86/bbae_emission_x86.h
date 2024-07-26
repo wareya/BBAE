@@ -633,8 +633,7 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
                     {
                         if (statement->output->regalloc >= REG_XMM0 && op1_op.value->variant == VALUE_CONST)
                         {
-                            const char * name = make_temp_name();
-                            add_static_i64(program, name, op1_op.value->constant);
+                            const char * name = add_static_i64_anonymous(program, op1_op.value->constant);
                             
                             EncOperand op_dummy = zy_mem(REG_RIP, 0x7FFFFFFF, 8);
                             

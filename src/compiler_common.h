@@ -139,6 +139,18 @@ static uint64_t my_strtoull(const char * str, const char ** endptr)
     return negative ? -out : out;
 }
 
+static uint64_t temp_ctr = 0;
+static char * make_temp_name(void)
+{
+    temp_ctr += 1;
+    size_t len = snprintf(0, 0, "__bbae_temp_%zu", temp_ctr) + 1;
+    char * str = zero_alloc(len + 1);
+    snprintf(str, len, "__bbae_temp_%zu", temp_ctr);
+    assert(len > 12);
+    assert(strcmp(str, "__bbae_temp_") != 0);
+    return str;
+}
+
 enum BBAE_TYPE_VARIANT {
     TYPE_INVALID,
     TYPE_NONE,
@@ -441,6 +453,7 @@ typedef struct _StaticData {
     uint64_t init_data_short; // only used if size of type is 8 or less
     uint8_t * init_data_long;
     size_t location; // starts out uninitialized, becomes initialized when code generation is done
+    uint8_t is_private;
 } StaticData;
 
 typedef struct _Program {
@@ -464,25 +477,82 @@ static Function * find_func(Program * program, const char * name)
     return 0;
 }
 
-static void add_static_i8(Program * program, const char * name, uint8_t value)
+static const char * find_static_by_value(Program * program, Type type, uint64_t value, uint8_t private_only)
 {
-    StaticData data = {name, basic_type(TYPE_I8), value, 0, 0};
+    for (size_t i = 0; i < array_len(program->statics, StaticData); i++)
+    {
+        StaticData stat = program->statics[i];
+        if (!private_only && !stat.is_private)
+            continue;
+        if (!types_same(stat.type, type))
+            continue;
+        if (type_is_agg(stat.type))
+        {
+            uint8_t * data = (uint8_t *)value;
+            if (memcmp(data, stat.init_data_long, type_size(stat.type)) == 0)
+                return stat.name;
+        }
+        else if (stat.init_data_short == value)
+            return stat.name;
+    }
+    return 0;
+}
+
+static void add_static_i8(Program * program, const char * name, uint8_t value, uint8_t is_private)
+{
+    StaticData data = {name, basic_type(TYPE_I8), value, 0, 0, is_private};
     array_push(program->statics, StaticData, data);
 }
-static void add_static_i16(Program * program, const char * name, uint16_t value)
+static const char * add_static_i8_anonymous(Program * program, uint8_t value)
 {
-    StaticData data = {name, basic_type(TYPE_I16), value, 0, 0};
+    const char * found_name = find_static_by_value(program, basic_type(TYPE_I8), value, 1);
+    if (found_name)
+        return found_name;
+    const char * name = make_temp_name();
+    add_static_i8(program, name, value, 1);
+    return name;
+}
+static void add_static_i16(Program * program, const char * name, uint16_t value, uint8_t is_private)
+{
+    StaticData data = {name, basic_type(TYPE_I16), value, 0, 0, is_private};
     array_push(program->statics, StaticData, data);
 }
-static void add_static_i32(Program * program, const char * name, uint32_t value)
+static const char * add_static_i16_anonymous(Program * program, uint16_t value)
 {
-    StaticData data = {name, basic_type(TYPE_I32), value, 0, 0};
+    const char * found_name = find_static_by_value(program, basic_type(TYPE_I16), value, 1);
+    if (found_name)
+        return found_name;
+    const char * name = make_temp_name();
+    add_static_i16(program, name, value, 1);
+    return name;
+}
+static void add_static_i32(Program * program, const char * name, uint32_t value, uint8_t is_private)
+{
+    StaticData data = {name, basic_type(TYPE_I32), value, 0, 0, is_private};
     array_push(program->statics, StaticData, data);
 }
-static void add_static_i64(Program * program, const char * name, uint64_t value)
+static const char * add_static_i32_anonymous(Program * program, uint32_t value)
 {
-    StaticData data = {name, basic_type(TYPE_I64), value, 0, 0};
+    const char * found_name = find_static_by_value(program, basic_type(TYPE_I32), value, 1);
+    if (found_name)
+        return found_name;
+    const char * name = make_temp_name();
+    add_static_i32(program, name, value, 1);
+    return name;
+}
+static void add_static_i64(Program * program, const char * name, uint64_t value, uint8_t is_private)
+{
+    StaticData data = {name, basic_type(TYPE_I64), value, 0, 0, is_private};
     array_push(program->statics, StaticData, data);
+}
+static const char * add_static_i64_anonymous(Program * program, uint64_t value)
+{
+    const char * found_name = find_static_by_value(program, basic_type(TYPE_I64), value, 1);
+    if (found_name)
+        return found_name;
+    const char * name = make_temp_name();
+    add_static_i64(program, name, value, 1);
+    return name;
 }
 
 static StaticData find_static(Program * program, const char * name)
@@ -633,18 +703,6 @@ static Operand new_op_separator(void)
     return op;
 }
 
-static uint64_t temp_ctr = 0;
-static char * make_temp_name(void)
-{
-    temp_ctr += 1;
-    size_t len = snprintf(0, 0, "__bbae_temp_%zu", temp_ctr) + 1;
-    char * str = zero_alloc(len + 1);
-    snprintf(str, len, "__bbae_temp_%zu", temp_ctr);
-    assert(len > 12);
-    assert(strcmp(str, "__bbae_temp_") != 0);
-    return str;
-}
-
 static void add_statement_output(Statement * statement)
 {
     if (statement->output_name)
@@ -735,6 +793,119 @@ size_t find_separator_index(Operand * args)
     return (size_t)-1;
 }
 
+static uint8_t statement_is_terminator(Statement * a)
+{
+    if (strcmp(a->statement_name, "goto") == 0 ||
+        strcmp(a->statement_name, "if") == 0 ||
+        strcmp(a->statement_name, "exit") == 0 ||
+        strcmp(a->statement_name, "return") == 0)
+        return 1;
+    return 0;
+}
+
+static uint8_t statement_has_side_effects(Statement * a)
+{
+    assert(a);
+    // statements with no output always have side effects
+    if (!a->output)
+        return 1;
+    // terminators always have side effects (on control flow)
+    if (statement_is_terminator(a))
+        return 1;
+    // function calls always have side effects
+    if (strcmp(a->statement_name, "call_eval") == 0)
+        return 1;
+    // FIXME check for volatile loads
+    return 0;
+}
+
+static uint8_t values_same(Value * a, Value * b)
+{
+    if (a == b)
+        return 1;
+    if (a->variant != b->variant)
+        return 0;
+    if (a->variant == VALUE_CONST)
+    {
+        if (!types_same(a->type, b->type))
+            return 0;
+        if (type_is_agg(a->type))
+            return memcmp((void *)a->constant, (void *)b->constant, type_size(a->type)) == 0;
+        else
+            return a->constant == b->constant;
+    }
+    if (a->variant == VALUE_ARG)
+        return strcmp(a->arg, b->arg) == 0;
+    
+    return memcmp(a, b, sizeof(Value)) == 0;
+}
+
+static uint8_t operands_same(Operand a, Operand b)
+{
+    if (a.variant != b.variant)
+        return 0;
+    // invalid operands are never the same
+    if (a.variant == OP_KIND_INVALID)
+        return 0;
+    // separators have no info, and are always the same
+    if (a.variant == OP_KIND_SEPARATOR)
+        return 1;
+    if (a.variant == OP_KIND_TYPE)
+        return types_same(a.rawtype, b.rawtype);
+    if (a.variant == OP_KIND_TEXT)
+        return strcmp(a.text, b.text) == 0;
+    if (a.variant == OP_KIND_VALUE)
+        return values_same(a.value, b.value);
+    
+    return 0;
+}
+
+static uint8_t statements_same(Statement * a, Statement * b)
+{
+    // "same" for statements here means that they can safely be substituted for one another or combined.
+    
+    // exact same object
+    if (a == b)
+        return 0;
+    // do-or-don't have outputs
+    if (!!a->output != !!b->output)
+        return 0;
+    if (a->output && !types_same(a->output->type, b->output->type))
+        return 0;
+    if (array_len(a->args, Operand) != array_len(b->args, Operand))
+        return 0;
+    if (strcmp(a->statement_name, b->statement_name) != 0)
+        return 0;
+    // strictly speaking, statements with side effects are *never* the same in SSA terms, because they can't be combined.
+    if (statement_has_side_effects(a) || statement_has_side_effects(b))
+        return 0;
+    // same output type, same statement name, same argument count... we need to check the individual operands.
+    for (size_t i = 0; i < array_len(a->args, Operand); i++)
+    {
+        if (!operands_same(a->args[i], b->args[i]))
+            return 0;
+    }
+    // every operand is the same, so we'll say the statements are the same.
+    return 1;
+}
+
+                
+static void block_replace_statement_val_args(Block * block, Value * old, Value * new)
+{
+    for (size_t j = 0; j < array_len(block->statements, Statement *); j++)
+    {
+        Statement * statement = block->statements[j];
+        for (size_t n = 0; n < array_len(statement->args, Operand); n++)
+        {
+            if (statement->args[n].variant == OP_KIND_VALUE && statement->args[n].value == old)
+            {
+                disconnect_statement_from_operand(statement, statement->args[n]);
+                statement->args[n].value = new;
+                connect_statement_to_operand(statement, statement->args[n]);
+            }
+        }
+    }
+}
 void print_ir_to(FILE * f, Program * program)
 {
     if (f == 0)

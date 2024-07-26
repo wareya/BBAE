@@ -19,6 +19,8 @@ typedef struct _RemapInfo
 
 static void * remap_lookup(RemapInfo * info, const void * oldptr)
 {
+    if (!info)
+        return 0;
     for (size_t i = 0; i < array_len(info, RemapInfo); i++)
     {
         if (info[i].oldptr == oldptr)
@@ -46,6 +48,10 @@ static char * string_clone(RemapInfo ** info, const char * old)
         return 0;
     if (remap_lookup(*info, old))
         return (char *)remap_lookup(*info, old);
+    
+    if (*info == 0)
+        *info = (RemapInfo *)zero_alloc(0);
+    
     char * ret = strcpy_z(old);
     remap_add(info, old, ret);
     return ret;
@@ -65,6 +71,10 @@ static Statement * statement_clone(RemapInfo ** info, Statement * old)
         return 0;
     if (remap_lookup(*info, old))
         return (Statement *)remap_lookup(*info, old);
+    
+    if (*info == 0)
+        *info = (RemapInfo *)zero_alloc(0);
+    
     Statement * ret = new_statement();
     memcpy(ret, old, sizeof(Statement));
     remap_add(info, old, ret);
@@ -88,6 +98,10 @@ static Block * block_clone(RemapInfo ** info, Block * old)
         return 0;
     if (remap_lookup(*info, old))
         return (Block *)remap_lookup(*info, old);
+    
+    if (*info == 0)
+        *info = (RemapInfo *)zero_alloc(0);
+    
     Block * ret = new_block();
     memcpy(ret, old, sizeof(Block));
     remap_add(info, old, ret);
@@ -114,6 +128,10 @@ static StackSlot * slot_clone(RemapInfo ** info, StackSlot * old)
         return 0;
     if (remap_lookup(*info, old))
         return (StackSlot *)remap_lookup(*info, old);
+    
+    if (*info == 0)
+        *info = (RemapInfo *)zero_alloc(0);
+    
     StackSlot * ret = (StackSlot *)zero_alloc(sizeof(StackSlot));
     memcpy(ret, old, sizeof(StackSlot));
     remap_add(info, old, ret);
@@ -129,6 +147,10 @@ static Value * value_clone(RemapInfo ** info, Value * old)
         return 0;
     if (remap_lookup(*info, old))
         return (Value *)remap_lookup(*info, old);
+    
+    if (*info == 0)
+        *info = (RemapInfo *)zero_alloc(0);
+    
     Value * ret = make_value(old->type);
     memcpy(ret, old, sizeof(Value));
     remap_add(info, old, ret);
@@ -146,28 +168,30 @@ static Value * value_clone(RemapInfo ** info, Value * old)
     return ret;
 }
 
-static Function * func_clone(Function * oldfunc)
+static Function * func_clone(RemapInfo ** info, Function * oldfunc)
 {
     if (!oldfunc)
         return 0;
     
-    RemapInfo * info = (RemapInfo *)zero_alloc(0);
+    if (*info == 0)
+        *info = (RemapInfo *)zero_alloc(0);
+    
     Function * newfunc = (Function *)zero_alloc_clone(oldfunc);
-    remap_add(&info, oldfunc, newfunc);
+    remap_add(info, oldfunc, newfunc);
     
     newfunc->args = (Value **)zero_alloc_clone(newfunc->args);
     newfunc->blocks = (Block **)zero_alloc_clone(newfunc->blocks);
     newfunc->stack_slots = (Value **)zero_alloc_clone(newfunc->stack_slots);
     
     for (size_t a = 0; a < array_len(newfunc->args, Value *); a++)
-        newfunc->args[a] = value_clone(&info, newfunc->args[a]);
+        newfunc->args[a] = value_clone(info, newfunc->args[a]);
     for (size_t i = 0; i < array_len(newfunc->blocks, Block *); i++)
-        newfunc->blocks[i] = block_clone(&info, newfunc->blocks[i]);
+        newfunc->blocks[i] = block_clone(info, newfunc->blocks[i]);
     for (size_t i = 0; i < array_len(newfunc->stack_slots, Value *); i++)
-        newfunc->stack_slots[i] = value_clone(&info, newfunc->stack_slots[i]);
+        newfunc->stack_slots[i] = value_clone(info, newfunc->stack_slots[i]);
     
-    newfunc->name = string_clone(&info, newfunc->name);
-    newfunc->entry_block = block_clone(&info, newfunc->entry_block);
+    newfunc->name = string_clone(info, newfunc->name);
+    newfunc->entry_block = block_clone(info, newfunc->entry_block);
     
     return newfunc;
 }
