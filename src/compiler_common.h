@@ -781,22 +781,23 @@ static uint8_t values_same(Value * a, Value * b)
 
 static uint8_t operands_same(Operand a, Operand b)
 {
+    // different kind of operand
     if (a.variant != b.variant)
         return 0;
     // invalid operands are never the same
     if (a.variant == OP_KIND_INVALID)
         return 0;
     // separators have no info, and are always the same
-    if (a.variant == OP_KIND_SEPARATOR)
+    else if (a.variant == OP_KIND_SEPARATOR)
         return 1;
-    if (a.variant == OP_KIND_TYPE)
+    else if (a.variant == OP_KIND_TYPE)
         return types_same(a.rawtype, b.rawtype);
-    if (a.variant == OP_KIND_TEXT)
+    else if (a.variant == OP_KIND_TEXT)
         return strcmp(a.text, b.text) == 0;
-    if (a.variant == OP_KIND_VALUE)
+    else if (a.variant == OP_KIND_VALUE)
         return values_same(a.value, b.value);
-    
-    return 0;
+    else 
+        assert("FIXME" && 0);
 }
 
 static void connect_statement_to_operand(Statement * statement, Operand op)
@@ -875,14 +876,17 @@ static uint8_t statements_same(Statement * a, Statement * b)
     
     // exact same object
     if (a == b)
-        return 0;
-    // do-or-don't have outputs
+        return 1;
+    // output-having-ness is different
     if (!!a->output != !!b->output)
         return 0;
+    // output types are different
     if (a->output && !types_same(a->output->type, b->output->type))
         return 0;
+    // arg count is different
     if (array_len(a->args, Operand) != array_len(b->args, Operand))
         return 0;
+    // statement type is different
     if (strcmp(a->statement_name, b->statement_name) != 0)
         return 0;
     // strictly speaking, statements with side effects are *never* the same in SSA terms, because they can't be combined.
@@ -897,7 +901,7 @@ static uint8_t statements_same(Statement * a, Statement * b)
     // every operand is the same, so we'll say the statements are the same.
     return 1;
 }
-     
+
 static void block_replace_statement_val_args(Block * block, Value * old, Value * new)
 {
     for (size_t j = 0; j < array_len(block->statements, Statement *); j++)
@@ -914,6 +918,7 @@ static void block_replace_statement_val_args(Block * block, Value * old, Value *
         }
     }
 }
+
 void print_ir_to(FILE * f, Program * program)
 {
     if (f == 0)

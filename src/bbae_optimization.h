@@ -183,6 +183,7 @@ static void optimization_unused_value_removal(Program * program)
             {
                 Block * block = func->blocks[b];
                 
+                // statements with no output usages or side effects
                 for (size_t i = 0; i < array_len(block->statements, Statement *) - 1; i++)
                 {
                     Statement * statement = block->statements[i];
@@ -202,9 +203,38 @@ static void optimization_unused_value_removal(Program * program)
                     }
                 }
                 
+                // statements that are a mov from one SSA variable to another
+                for (size_t i = 0; i < array_len(block->statements, Statement *) - 1; i++)
+                {
+                    Statement * statement = block->statements[i];
+                    if (strcmp(statement->statement_name, "mov") == 0)
+                    {
+                        assert(statement->output);
+                        assert(array_len(statement->args, Operand) > 0);
+                        
+                        if (!statement->args[0].value)
+                            continue;
+                        if (statement->args[0].value->variant != VALUE_SSA)
+                            continue;
+                        if (statement_has_side_effects(statement))
+                            continue;
+                        
+                        assert(statement->block == statement->args[0].value->ssa->block);
+                        
+                        disconnect_statement_from_operand(statement, statement->args[0], 1);
+                        block_replace_statement_val_args(block, statement->output, statement->args[0].value);
+                        
+                        array_erase(block->statements, Statement *, i);
+                        i -= 1;
+                        
+                        did_work = 1;
+                    }
+                }
+                
                 if (b == 0)
                     continue;
                 
+                // block arguments with no uses
                 for (size_t a = 0; a < array_len(block->args, Value *); a++)
                 {
                     Value * arg = block->args[a];
@@ -403,26 +433,13 @@ static void optimization_local_CSE(Program * program)
                     continue;
                 for (size_t j = 0; j < i; j++)
                 {
-                    Statement * prev = block->statements[i];
+                    Statement * prev = block->statements[j];
                     if (statements_same(prev, statement))
                     {
                         array_erase(block->statements, Statement *, i);
                         i -= 1;
                         
-                        for (size_t e = 0; e < array_len(statement->output->edges_out, Statement *); e++)
-                        {
-                            Statement * user = statement->output->edges_out[e];
-                            for (size_t a = 0; a < array_len(user->args, Operand); a++)
-                            {
-                                if (user->args[a].variant == OP_KIND_TYPE && user->args[a].value == statement->output)
-                                {
-                                    // don't need to disconnect because the connection info is only in the statement, which we are deleting
-                                    user->args[a].value = prev->output;
-                                    connect_statement_to_operand(user, user->args[a]);
-                                }
-                            }
-                        }
-                        
+                        block_replace_statement_val_args(block, statement->output, prev->output);
                         break;
                     }
                 }
