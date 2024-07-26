@@ -194,7 +194,7 @@ static void optimization_unused_value_removal(Program * program)
                             continue;
                         
                         for (size_t i = 0; i < array_len(statement->args, Operand); i++)
-                            disconnect_statement_from_operand(statement, statement->args[i], 0);
+                            disconnect_statement_from_operand(statement, statement->args[i], 1);
                         
                         array_erase(block->statements, Statement *, i);
                         i -= 1;
@@ -221,7 +221,7 @@ static void optimization_unused_value_removal(Program * program)
                         
                         assert(statement->block == statement->args[0].value->ssa->block);
                         
-                        disconnect_statement_from_operand(statement, statement->args[0], 1);
+                        disconnect_statement_from_operand(statement, statement->args[0], 0);
                         block_replace_statement_val_args(block, statement->output, statement->args[0].value);
                         
                         array_erase(block->statements, Statement *, i);
@@ -289,7 +289,7 @@ static void optimization_unused_value_removal(Program * program)
                             {
                                 if (strcmp(statement->args[0].text, block->name) == 0)
                                 {
-                                    disconnect_statement_from_operand(statement, statement->args[a + 1], 0);
+                                    disconnect_statement_from_operand(statement, statement->args[a + 1], 1);
                                     array_erase(statement->args, Operand, a + 1);
                                 }
                             }
@@ -298,7 +298,7 @@ static void optimization_unused_value_removal(Program * program)
                                 assert(a + 2 < array_len(statement->args, Operand));
                                 if (strcmp(statement->args[1].text, block->name) != 0)
                                 {
-                                    disconnect_statement_from_operand(statement, statement->args[a + 2], 0);
+                                    disconnect_statement_from_operand(statement, statement->args[a + 2], 1);
                                     array_erase(statement->args, Operand, a + 2);
                                 }
                                 size_t separator_index = find_separator_index(statement->args);
@@ -306,7 +306,7 @@ static void optimization_unused_value_removal(Program * program)
                                 assert(separator_index + 2 + a < array_len(statement->args, Operand));
                                 if (strcmp(statement->args[separator_index + 1].text, block->name) != 0)
                                 {
-                                    disconnect_statement_from_operand(statement, statement->args[separator_index + 2 + a], 0);
+                                    disconnect_statement_from_operand(statement, statement->args[separator_index + 2 + a], 1);
                                     array_erase(statement->args, Operand, separator_index + 2 + a);
                                 }
                             }
@@ -323,7 +323,7 @@ static void optimization_unused_value_removal(Program * program)
                             {
                                 assert(strcmp(statement->args[0].text, block->name) == 0);
                                 assert(a + 1 < array_len(statement->args, Operand));
-                                disconnect_statement_from_operand(statement, statement->args[a + 1], 0);
+                                disconnect_statement_from_operand(statement, statement->args[a + 1], 1);
                                 array_erase(statement->args, Operand, a + 1);
                             }
                             else if (strcmp(statement->statement_name, "if") == 0)
@@ -331,7 +331,7 @@ static void optimization_unused_value_removal(Program * program)
                                 if (strcmp(statement->args[1].text, block->name) == 0)
                                 {
                                     assert(a + 2 < array_len(statement->args, Operand));
-                                    disconnect_statement_from_operand(statement, statement->args[a + 2], 0);
+                                    disconnect_statement_from_operand(statement, statement->args[a + 2], 1);
                                     array_erase(statement->args, Operand, a + 2);
                                 }
                                 size_t separator_index = find_separator_index(statement->args);
@@ -339,7 +339,7 @@ static void optimization_unused_value_removal(Program * program)
                                 if (strcmp(statement->args[separator_index + 1].text, block->name) == 0)
                                 {
                                     assert(separator_index + 2 + a < array_len(statement->args, Operand));
-                                    disconnect_statement_from_operand(statement, statement->args[separator_index + 2 + a], 0);
+                                    disconnect_statement_from_operand(statement, statement->args[separator_index + 2 + a], 1);
                                     array_erase(statement->args, Operand, separator_index + 2 + a);
                                 }
                             }

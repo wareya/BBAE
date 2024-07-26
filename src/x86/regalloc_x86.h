@@ -481,6 +481,55 @@ static void expire_unused_regs(Value ** reg_int_alloced, Value ** reg_float_allo
 #endif // BBAE_DEBUG_SPILLS
 }
 
+static uint8_t is_statement_commutative(Statement * statement)
+{
+    if (strcmp(statement->statement_name, "add") == 0 ||
+        strcmp(statement->statement_name, "mul") == 0 ||
+        strcmp(statement->statement_name, "imul") == 0 ||
+        strcmp(statement->statement_name, "fadd") == 0 ||
+        strcmp(statement->statement_name, "fmul") == 0)
+    {
+        return 1;
+    }
+    return 0;
+}
+
+static uint8_t statement_ops_live_until_after_statement(Statement * statement)
+{
+    if (strcmp(statement->statement_name, "call_eval") == 0)
+        return 0;
+    return 1;
+}
+
+static void increment_operand_uses_impl(Statement * statement, size_t start, size_t end)
+{
+    assert(end <= array_len(statement->args, Operand));
+    for (size_t j = start; j < end; j++)
+    {
+        Value * arg = statement->args[j].value;
+        if (arg && arg->variant != VALUE_CONST)
+        {
+            arg->alloced_use_count += 1;
+            size_t len = array_len(arg->edges_out, Value *);
+            assert(arg->alloced_use_count <= len);
+        }
+    }
+}
+
+static void increment_operand_uses_early(Statement * statement)
+{
+    if (statement_ops_live_until_after_statement(statement))
+        increment_operand_uses_impl(statement, 0, 1);
+    else
+        increment_operand_uses_impl(statement, 0, array_len(statement->args, Operand));
+}
+
+static void increment_operand_uses_late(Statement * statement)
+{
+    if (statement_ops_live_until_after_statement(statement))
+        increment_operand_uses_impl(statement, 1, array_len(statement->args, Operand));
+}
+
 static void do_regalloc_block(Function * func, Block * block)
 {
     Value * reg_int_alloced[BBAE_REGISTER_CAPACITY];
@@ -513,16 +562,7 @@ static void do_regalloc_block(Function * func, Block * block)
         Statement * statement = block->statements[i];
         
         // tick the usage count of the statement's operands
-        for (size_t j = 0; j < array_len(statement->args, Operand); j++)
-        {
-            Value * arg = statement->args[j].value;
-            if (arg && arg->variant != VALUE_CONST)
-            {
-                arg->alloced_use_count += 1;
-                size_t len = array_len(arg->edges_out, Value *);
-                assert(arg->alloced_use_count <= len);
-            }
-        }
+        increment_operand_uses_early(statement);
         
         // free no-longer-used registers, except for reserved ones (RSP, RBP, R11, XMM5)
         expire_unused_regs(reg_int_alloced, reg_float_alloced);
@@ -538,13 +578,7 @@ static void do_regalloc_block(Function * func, Block * block)
         
         //printf("-- allocating reg TYPE %d for SSA var %s in block %s\n", is_int, statement->output_name, block->name);
         
-        uint8_t op_is_commutative = 0;
-        if (strcmp(statement->statement_name, "add") == 0 ||
-            strcmp(statement->statement_name, "mul") == 0 ||
-            strcmp(statement->statement_name, "imul") == 0 ||
-            strcmp(statement->statement_name, "fadd") == 0 ||
-            strcmp(statement->statement_name, "fmul") == 0)
-            op_is_commutative = 1;
+        uint8_t op_is_commutative = is_statement_commutative(statement);
         
         uint64_t allow_mask = is_special ? rules.allowed_output_registers : 0xFFFFFFFF;
         
@@ -644,6 +678,9 @@ static void do_regalloc_block(Function * func, Block * block)
         else
             assert(where >= 16 && where <= 31);
         
+        // tick the usage count of the statement's operands
+        increment_operand_uses_late(statement);
+            
         // spill clobbered registers
         if (is_special && rules.clobbered_registers)
         {

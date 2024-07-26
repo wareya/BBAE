@@ -902,7 +902,7 @@ static void validate_links(Program * program)
                 }
                 if (statement->output)
                 {
-                    size_t edge_count = array_len(statement->output->edges_out, Statement *);
+                    //size_t edge_count = array_len(statement->output->edges_out, Statement *);
                     for (size_t e = 0; e < array_len(statement->output->edges_out, Statement *); e++)
                     {
                         Statement * other = statement->output->edges_out[e];

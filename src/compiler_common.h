@@ -143,11 +143,13 @@ static uint64_t temp_ctr = 0;
 static char * make_temp_name(void)
 {
     temp_ctr += 1;
-    size_t len = snprintf(0, 0, "__bbae_temp_%zu", temp_ctr) + 1;
+    //size_t len = snprintf(0, 0, "__bbae_temp_%zu", temp_ctr) + 1;
+    size_t len = snprintf(0, 0, "btemp_%zu", temp_ctr) + 1;
     char * str = zero_alloc(len + 1);
-    snprintf(str, len, "__bbae_temp_%zu", temp_ctr);
-    assert(len > 12);
-    assert(strcmp(str, "__bbae_temp_") != 0);
+    //snprintf(str, len, "__bbae_temp_%zu", temp_ctr);
+    snprintf(str, len, "btemp_%zu", temp_ctr);
+    //assert(strcmp(str, "__bbae_temp_") != 0);
+    assert(strcmp(str, "btemp_") != 0);
     return str;
 }
 
