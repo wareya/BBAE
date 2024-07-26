@@ -758,67 +758,6 @@ static void add_statement_output(Statement * statement)
     }
 }
 
-static void connect_statement_to_operand(Statement * statement, Operand op)
-{
-    if (op.variant == OP_KIND_VALUE)
-    {
-        Value * val = op.value;
-        if (val->variant == VALUE_ARG || val->variant == VALUE_SSA || val->variant == VALUE_STACKADDR)
-            array_push(val->edges_out, Statement *, statement);
-    }
-}
-
-static void disconnect_statement_from_operand(Statement * statement, Operand op)
-{
-    if (op.variant != OP_KIND_VALUE)
-        return;
-    Value * val = op.value;
-    for (size_t i = 0; i < array_len(val->edges_out, Statement *); i++)
-    {
-        if (val->edges_out[i] == statement)
-        {
-            array_erase(val->edges_out, Statement *, i);
-            break;
-        }
-    }
-}
-
-size_t find_separator_index(Operand * args)
-{
-    for (size_t i = 2; i < array_len(args, Operand); i++)
-    {
-        if (args[i].variant == OP_KIND_SEPARATOR)
-            return i;
-    }
-    return (size_t)-1;
-}
-
-static uint8_t statement_is_terminator(Statement * a)
-{
-    if (strcmp(a->statement_name, "goto") == 0 ||
-        strcmp(a->statement_name, "if") == 0 ||
-        strcmp(a->statement_name, "exit") == 0 ||
-        strcmp(a->statement_name, "return") == 0)
-        return 1;
-    return 0;
-}
-
-static uint8_t statement_has_side_effects(Statement * a)
-{
-    assert(a);
-    // statements with no output always have side effects
-    if (!a->output)
-        return 1;
-    // terminators always have side effects (on control flow)
-    if (statement_is_terminator(a))
-        return 1;
-    // function calls always have side effects
-    if (strcmp(a->statement_name, "call_eval") == 0)
-        return 1;
-    // FIXME check for volatile loads
-    return 0;
-}
-
 static uint8_t values_same(Value * a, Value * b)
 {
     if (a == b)
@@ -860,6 +799,76 @@ static uint8_t operands_same(Operand a, Operand b)
     return 0;
 }
 
+static void connect_statement_to_operand(Statement * statement, Operand op)
+{
+    uint8_t found = 0;
+    for (size_t i = 0; i < array_len(statement->args, Operand); i++)
+    {
+        if (operands_same(statement->args[i], op))
+        {
+            found = 1;
+            break;
+        }
+    }
+    assert(found);
+    Value * val = op.value;
+    if (val && (val->variant == VALUE_ARG || val->variant == VALUE_SSA || val->variant == VALUE_STACKADDR))
+        array_push(val->edges_out, Statement *, statement);
+}
+
+static void disconnect_statement_from_operand(Statement * statement, Operand op, uint8_t once)
+{
+    if (op.variant != OP_KIND_VALUE)
+        return;
+    Value * val = op.value;
+    for (size_t i = 0; i < array_len(val->edges_out, Statement *); i++)
+    {
+        if (val->edges_out[i] == statement)
+        {
+            array_erase(val->edges_out, Statement *, i);
+            i -= 1;
+            if (once)
+                break;
+        }
+    }
+}
+
+size_t find_separator_index(Operand * args)
+{
+    for (size_t i = 2; i < array_len(args, Operand); i++)
+    {
+        if (args[i].variant == OP_KIND_SEPARATOR)
+            return i;
+    }
+    return (size_t)-1;
+}
+
+static uint8_t statement_is_terminator(Statement * a)
+{
+    if (strcmp(a->statement_name, "goto") == 0 ||
+        strcmp(a->statement_name, "if") == 0 ||
+        strcmp(a->statement_name, "exit") == 0 ||
+        strcmp(a->statement_name, "return") == 0)
+        return 1;
+    return 0;
+}
+
+static uint8_t statement_has_side_effects(Statement * a)
+{
+    assert(a);
+    // statements with no output always have side effects
+    if (!a->output)
+        return 1;
+    // terminators always have side effects (on control flow)
+    if (statement_is_terminator(a))
+        return 1;
+    // function calls always have side effects
+    if (strcmp(a->statement_name, "call_eval") == 0)
+        return 1;
+    // FIXME check for volatile loads
+    return 0;
+}
+
 static uint8_t statements_same(Statement * a, Statement * b)
 {
     // "same" for statements here means that they can safely be substituted for one another or combined.
@@ -888,8 +897,7 @@ static uint8_t statements_same(Statement * a, Statement * b)
     // every operand is the same, so we'll say the statements are the same.
     return 1;
 }
-
-                
+     
 static void block_replace_statement_val_args(Block * block, Value * old, Value * new)
 {
     for (size_t j = 0; j < array_len(block->statements, Statement *); j++)
@@ -899,7 +907,7 @@ static void block_replace_statement_val_args(Block * block, Value * old, Value *
         {
             if (statement->args[n].variant == OP_KIND_VALUE && statement->args[n].value == old)
             {
-                disconnect_statement_from_operand(statement, statement->args[n]);
+                disconnect_statement_from_operand(statement, statement->args[n], 1);
                 statement->args[n].value = new;
                 connect_statement_to_operand(statement, statement->args[n]);
             }

@@ -774,7 +774,7 @@ static void split_blocks(Program * program)
                                 if (statement->args[n].variant == OP_KIND_VALUE && statement->args[n].value == value)
                                 {
                                     printf("replaced a usage of %s in statement type %s\n", output_names[a], statement->statement_name);
-                                    disconnect_statement_from_operand(statement, statement->args[n]);
+                                    disconnect_statement_from_operand(statement, statement->args[n], 1);
                                     statement->args[n].value = arg;
                                     connect_statement_to_operand(statement, statement->args[n]);
                                 }
@@ -902,20 +902,32 @@ static void validate_links(Program * program)
                 }
                 if (statement->output)
                 {
+                    size_t edge_count = array_len(statement->output->edges_out, Statement *);
                     for (size_t e = 0; e < array_len(statement->output->edges_out, Statement *); e++)
                     {
                         Statement * other = statement->output->edges_out[e];
                         assert(other->block == block);
-                        uint8_t found = 0;
+                        uint8_t found_arg = 0;
+                        for (size_t i = 0; i < array_len(other->args, Operand); i++)
+                        {
+                            if (other->args[i].value == statement->output)
+                            {
+                                found_arg = 1;
+                                break;
+                            }
+                        }
+                        assert(found_arg);
+                        
+                        uint8_t found_statement = 0;
                         for (size_t i = 0; i < array_len(block->statements, Statement *); i++)
                         {
                             if (block->statements[i] == other)
                             {
-                                found = 1;
+                                found_statement = 1;
                                 break;
                             }
                         }
-                        assert(found);
+                        assert(found_statement);
                     }
                 }
                 for (size_t a = 0; a < array_len(statement->args, Operand); a++)

@@ -48,22 +48,22 @@ static void _remap_args_span(Value ** block_args, Operand * exit_args, Statement
         entry_arg_count += 1;
     assert(entry_arg_count == block_arg_count);
     
-    Operand * new_args = _remap_args(block_args, exit_args, entry->args + offset);
+    Operand * args_copy = _remap_args(block_args, exit_args, entry->args + offset);
     
-    Operand label = new_args[0];
+    Operand label = args_copy[0];
     assert(label.variant == OP_KIND_TEXT);
     entry->args[entry_label_offset] = label;
-    assert(array_len(exit_args, Operand) == array_len(new_args, Operand));
+    assert(array_len(exit_args, Operand) == array_len(args_copy, Operand));
     
     for (size_t i = 0; i < block_arg_count; i++)
     {
-        disconnect_statement_from_operand(entry, entry->args[offset]);
+        disconnect_statement_from_operand(entry, entry->args[offset], 1);
         array_erase(entry->args, Operand, offset);
     }
     
     for (size_t i = 1; i < array_len(exit_args, Operand); i++)
     {
-        Operand op = new_args[i];
+        Operand op = args_copy[i];
         array_insert(entry->args, Operand, offset + i - 1, op);
         connect_statement_to_operand(entry, op);
     }
@@ -88,6 +88,7 @@ static void optimization_empty_block_removal(Program * program)
                 continue;
             Statement * exit = block->statements[0];
             assert(exit);
+            
             if (strcmp(exit->statement_name, "goto") == 0)
             {
                 Block * target_block = find_block(func, exit->args[0].text);
@@ -106,15 +107,10 @@ static void optimization_empty_block_removal(Program * program)
                 array_erase(func->blocks, Block *, b);
                 
                 for (size_t i = 1; i < array_len(exit->args, Operand); i++)
-                {
-                    if (exit->args[i].value)
-                        exit->args[i].value->temp = i - 1;
-                    disconnect_statement_from_operand(exit, exit->args[0]);
-                }
+                    disconnect_statement_from_operand(exit, exit->args[i], 0);
                 
                 size_t block_arg_count = array_len(block->args, Value *);
                 
-                // FIXME make sure arguments get transferred properly even if they're in a different order
                 for (size_t i = 0; i < array_len(block->edges_in, Statement *); i++)
                 {
                     Statement * entry = block->edges_in[i];
@@ -197,7 +193,7 @@ static void optimization_unused_value_removal(Program * program)
                             continue;
                         
                         for (size_t i = 0; i < array_len(statement->args, Operand); i++)
-                            disconnect_statement_from_operand(statement, statement->args[i]);
+                            disconnect_statement_from_operand(statement, statement->args[i], 0);
                         
                         array_erase(block->statements, Statement *, i);
                         i -= 1;
@@ -263,7 +259,7 @@ static void optimization_unused_value_removal(Program * program)
                             {
                                 if (strcmp(statement->args[0].text, block->name) == 0)
                                 {
-                                    disconnect_statement_from_operand(statement, statement->args[a + 1]);
+                                    disconnect_statement_from_operand(statement, statement->args[a + 1], 0);
                                     array_erase(statement->args, Operand, a + 1);
                                 }
                             }
@@ -272,7 +268,7 @@ static void optimization_unused_value_removal(Program * program)
                                 assert(a + 2 < array_len(statement->args, Operand));
                                 if (strcmp(statement->args[1].text, block->name) != 0)
                                 {
-                                    disconnect_statement_from_operand(statement, statement->args[a + 2]);
+                                    disconnect_statement_from_operand(statement, statement->args[a + 2], 0);
                                     array_erase(statement->args, Operand, a + 2);
                                 }
                                 size_t separator_index = find_separator_index(statement->args);
@@ -280,7 +276,7 @@ static void optimization_unused_value_removal(Program * program)
                                 assert(separator_index + 2 + a < array_len(statement->args, Operand));
                                 if (strcmp(statement->args[separator_index + 1].text, block->name) != 0)
                                 {
-                                    disconnect_statement_from_operand(statement, statement->args[separator_index + 2 + a]);
+                                    disconnect_statement_from_operand(statement, statement->args[separator_index + 2 + a], 0);
                                     array_erase(statement->args, Operand, separator_index + 2 + a);
                                 }
                             }
@@ -297,7 +293,7 @@ static void optimization_unused_value_removal(Program * program)
                             {
                                 assert(strcmp(statement->args[0].text, block->name) == 0);
                                 assert(a + 1 < array_len(statement->args, Operand));
-                                disconnect_statement_from_operand(statement, statement->args[a + 1]);
+                                disconnect_statement_from_operand(statement, statement->args[a + 1], 0);
                                 array_erase(statement->args, Operand, a + 1);
                             }
                             else if (strcmp(statement->statement_name, "if") == 0)
@@ -305,7 +301,7 @@ static void optimization_unused_value_removal(Program * program)
                                 if (strcmp(statement->args[1].text, block->name) == 0)
                                 {
                                     assert(a + 2 < array_len(statement->args, Operand));
-                                    disconnect_statement_from_operand(statement, statement->args[a + 2]);
+                                    disconnect_statement_from_operand(statement, statement->args[a + 2], 0);
                                     array_erase(statement->args, Operand, a + 2);
                                 }
                                 size_t separator_index = find_separator_index(statement->args);
@@ -313,7 +309,7 @@ static void optimization_unused_value_removal(Program * program)
                                 if (strcmp(statement->args[separator_index + 1].text, block->name) == 0)
                                 {
                                     assert(separator_index + 2 + a < array_len(statement->args, Operand));
-                                    disconnect_statement_from_operand(statement, statement->args[separator_index + 2 + a]);
+                                    disconnect_statement_from_operand(statement, statement->args[separator_index + 2 + a], 0);
                                     array_erase(statement->args, Operand, separator_index + 2 + a);
                                 }
                             }
@@ -338,76 +334,51 @@ static void optimization_trivial_block_splicing(Program * program)
             assert(array_len(block->statements, Statement *) > 0);
             Statement * exit = block->statements[array_len(block->statements, Statement *) - 1];
             assert(exit);
-            if (strcmp(exit->statement_name, "goto") == 0)
+            
+            if (strcmp(exit->statement_name, "goto") != 0)
+                continue;
+            
+            Block * target_block = find_block(func, exit->args[0].text);
+            assert(target_block);
+            // multiple inputs to target block. skip.
+            if (array_len(target_block->edges_in, Statement *) != 1)
+                continue;
+            
+            size_t target_block_index = ptr_array_find(func->blocks, target_block);
+            assert(target_block_index != (size_t)-1);
+            
+            array_erase(func->blocks, Block *, target_block_index);
+            
+            assert(array_len(exit->args, Operand) - 1 == array_len(target_block->args, Value *));
+            
+            const char * name_prefix = string_concat(make_temp_name(), "_");
+            
+            for (size_t i = 1; i < array_len(exit->args, Operand); i++)
             {
-                Block * target_block = find_block(func, exit->args[0].text);
-                assert(target_block);
-                size_t target_block_in_edge_index = (size_t)-1;
-                for (size_t i = 0; i < array_len(target_block->edges_in, Statement *); i++)
-                {
-                    if (target_block->edges_in[i] == exit)
-                    {
-                        target_block_in_edge_index = i;
-                        break;
-                    }
-                }
-                assert(target_block_in_edge_index != (size_t)-1);
-                
-                array_erase(func->blocks, Block *, b);
-                
-                for (size_t i = 1; i < array_len(exit->args, Operand); i++)
-                {
-                    if (exit->args[i].value)
-                        exit->args[i].value->temp = i - 1;
-                    disconnect_statement_from_operand(exit, exit->args[0]);
-                }
-                
-                size_t block_arg_count = array_len(block->args, Value *);
-                
-                // FIXME make sure arguments get transferred properly even if they're in a different order
-                for (size_t i = 0; i < array_len(block->edges_in, Statement *); i++)
-                {
-                    Statement * entry = block->edges_in[i];
-                    if (strcmp(entry->statement_name, "goto") == 0)
-                    {
-                        assert(strcmp(entry->args[0].text, block->name) == 0);
-                        assert(block_arg_count == array_len(entry->args, Operand) - 1);
-                        _remap_args_span(block->args, exit->args, entry, 0);
-                        target_block->edges_in[target_block_in_edge_index] = entry;
-                    }
-                    if (strcmp(entry->statement_name, "if") == 0)
-                    {
-                        // need to make sure the separator exists
-                        size_t separator_index = find_separator_index(entry->args);
-                        assert(separator_index != (size_t)-1);
-                        assert(entry->args[1].variant == OP_KIND_TEXT);
-                        
-                        uint8_t filled_once = 0;
-                        
-                        if (strcmp(entry->args[1].text, block->name) == 0)
-                        {
-                            _remap_args_span(block->args, exit->args, entry, 1);
-                            target_block->edges_in[target_block_in_edge_index] = entry;
-                            filled_once = 1;
-                        }
-                        
-                        // need to recalculate because it might have moved
-                        separator_index = find_separator_index(entry->args);
-                        assert(separator_index != (size_t)-1);
-                        
-                        assert(entry->args[separator_index + 1].variant == OP_KIND_TEXT);
-                        
-                        if (strcmp(entry->args[separator_index + 1].text, block->name) == 0)
-                        {
-                            _remap_args_span(block->args, exit->args, entry, separator_index + 1);
-                            if (!filled_once)
-                                target_block->edges_in[target_block_in_edge_index] = entry;
-                            else
-                                array_insert(target_block->edges_in, Statement *, target_block_in_edge_index, entry);
-                        }
-                    }
-                }
+                disconnect_statement_from_operand(exit, exit->args[i], 1);
+                Value * arg = target_block->args[i - 1];
+                assert(arg->arg);
+                arg->arg = string_concat(name_prefix, arg->arg);
+                assert(exit->args[i].value);
+                block_replace_statement_val_args(target_block, arg, exit->args[i].value);
             }
+            
+            array_erase(block->statements, Statement *, array_len(block->statements, Statement *) - 1);
+            
+            for (size_t i = 0; i < array_len(target_block->statements, Statement *); i++)
+            {
+                Statement * statement = target_block->statements[i];
+                if (statement->output_name)
+                    statement->output_name = string_concat(name_prefix, statement->output_name);
+                
+                statement->block = block;
+                array_push(block->statements, Statement *, statement);
+            }
+            
+            // may need to join on same block again
+            b -= 1;
+            
+            puts("-------!!!-!-! spliced a block");
         }
     }
     _block_edges_fix(program);
@@ -545,10 +516,10 @@ static void optimization_global_mem2reg(Program * program)
                     {
                         statement->statement_name = strcpy_z("mov");
                         
-                        disconnect_statement_from_operand(statement, statement->args[0]);
+                        disconnect_statement_from_operand(statement, statement->args[0], 1);
                         array_erase(statement->args, Operand, 0);
                         
-                        disconnect_statement_from_operand(statement, statement->args[0]);
+                        disconnect_statement_from_operand(statement, statement->args[0], 1);
                         Operand op = new_op_val(newval);
                         statement->args[0] = op;
                         connect_statement_to_operand(statement, op);
@@ -564,7 +535,7 @@ static void optimization_global_mem2reg(Program * program)
                         statement->output = newval_mutated;
                         statement->statement_name = strcpy_z("mov");
                         
-                        disconnect_statement_from_operand(statement, statement->args[0]);
+                        disconnect_statement_from_operand(statement, statement->args[0], 1);
                         array_erase(statement->args, Operand, 0);
                         
                         newval = newval_mutated;
@@ -748,11 +719,10 @@ static void optimization_function_inlining(Program * program)
             
             // For the sake of simplicity we dump every cross-call live SSA variable to a stack slot.
             // This way we don't have to rewrite all the blocks in the inlined function.
-            size_t cutoff = call_index;
             for (size_t i = 0; i < array_len(output_latest_use, uint64_t); i++)
             {
                 size_t latest = output_latest_use[i];
-                if (latest <= cutoff)
+                if (latest <= call_index)
                     continue;
                 
                 Value * var = outputs[i];
@@ -811,32 +781,32 @@ static void optimization_function_inlining(Program * program)
             
             // clone inlined func body so that we can can rewrite its blocks
             RemapInfo * info = 0;
-            Function * cloned = func_clone(&info, called_func);
+            Function * cloned_func = func_clone(&info, called_func);
             
             // rewrite entry block to use block args instead of func args
-            assert(cloned->entry_block);
-            cloned->entry_block->args = cloned->args;
-            cloned->args = (Value **)zero_alloc(0);
+            assert(cloned_func->entry_block);
+            cloned_func->entry_block->args = cloned_func->args;
+            cloned_func->args = (Value **)zero_alloc(0);
             
             // need a unique prefix for some later actions
             const char * name_prefix = string_concat(make_temp_name(), "_");
             
             // move stack slots into outer function
-            for (size_t s = 0; s < array_len(cloned->stack_slots, Value *); s++)
+            for (size_t s = 0; s < array_len(cloned_func->stack_slots, Value *); s++)
             {
-                Value * slotval = cloned->stack_slots[s];
+                Value * slotval = cloned_func->stack_slots[s];
                 StackSlot * slotinfo = slotval->slotinfo;
                 slotinfo->name = string_concat(name_prefix, slotinfo->name);
-                array_push(func->stack_slots, Value *, cloned->stack_slots[s]);
+                array_push(func->stack_slots, Value *, cloned_func->stack_slots[s]);
             }
-            cloned->stack_slots = 0;
+            cloned_func->stack_slots = 0;
             
             // invasive rewrites:
             // - add a prefix to block names, rewrite if and goto to use prefixed block names
             // - rewrite returns to jump out to the next block instead
-            for (size_t b = 0; b < array_len(cloned->blocks, Block *); b++)
+            for (size_t b = 0; b < array_len(cloned_func->blocks, Block *); b++)
             {
-                Block * rw_block = cloned->blocks[b];
+                Block * rw_block = cloned_func->blocks[b];
                 rw_block->name = string_concat(name_prefix, called_func->name);
                 
                 for (size_t s = 0; s < array_len(rw_block->statements, Statement *); s++)
@@ -846,8 +816,14 @@ static void optimization_function_inlining(Program * program)
                     if (strcmp(statement->statement_name, "return") == 0)
                     {
                         statement->statement_name = strcpy_z("goto");
+                        
                         if (return_type.variant == TYPE_NONE)
+                        {
+                            for (size_t i = 0; i < array_len(statement->args, Operand); i++)
+                                disconnect_statement_from_operand(statement, statement->args[i], 0);
                             statement->args = (Operand *)zero_alloc(0);
+                        }
+                        
                         array_insert(statement->args, Operand, 0, new_op_text(next_block->name));
                     }
                     else if (strcmp(statement->statement_name, "if") == 0 ||
@@ -879,7 +855,7 @@ static void optimization_function_inlining(Program * program)
                     {
                         if (edge->args[i].value == call->output)
                         {
-                            disconnect_statement_from_operand(edge, edge->args[i]);
+                            disconnect_statement_from_operand(edge, edge->args[i], 1);
                             edge->args[i].value = argval;
                             connect_statement_to_operand(edge, edge->args[i]);
                         }
@@ -891,11 +867,12 @@ static void optimization_function_inlining(Program * program)
             call->output = 0;
             call->output_name = 0;
             call->statement_name = strcpy_z("goto");
-            call->args[0] = new_op_text(cloned->entry_block->name);
+            disconnect_statement_from_operand(call, call->args[0], 1);
+            call->args[0] = new_op_text(cloned_func->entry_block->name);
             
             // insert blocks from inlined function into outer function
-            for (size_t i = 0; i < array_len(cloned->blocks, Block *); i++)
-                array_insert(func->blocks, Block *, b + i + 1, cloned->blocks[i]);
+            for (size_t i = 0; i < array_len(cloned_func->blocks, Block *); i++)
+                array_insert(func->blocks, Block *, b + i + 1, cloned_func->blocks[i]);
         }
     }
     _block_edges_fix(program);
