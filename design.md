@@ -96,7 +96,7 @@ func my_func
 endfunc
 ```
 
-This specifies at least 16 bytes of storage for the stack slot `a`, and creates a SSA variable a, and stores an i64 pointer to that stack slot in that SSA variable. The pointer is assumed to not alias any other memory and cannot be used to access any data outside of its own stack slot. The storage will remain valid exactly until the function exits or the compiler knows that it cannot be legally accessed any more.
+This specifies at least 16 bytes of storage for the stack slot `a`, and creates a SSA variable a, and stores a pointer to that stack slot in that SSA variable. The pointer is assumed to not alias any other memory and cannot be used to access any data outside of its own stack slot. The storage will remain valid exactly until the function exits or the compiler knows that it cannot be legally accessed any more.
 
 Stack slots are analogous to LLVM's alloca.
 
@@ -138,8 +138,6 @@ block label
     x = 5i8
 endfunc
 ```
-
-Integer literals with no type suffix are assumed to be i64.
 
 ------
 
@@ -225,7 +223,7 @@ x4 = mul x x3
 
 ------
 
-Function calls apply to an i64 (the function pointer) and have their function signature derived from the argument list and an explicit return type. There are two call instructions, `call` and `call_eval`. `call` is an instruction, and `call_eval` is an operation. call_eval requires a return type. For call, the return type is elided exactly if the function returns void.
+Function calls apply to an iptr (the function pointer) and have their function signature derived from the argument list and an explicit return type. There are two call instructions, `call` and `call_eval`. `call` is an instruction, and `call_eval` is an operation. call_eval requires a return type. For call, the return type is elided exactly if the function returns void.
 
 ```rs
 // like f32 x = myfunc(a, b, c)
@@ -275,26 +273,26 @@ mov any // copy any value into a new SSA variable
 load <type> iptr
 ternary i any any // any and any must be of the same type. compiles down to a conditional move, not a branch, except on platforms without conditional moves, unless the compiler determines that a branch would be faster.
 
-add i i // i and i must be of the same type
+add i i // i and i must be of the same type, OR, left is iptr and right is native-pointer-sized int (i64 or i32)
 sub i i // likewise for all of these
 mul i i // unsigned multiplication
 imul i i // signed multiplication
 
-div i i  // division by 0 produces 0
-idiv i i // division by 0 produces 0
-rem i i  // remainder by 0 produces 0
-irem i i // remainder by 0 produces 0
+div i i  // division by 0 produces 1
+idiv i i
+rem i i // remainder by 0 produces 0
+irem i i
 
 div_unsafe i i  // division by 0 produces implementation-specified behavior
-idiv_unsafe i i // division by 0 produces implementation-specified behavior
-rem_unsafe i i  // remainder by 0 produces implementation-specified behavior
-irem_unsafe i i // remainder by 0 produces implementation-specified behavior
+idiv_unsafe i i // likewise
+rem_unsafe i i  // likewise
+irem_unsafe i i // likewise
 
-shl i i // shifts i (left) left by i (right) bits
-shr i i // shifts right, but at most sizeof(i_left)*8-1 bits, even if i_right stores a larger value. shifts in zero.
-shr_unsafe i i // implementation-defined behavior if i_right is sizeof(i_left)*8 or greater
-sar i i // likewise, but shifts in the sign bit instead of zero
-sar_unsafe i i // likewise
+shl i i // shifts i (left) left by i (right) bits. shifts in zero.
+shr i i // shifts right. if sizeof(type)*8 or more bits are shifted, the result is 0.
+shr_unsafe i i // implementation-defined behavior on bit width overflow
+sar i i // likewise, but shifts in the sign bit instead of zero.
+sar_unsafe i i // implementation-defined behavior on bit width overflow
 
 and i i // bitwise and
 or i i // bitwise or
@@ -333,7 +331,7 @@ fdiv f f
 frem f f
 
 trim <type> i // cast integer to given type, which must be the same size or smaller. bitwise truncation, trims away any higher bits.
-qext <type> i // quick extend integer into the given type, which must be the same size or larger. any new bits contain arbitrary but not-undefined, not-poison data.
+qext <type> i // quick extend integer into the given type, which must be the same size or larger. any new bits contain arbitrary data. (arbitrary data is not undefined and not poison.)
 zext <type> i // zero-extend integer into the given type, which must be the same size or larger. any new bits contain zero.
 sext <type> i // sign-extend integer into the given type, which must be the same size or larger. any new bits contain a copy of the uppermost old bit.
 // the above four instructions are legal no-ops if the input and output sizes are the same. valid types are i8, i16, i32, and i64. iptr is not supported.
@@ -358,6 +356,10 @@ build agg_type any+ // build a value of an aggregate type by packing one or more
 
 call_eval <type> iptr any* // zero or more instances of any value as function arguments. iptr is function pointer. <type> is return type
 
+symbol_lookup <raw text> <int literal> // does implementation-defined symbol lookup, returning an iptr (must be able to find functions, globals and static defined in the current module)
+symbol_lookup_unsized <raw text> // same, but without an aliasing region size
+// see rest of documentation for explanation of the difference between symbol_lookup and symbol_lookup_unsized
+
 // The following operations do not generate any code of their own, but rather affect how optimizations work.
 
 freeze <any> // freezes any poison/undefined data in the given value as fixed but not-yet-known data. analogous to LLVM's freeze. returns the frozen value.
@@ -366,15 +368,11 @@ ptralias_inherit iptr iptr // Evaluates to the left iptr, but with the aliasing 
 ptralias_merge iptr iptr // Evaluates to the left iptr, but with aliasing analysis that aliases both the left and right iptr.
 ptralias_disjoint iptr iptr // Evaluates to the left iptr, starting with the aliasing analysis of the left iptr, but asserting that the output iptr and the right iptr cannot be used to derive eachother or point to each other's data.
 ptralias_bless iptr // Evaluates to iptr, but with universal aliasing.
-ptralias_curse iptr // Evaluates to iptr, but with no aliasing (i.e. is assumed to point to different data than any prior-existant pointer, including the original iptr).
+ptralias_curse iptr // Evaluates to iptr, but with no aliasing (i.e. is assumed to point to different data than any prior-existant pointer, **including the original iptr**).
 
-ptr_to_i64 iptr // returns an i64 with the same value as the given pointer
-int_to_ptr_blessed i // returns an iptr with the same value as an integer, and universal aliasing. primarily used for int-punned pointers.
-int_to_ptr_cursed i // returns an iptr with the same value as an integer, and no aliasing. primarily used for offsets.
-
-symbol_lookup <raw text> <int literal> // does implementation-defined symbol lookup, returning an iptr (must be able to find functions, globals and static defined in the current module)
-symbol_lookup_unsized <raw text> // same, but without an aliasing region size
-// see rest of documentation for explanation of the difference between symbol_lookup and symbol_lookup_unsized
+ptr_to_int iptr // returns an int of the native pointer size with the same value as the given pointer.
+int_to_ptr_blessed i // returns an iptr with the same value as an integer, and universal aliasing. primarily used for int-punned pointers. int must be of the native pointer size.
+int_to_ptr_cursed i // returns an iptr with the same value as an integer, and no aliasing. primarily used for offsets. int must be of the native pointer size.
 ```
 
 ------
