@@ -364,9 +364,9 @@ symbol_lookup_unsized <raw text> // same, but without an aliasing region size
 
 freeze <any> // freezes any poison/undefined data in the given value as fixed but not-yet-known data. analogous to LLVM's freeze. returns the frozen value.
 
-ptralias_inherit iptr iptr // Evaluates to the left iptr, but with the aliasing analysis of the right iptr.
+ptralias_reinterpret iptr iptr // Evaluates to the left iptr, but with the aliasing analysis of the right iptr.
 ptralias_merge iptr iptr // Evaluates to the left iptr, but with aliasing analysis that aliases both the left and right iptr.
-ptralias_disjoint iptr iptr // Evaluates to the left iptr, starting with the aliasing analysis of the left iptr, but asserting that the output iptr and the right iptr cannot be used to derive eachother or point to each other's data.
+ptralias_disjoint iptr iptr // Evaluates to the left iptr, starting with the aliasing analysis of the left iptr, but asserting that the output iptr and the right iptr cannot be used to derive eachother or point to each other's data. does not assert the same for the two input pointers.
 ptralias_bless iptr // Evaluates to iptr, but with universal aliasing.
 ptralias_curse iptr // Evaluates to iptr, but with no aliasing (i.e. is assumed to point to different data than any prior-existant pointer, **including the original iptr**).
 
