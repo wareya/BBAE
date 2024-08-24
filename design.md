@@ -311,12 +311,12 @@ icmp_le i i // signed <=
 icmp_g i i // signed >
 icmp_l i i // signed <
 
-fcmp_eq i i // comparison for floats.
-fcmp_ne i i // !=
-fcmp_ge i i // >=
-fcmp_le i i // <=
-fcmp_g i i // >
-fcmp_l i i // <
+fcmp_eq f f // comparison for floats.
+fcmp_ne f f // !=
+fcmp_ge f f // >=
+fcmp_le f f // <=
+fcmp_g f f // >
+fcmp_l f f // <
 
 bnot i // flips each bit in the input value and produces a new value of the same type
 neg i // produces the arithmetic negative of the input value
@@ -329,6 +329,10 @@ fsub f f
 fmul f f
 fdiv f f
 frem f f
+
+fneg f // sign-negates a float (e.g. x * -1.0), producing a float of the same type
+fbool f // produces 0u8 if the float is 0.0 or -0.0, and 1u8 otherwise (including producing 1u8 for NaN)
+fnan f // produces 1u8 if the float is NaN, and 0u8 otherwise
 
 trim <type> i // cast integer to given type, which must be the same size or smaller. bitwise truncation, trims away any higher bits.
 qext <type> i // quick extend integer into the given type, which must be the same size or larger. any new bits contain arbitrary data. (arbitrary data is not undefined and not poison.)
@@ -576,9 +580,10 @@ Pointer aliasing:
 - Pointers derived from `symbol_lookup_unsized` are assumed to alias any other pointer derived from `symbol_lookup_unsized`, including other symbols.
 - Pointers derived from `symbol_lookup` are assumed to alias only other pointers derived from the same symbol. Additionally, only accesses to the defined region can be derived from the pointer. Accesses outside the defined region are UB.
 - Pointers derived from anything else are assumed to alias any pointer whose value they derive from in any way, except for null checks.
-- Blessed pointers (via ptralias_bless), and all pointers derived from them, are assumed to alias absolutely all pointers.
+- Blessed pointers (via `ptralias_bless` or `int_to_ptr_blessed`), and all pointers derived from them, are assumed to alias absolutely all pointers.
+- Aliasing manipulation instructions like `ptralias_bless` override the above.
 
-Things that alias more things override the aliasing considerations of things that alias fewer things. For example, stack_slot-derived pointers alias all pointers of unknown origin, despite being specified as only aliasing pointers from the same stack slot, because pointer of unknown origin alias all pointers.
+Things that alias more things override the aliasing considerations of things that alias fewer things. For example, stack_slot-derived pointers alias all blessed pointers, despite being specified as only aliasing pointers from the same stack slot, because blessed pointers alias all pointers.
 
 The compiler is allowed to analyze pointer math and determine statement-specific aliasing accordingly. For example:
 
@@ -589,7 +594,7 @@ b = add buf 250
 memmove a b 16
 ```
 
-The compiler is allowed to know that a and b are only aliased for operations larger than 200 bytes, and convert the memmove into a memcpy because it's only 16 bytes.
+The compiler is allowed to know that a and b are only aliased for dara under `a` with a span larger than 200 bytes, and convert the memmove into a memcpy because it's only 16 bytes.
 
 ------
 

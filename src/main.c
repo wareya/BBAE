@@ -31,6 +31,11 @@ void print_asm(byte_buffer * code)
     }
 }
 
+void print_double(double f)
+{
+    printf("%.9f\n", f);
+}
+
 int main(int argc, char ** argv)
 {
     if (argc < 2)
@@ -40,7 +45,7 @@ int main(int argc, char ** argv)
     
     fseek(f, 0, SEEK_END);
     long length = ftell(f);
-    fseek (f, 0, SEEK_SET);
+    fseek(f, 0, SEEK_SET);
     
     char * buffer = (char *)malloc(length+1);
     if (!buffer)
@@ -71,7 +76,8 @@ int main(int argc, char ** argv)
     
     print_asm(code);
     
-    uint8_t * jit_code = copy_as_executable(code->data, code->len);
+    size_t code_len = code->len;
+    uint8_t * jit_code = copy_as_executable(code->data, &code_len);
     
     ptrdiff_t loc = -1;
     for (size_t i = 0; symbollist[i].name; i++)
@@ -85,6 +91,7 @@ int main(int argc, char ** argv)
     assert(loc >= 0);
     
     printf("-- %p\n", (void *)jit_code);
+    printf("-- %p\n", (void *)main);
     
     // suppress non-posix-compliant gcc function pointer casting warning
 #pragma GCC diagnostic push
@@ -93,20 +100,9 @@ int main(int argc, char ** argv)
 #pragma GCC diagnostic pop
     
     assert(jit_main);
-    double asdf = jit_main(5, 5);
-    printf("output: %.9f\n", asdf);
-/*
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wpedantic"
-    int (*jit_main) (int, int) = (int(*)(int, int))(void *)(jit_code);
-#pragma GCC diagnostic pop
+    double asdf = jit_main(0, 0);
     
-    assert(jit_main);
-    int asdf = jit_main(5, 5);
-    printf("output: %d (0x%X)\n", asdf, asdf);
-*/
-    
-    free_as_executable(jit_code);
+    free_as_executable(jit_code, code_len);
     free_all_compiler_allocs();
     
     free(buffer);

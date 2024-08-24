@@ -13,7 +13,7 @@
 static Program * parse(const char * buffer)
 {
     Program * program = parse_file(buffer);
-    connect_graphs(program);
+    program_finish_construction(program);
     return program;
 }
 

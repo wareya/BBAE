@@ -14,8 +14,25 @@ typedef struct _SymbolEntry
 {
     const char * name;
     size_t loc;
-    uint8_t kind; // 0 = invalid; 1 = function; 2 = static variable
+    uint8_t kind; // 0 = invalid; 1 = function; 2 = static data; 3 = global variable (different address space)
+    uint8_t visibility; // 0 = private, 1 = default (export), 2 = dllexport
 } SymbolEntry;
+
+typedef struct _UnknownSymbolUsage
+{
+    const char * name;
+    size_t loc;
+} UnknownSymbolUsage;
+
+typedef struct _CompilerMetaOutput
+{
+    // array
+    UnknownSymbolUsage * unknown_symbol_usages;
+    // array
+    SymbolEntry * symbols;
+    size_t global_var_bytes;
+} CompilerMetaOutput;
+
 
 // read the next token on the current line, return 0 if none
 // thrashes any previously-returned token. make copies!
@@ -660,16 +677,6 @@ static Value * make_stackslot_value(StackSlot * slot)
     return ret;
 }
 
-static Value * add_stack_slot(Function * func, char * name, uint64_t size)
-{            
-    StackSlot _slot = {name, size, 0, 0};
-    StackSlot * slot = (StackSlot *)zero_alloc(sizeof(StackSlot));
-    *slot = _slot;
-    Value * val = make_stackslot_value(slot);
-    array_push(func->stack_slots, Value *, val);
-    return val;
-}
-
 static Operand new_op_val(Value * val)
 {
     Operand op;
@@ -921,6 +928,116 @@ static void block_replace_statement_val_args(Block * block, Value * old, Value *
     }
 }
 
+static void validate_links(Program * program)
+{
+    for (size_t f = 0; f < array_len(program->functions, Function *); f++)
+    {
+        Function * func = program->functions[f];
+        for (size_t b = 0; b < array_len(func->blocks, Block *); b++)
+        {
+            Block * block = func->blocks[b];
+            for (size_t i = 0; i < array_len(block->statements, Statement *); i++)
+            {
+                Statement * statement = block->statements[i];
+                assert(statement->block == block);
+                if (strcmp(statement->statement_name, "goto") == 0)
+                {
+                    assert(array_len(statement->args, Value *) > 0);
+                    assert(statement->args[0].variant == OP_KIND_TEXT);
+                    for (size_t i = 1; i < array_len(statement->args, Operand); i++)
+                    {
+                        Operand op = statement->args[i];
+                        assert(op.variant == OP_KIND_VALUE);
+                    }
+                    Block * next = find_block(func, statement->args[0].text);
+                    assert(next);
+                    size_t block_arg_count = array_len(next->args, Value *);
+                    size_t statement_arg_count = array_len(statement->args, Operand);
+                    assert(block_arg_count == statement_arg_count - 1);
+                }
+                if (statement->output)
+                {
+                    //size_t edge_count = array_len(statement->output->edges_out, Statement *);
+                    for (size_t e = 0; e < array_len(statement->output->edges_out, Statement *); e++)
+                    {
+                        Statement * other = statement->output->edges_out[e];
+                        assert(other->block == block);
+                        uint8_t found_arg = 0;
+                        for (size_t i = 0; i < array_len(other->args, Operand); i++)
+                        {
+                            if (other->args[i].value == statement->output)
+                            {
+                                found_arg = 1;
+                                break;
+                            }
+                        }
+                        assert(found_arg);
+                        
+                        uint8_t found_statement = 0;
+                        for (size_t i = 0; i < array_len(block->statements, Statement *); i++)
+                        {
+                            if (block->statements[i] == other)
+                            {
+                                found_statement = 1;
+                                break;
+                            }
+                        }
+                        assert(found_statement);
+                    }
+                }
+                for (size_t a = 0; a < array_len(statement->args, Operand); a++)
+                {
+                    Operand op = statement->args[a];
+                    if (op.value)
+                    {
+                        if (op.value->ssa)
+                            assert(op.value->ssa->block == block);
+                        else if (op.value->arg)
+                        {
+                            uint8_t found = 0;
+                            size_t ba_count = (b != 0) ? array_len(block->args, Value *) : array_len(func->args, Value *);
+                            for (size_t ba = 0; ba < ba_count; ba++)
+                            {
+                                Value * block_arg = (b != 0) ? block->args[ba] : func->args[ba];
+                                if (strcmp(block_arg->arg, op.value->arg) == 0)
+                                {
+                                    found = 1;
+                                    break;
+                                }
+                            }
+                            assert(found);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+static void verify_coherency(Program * program)
+{
+    for (size_t f = 0; f < array_len(program->functions, Function *); f++)
+    {
+        Function * func = program->functions[f];
+        for (size_t b = 0; b < array_len(func->blocks, Block *); b++)
+        {
+            Block * block = func->blocks[b];
+            assert(array_len(block->statements, Statement *) >= 1);
+            for (size_t i = 0; i < array_len(block->statements, Statement *) - 1; i++)
+            {
+                Statement * statement = block->statements[i];
+                assert(strcmp(statement->statement_name, "if") != 0);
+                assert(strcmp(statement->statement_name, "goto") != 0);
+                assert(strcmp(statement->statement_name, "return") != 0);
+            }
+            Statement * last = array_last(block->statements, Statement *);
+            assert(strcmp(last->statement_name, "if") == 0 ||
+                   strcmp(last->statement_name, "goto") == 0 ||
+                   strcmp(last->statement_name, "return") == 0);
+        }
+    }
+}
+
 void print_ir_to(FILE * f, Program * program)
 {
     if (f == 0)
@@ -1019,15 +1136,9 @@ void print_ir_to(FILE * f, Program * program)
 
 // On some backends, specific types of argument can't be used with specific functions.
 // For example, on x86, there's no <reg_a> = fmul <reg_a> <const> instruction.
-// So, we need a legalization system. Our legalization system runs immediately before an instruction
-// is regalloced
-
+// So, we need to legalize literals/constants. Our const legalization runs immediately before an instruction is regalloced.
 typedef struct _ImmOpsAllowed
 {
-    // For if and goto instructions, all operands are legal (except for the ones that need to be label names).
-    // For branches, it's the backend's job to emit all the relevant machine code.
-    // The backend knows exactly which registers are allowed to be clobbered during jumps, so it's able to do so.
-    
     uint8_t immediates_allowed[8];
 } ImmOpsAllowed;
 // implemented by backend

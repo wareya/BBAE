@@ -8,7 +8,7 @@
             "args": [
                 "--login",
                 "-c",
-                "clang main.c -Wall -Wextra -pedantic -Wno-unused-function -g -ggdb -O0 -o '${workspaceFolder}/a.exe'"
+                "clang main.c -Wl,-export-all-symbols -Wall -Wextra -pedantic -Wno-unused-function -g -ggdb -O0 -o '${workspaceFolder}/a.exe'"
             ],
             "problemMatcher": [
                 "$tsc"
