@@ -17,23 +17,22 @@ static size_t get_page_size(void)
     return siSysInfo.dwPageSize;
 }
 
-static void * VirtualAllocNearProcess(size_t len)
+static void * VirtualAllocNearProcess(size_t * len)
 {
     size_t check_size = 1 << 16;
     size_t start_at = (size_t)(void *)VirtualAllocNearProcess;
     start_at = (start_at >> 16) << 16;
-    size_t orig_start_at = start_at;
     size_t start_at_2 = start_at;
-    len = ((len + (1 << 16)) >> 16) << 16;
-    void * buffer = VirtualAlloc((void *)start_at, len, MEM_COMMIT|MEM_RESERVE, PAGE_READWRITE);
+    *len = ((*len + (1 << 16) - 1) >> 16) << 16;
+    void * buffer = VirtualAlloc((void *)start_at, *len, MEM_COMMIT|MEM_RESERVE, PAGE_READWRITE);
     while (!buffer && (start_at - start_at_2) < (1ll<<31ll))
     {
         start_at += check_size;
         start_at_2 -= check_size;
-        buffer = VirtualAlloc((void *)start_at, len, MEM_COMMIT|MEM_RESERVE, PAGE_READWRITE);
+        buffer = VirtualAlloc((void *)start_at, *len, MEM_COMMIT|MEM_RESERVE, PAGE_READWRITE);
         if (buffer)
             return buffer;
-        buffer = VirtualAlloc((void *)start_at_2, len, MEM_COMMIT|MEM_RESERVE, PAGE_READWRITE);
+        buffer = VirtualAlloc((void *)start_at_2, *len, MEM_COMMIT|MEM_RESERVE, PAGE_READWRITE);
         if (buffer)
             return buffer;
     }
@@ -46,9 +45,9 @@ static void * VirtualAllocNearProcess(size_t len)
 }
 
 /// returns read-write memory near the process address space
-static uint8_t * alloc_near_executable(size_t len)
+static uint8_t * alloc_near_executable(size_t * len)
 {
-    printf("allocating %zu length\n", len);
+    printf("allocating %zu length\n", *len);
     // we want an allocation that's near our own process memory
     // so that we can do 32-bit relocations when calling non-JIT functions
     void * const buffer = VirtualAllocNearProcess(len);
@@ -64,9 +63,10 @@ static uint8_t * alloc_near_executable(size_t len)
 /// actual size allocated is written into len, which must not be null
 static uint8_t * copy_as_executable(uint8_t * mem, size_t * len)
 {
-    uint8_t * buffer = alloc_near_executable(*len);
+    size_t orig_len = *len;
+    uint8_t * buffer = alloc_near_executable(len);
     
-    memcpy(buffer, mem, *len);
+    memcpy(buffer, mem, orig_len);
     DWORD dummy;
     assert(VirtualProtect(buffer, *len, PAGE_EXECUTE_READ, &dummy));
     

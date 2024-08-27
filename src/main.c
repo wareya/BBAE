@@ -101,6 +101,7 @@ int main(int argc, char ** argv)
     
     assert(jit_main);
     double asdf = jit_main(0, 0);
+    (void)asdf; // unused
     
     free_as_executable(jit_code, code_len);
     free_all_compiler_allocs();
