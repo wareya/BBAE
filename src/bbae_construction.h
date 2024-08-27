@@ -284,9 +284,17 @@ static Statement * parse_statement(Program * program, const char ** cursor)
         }
         else if (strcmp(ret->statement_name, "symbol_lookup_unsized") == 0)
         {
-            const char * op1_text = strcpy_z(find_next_token(cursor));
-            Operand op1 = parse_op_text(&op1_text);
+            Operand op1 = parse_op_text(cursor);
             array_push(ret->args, Operand, op1);
+            return ret;
+        }
+        else if (strcmp(ret->statement_name, "symbol_lookup") == 0)
+        {
+            Operand op1 = parse_op_text(cursor);
+            const char * op2_text = strcpy_z(find_next_token(cursor));
+            uint64_t size = parse_int_bare(op2_text);
+            array_push(ret->args, Operand, op1);
+            array_push(ret->args, Operand, new_op_rawint(size));
             return ret;
         }
         else if (strcmp(ret->statement_name, "call_eval") == 0)
@@ -632,7 +640,9 @@ static Program * parse_file(const char * cursor)
 {
     Program * program = (Program *)zero_alloc(sizeof(Program));
     program->functions = (Function **)zero_alloc(0);
+    program->globals = (GlobalData *)zero_alloc(0);
     program->statics = (StaticData *)zero_alloc(0);
+    program->unused_relocation_log = (UnusedRelocation *)zero_alloc(0);
     
     enum BBAE_PARSER_STATE state = PARSER_STATE_ROOT;
     char * token = find_next_token_anywhere(&cursor);
@@ -658,7 +668,12 @@ static Program * parse_file(const char * cursor)
             }
             else if (strcmp(token, "global") == 0)
             {
-                assert(((void)"TODO global", 0));
+                Type type = parse_type(&cursor);
+                token = find_next_token(&cursor);
+                assert(token);
+                const char * name = strcpy_z(token);
+                
+                add_global(program, name, type, 0);
             }
             else if (strcmp(token, "static") == 0)
             {

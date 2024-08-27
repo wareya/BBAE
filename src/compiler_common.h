@@ -306,11 +306,13 @@ uint8_t types_same(Type a, Type b)
     return aggdata_same(a.aggdata, b.aggdata);
 }
 
-typedef struct _Global {
-    char * name;
+typedef struct _GlobalData {
+    const char * name;
     Type type;
-    struct _Global * next;
-} Global;
+    size_t location;
+    size_t allocated_size;
+    uint8_t is_private;
+} GlobalData;
 
 enum BBAE_VALUE_VARIANT {
     VALUE_INVALID,
@@ -360,6 +362,7 @@ enum BBAE_OP_VARIANT {
     OP_KIND_TYPE,
     OP_KIND_VALUE,
     OP_KIND_TEXT,
+    OP_KIND_RAWINTEGER,
     OP_KIND_SEPARATOR,
 };
 
@@ -368,6 +371,7 @@ typedef struct _Operand {
     Type rawtype;
     Value * value;
     const char * text;
+    int64_t rawint;
 } Operand;
 
 struct _Block;
@@ -475,11 +479,28 @@ typedef struct _StaticData {
     uint8_t is_private;
 } StaticData;
 
+typedef struct _NameUsageInfo
+{
+    uint64_t loc;
+    const char * name;
+    uint8_t size;
+    // TODO: whether the relocation is end-relative, start-relative, or absolute (currently only end-relative)
+} NameUsageInfo;
+
+typedef struct _UnusedRelocation
+{
+    NameUsageInfo info;
+} UnusedRelocation;
+
+
 typedef struct _Program {
-    // array
+    // arrays
     Function ** functions;
-    //Global * globals;
+    GlobalData * globals;
+    size_t globals_bytecount; // number of bytes for globals, not number of globals
     StaticData * statics;
+    UnusedRelocation * unused_relocation_log;
+    // non-arrays
     Function * current_func;
     Block * current_block;
 } Program;
@@ -515,6 +536,38 @@ static const char * find_static_by_value(Program * program, Type type, uint64_t 
             return stat.name;
     }
     return 0;
+}
+
+static GlobalData add_global(Program * program, const char * name, Type type_, uint8_t is_private)
+{
+    size_t allocated_size = type_size(type_);
+    size_t align = size_guess_align(allocated_size);
+    
+    //while (allocated_size % align)
+    //    allocated_size += 1;
+    
+    while (program->globals_bytecount % align)
+        program->globals_bytecount += 1;
+    
+    GlobalData data = {name, type_, program->globals_bytecount, allocated_size, is_private};
+    
+    program->globals_bytecount += allocated_size;
+    
+    array_push(program->globals, GlobalData, data);
+    return data;
+}
+
+static GlobalData find_global(Program * program, const char * name)
+{
+    for (size_t i = 0; i < array_len(program->globals, GlobalData); i++)
+    {
+        GlobalData stat = program->globals[i];
+        if (strcmp(stat.name, name) == 0)
+            return stat;
+    }
+    GlobalData ret;
+    memset(&ret, 0, sizeof(GlobalData));
+    return ret;
 }
 
 static void add_static_i8(Program * program, const char * name, uint8_t value, uint8_t is_private)
@@ -677,6 +730,16 @@ static Value * make_stackslot_value(StackSlot * slot)
     return ret;
 }
 
+
+static Operand new_op_rawint(uint64_t rawint)
+{
+    Operand op;
+    memset(&op, 0, sizeof(Operand));
+    op.variant = OP_KIND_RAWINTEGER;
+    op.rawint = rawint;
+    return op;
+}
+
 static Operand new_op_val(Value * val)
 {
     Operand op;
@@ -805,6 +868,8 @@ static uint8_t operands_same(Operand a, Operand b)
         return strcmp(a.text, b.text) == 0;
     else if (a.variant == OP_KIND_VALUE)
         return values_same(a.value, b.value);
+    else if (a.variant == OP_KIND_RAWINTEGER)
+        return a.rawint == b.rawint;
     else 
         assert("FIXME" && 0);
 }
@@ -1119,6 +1184,8 @@ void print_ir_to(FILE * f, Program * program)
                                 fprintf(f, " <aggregate>");
                         }
                     }
+                    else if (op.variant == OP_KIND_RAWINTEGER)
+                        fprintf(f, " %zd", op.rawint);
                     else
                         assert(0);
                 }

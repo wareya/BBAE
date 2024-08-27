@@ -8,148 +8,7 @@
 #include "regalloc_x86.h"
 #include "emitter_x86.h"
 #include "../compiler_common.h"
-
-typedef struct _NameUsageInfo
-{
-    uint64_t loc;
-    const char * name;
-    uint8_t size;
-    // TODO: whether it's end-relative or start-relative (currently only end)
-} NameUsageInfo;
-
-static void add_relocation(NameUsageInfo ** usages, uint64_t loc, const char * name, uint8_t size)
-{
-    NameUsageInfo info = {loc, name, size};
-    if (!*usages)
-        *usages = (NameUsageInfo *)zero_alloc(0);
-    
-    array_push((*usages), NameUsageInfo, info);
-}
-
-static uint64_t reloc_illegal_dummy_value = 0xABADB007ABADB007;
-
-static void apply_relocations(NameUsageInfo ** usages, byte_buffer * code, int64_t (*target_lookup_func)(const char *, void *), void * userdata)
-{
-    if (!*usages)
-        return;
-    
-    for (size_t u = 0; u < array_len((*usages), NameUsageInfo); u++)
-    {
-        NameUsageInfo info = (*usages)[u];
-        //Block * block = find_block(func, info.name);
-        //if (!block)
-        //{
-        //    printf("failed to find block with name %s\n", info.name);
-        //    assert(0); 
-        //}
-        int64_t target = target_lookup_func(info.name, userdata);
-        if (target == (int64_t)reloc_illegal_dummy_value)
-            continue;
-        int64_t rewrite_loc = info.loc;
-        if (info.size == 4)
-        {
-            //int64_t diff = rewrite_loc + 4 - target;
-            int64_t diff = target - (rewrite_loc + 4);
-            assert(diff >= -2147483648 && diff <= 2147483647);
-            assert(rewrite_loc + 4 < (int64_t)code->len);
-            memcpy(code->data + rewrite_loc, &diff, 4);
-        }
-        else if (info.size == 1)
-        {
-            //int64_t diff = rewrite_loc + 1 - target;
-            int64_t diff = target - (rewrite_loc + 1);
-            assert(diff >= -128 && diff <= 127);
-            assert(rewrite_loc + 1 < (int64_t)code->len);
-            memcpy(code->data + rewrite_loc, &diff, 1);
-        }
-        else
-            assert(((void)"TODO", 0));
-    }
-}
-
-static NameUsageInfo * _emitter_label_usages = 0;
-static void add_label_relocation(uint64_t loc, const char * name, uint8_t size)
-{
-    add_relocation(&_emitter_label_usages, loc, name, size);
-}
-
-static int64_t get_block_loc_or_assert(const char * name, void * _func)
-{
-    Function * func = (Function *)_func;
-    Block * block = find_block(func, name);
-    if (!block)
-    {
-        printf("failed to find block with name %s\n", name);
-        assert(0); 
-    }
-    return block->start_offset;
-}
-static void apply_label_relocations(byte_buffer * code, Function * func)
-{
-    apply_relocations(&_emitter_label_usages, code, get_block_loc_or_assert, (void *)func);
-}
-
-static NameUsageInfo * static_addr_relocations = 0;
-static void add_static_relocation(uint64_t loc, const char * name, uint8_t size)
-{
-    add_relocation(&static_addr_relocations, loc, name, size);
-}
-
-static int64_t get_static_or_assert(const char * name, void * _program)
-{
-    Program * program = (Program *)_program;
-    StaticData stat = find_static(program, name);
-    if (!stat.name)
-    {
-        printf("failed to find static with name %s\n", name);
-        assert(0); 
-    }
-    return stat.location;
-}
-static void apply_static_relocations(byte_buffer * code, Program * program)
-{
-    // allocate and align statics
-    for (size_t i = 0; i < array_len(program->statics, StaticData); i++)
-    {
-        StaticData stat = program->statics[i];
-        while (code->len % size_guess_align(type_size(stat.type)))
-            byte_push(code, 0);
-        
-        stat.location = code->len;
-        
-        printf("allocating static %s at %zu\n", stat.name, stat.location);
-        
-        if (type_size(stat.type) <= 8)
-            bytes_push(code, (uint8_t *)&stat.init_data_short, type_size(stat.type));
-        else
-            bytes_push(code, stat.init_data_long, type_size(stat.type));
-        
-        program->statics[i] = stat;
-    }
-    // apply relocations pointing at statics
-    apply_relocations(&static_addr_relocations, code, get_static_or_assert, (void *)program);
-}
-
-static NameUsageInfo * _emitter_symbol_usages = 0;
-static void add_symbol_relocation(uint64_t loc, const char * name, uint8_t size)
-{
-    add_relocation(&_emitter_symbol_usages, loc, name, size);
-}
-
-static int64_t get_symbol_loc_or_dummy(const char * name, void * _list)
-{
-    SymbolEntry * symbollist = (SymbolEntry *)_list;
-    for (size_t i = 0; symbollist[i].name; i++)
-    {
-        if (strcmp(symbollist[i].name, name) == 0)
-            return symbollist[i].loc;
-    }
-    return reloc_illegal_dummy_value;
-}
-static void apply_symbol_relocations(byte_buffer * code, SymbolEntry * list)
-{
-    apply_relocations(&_emitter_symbol_usages, code, get_symbol_loc_or_dummy, (void *)list);
-}
+#include "../relocation_helpers.h"
 
 static void allocate_stack_slots(Program * program)
 {
@@ -173,7 +32,7 @@ static void allocate_stack_slots(Program * program)
     }
 }
 
-static EncOperand get_basic_encoperand(Value * value)
+static EncOperand get_basic_encoperand_mem(Value * value, uint8_t want_ptr)
 {
     assert(value->variant == VALUE_CONST || value->variant == VALUE_STACKADDR || value->regalloced);
     if (value->variant == VALUE_CONST)
@@ -185,15 +44,29 @@ static EncOperand get_basic_encoperand(Value * value)
     else if (value->variant == VALUE_SSA || value->variant == VALUE_ARG)
     {
         assert(type_is_valid(value->type));
-        return zy_reg(value->regalloc, type_size(value->type));
+        if (want_ptr)
+        {
+            assert(type_is_ptr(value->type));
+            return zy_mem(value->regalloc, 0, type_size(value->type));
+        }
+        else
+            return zy_reg(value->regalloc, type_size(value->type));
     }
     else if (value->variant == VALUE_STACKADDR)
+    {
+        assert(want_ptr);
         return zy_mem(REG_RBP, -value->slotinfo->offset, value->slotinfo->size);
+    }
     else
     {
         printf("culprit: %d\n", value->variant);
         assert(((void)"TODO", 0));
     }
+}
+
+static EncOperand get_basic_encoperand(Value * value)
+{
+    return get_basic_encoperand_mem(value, 0);
 }
 
 uint8_t reg_shuffle_needed(Value ** block_args, Operand * args, size_t count)
@@ -668,7 +541,7 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
                     Operand op2_op = statement->args[1];
                     assert(op2_op.variant == OP_KIND_VALUE);
                     
-                    EncOperand op1 = get_basic_encoperand(op1_op.value);
+                    EncOperand op1 = get_basic_encoperand_mem(op1_op.value, 1);
                     EncOperand op2 = get_basic_encoperand(op2_op.value);
                     
                     assert(((void)"TODO", type_size(op2_op.value->type) <= 8));
@@ -710,7 +583,7 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
                     assert(statement->output->regalloced);
                     
                     EncOperand op0 = get_basic_encoperand(statement->output);
-                    EncOperand op1 = get_basic_encoperand(op1_op.value);
+                    EncOperand op1 = get_basic_encoperand_mem(op1_op.value, 1);
                     
                     if (statement->output->type.variant == TYPE_F64)
                         zy_emit_2(code, INST_MOVQ, op0, op1);
@@ -930,7 +803,8 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
                     else
                         zy_emit_2(code, INST_MOVQ, op0, op2);
                 }
-                else if (strcmp(statement->statement_name, "symbol_lookup_unsized") == 0)
+                else if (strcmp(statement->statement_name, "symbol_lookup_unsized") == 0 ||
+                         strcmp(statement->statement_name, "symbol_lookup") == 0)
                 {
                     Operand op1_op = statement->args[0];
                     assert(op1_op.variant == OP_KIND_TEXT);
@@ -978,12 +852,11 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
                 }
             }
         }
-        apply_label_relocations(code, func);
+        apply_label_relocations(program, code, func);
     }
     
-    apply_static_relocations(code, program);
-    
-    apply_symbol_relocations(code, *symbollist);
+    apply_static_relocations(program, code, program);
+    apply_symbol_relocations(program, code, *symbollist);
     
     return code;
 }

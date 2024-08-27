@@ -59,18 +59,12 @@ static uint8_t * alloc_near_executable(size_t * len)
     return buffer;
 }
 
-/// returns executable memory near the process address space
-/// actual size allocated is written into len, which must not be null
-static uint8_t * copy_as_executable(uint8_t * mem, size_t * len)
+/// marks an allocation previously returned by `alloc_near_executable` as being executable
+/// MUST SPECIFICALLY be an allocation returned by alloc_near_executable
+static void mark_as_executable(uint8_t * mem, size_t len)
 {
-    size_t orig_len = *len;
-    uint8_t * buffer = alloc_near_executable(len);
-    
-    memcpy(buffer, mem, orig_len);
     DWORD dummy;
-    assert(VirtualProtect(buffer, *len, PAGE_EXECUTE_READ, &dummy));
-    
-    return (uint8_t *)buffer;
+    assert(VirtualProtect(mem, len, PAGE_EXECUTE_READ, &dummy));
 }
 
 static void free_as_executable(uint8_t * mem, size_t len)

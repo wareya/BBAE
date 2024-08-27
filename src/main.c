@@ -76,8 +76,47 @@ int main(int argc, char ** argv)
     
     print_asm(code);
     
+    size_t globals_len = program->globals_bytecount;
+    uint8_t * jit_globals = alloc_near_executable(&globals_len);
+    memset(jit_globals, 0, globals_len);
+    
     size_t code_len = code->len;
-    uint8_t * jit_code = copy_as_executable(code->data, &code_len);
+    uint8_t * jit_code = alloc_near_executable(&code_len);
+    memset(jit_code, 0, code_len);
+    memcpy(jit_code, code->data, code->len);
+    
+    // relocate unresolved symbols over jit_code
+    for (size_t i = 0; i < array_len(program->unused_relocation_log, UnusedRelocation); i++)
+    {
+        UnusedRelocation relocation = program->unused_relocation_log[i];
+        size_t reloc_loc = relocation.info.loc;
+        size_t reloc_size = relocation.info.size;
+        assert(reloc_loc + reloc_size <= code->len);
+        assert(reloc_size == 1 || reloc_size == 4);
+        int64_t diff = 0;
+        
+        GlobalData global_data = find_global(program, relocation.info.name);
+        if (global_data.name != 0)
+        {
+            int64_t total_offset = (int64_t)(jit_code - jit_globals);
+            
+            diff = global_data.location - (reloc_loc + 4);
+            diff -= total_offset;
+        }
+        else
+            assert(((void)"TODO: check for other symbols like function names etc", 0));
+        
+        if (reloc_size == 4)
+            assert(diff >= -2147483648 && diff <= 2147483647);
+        else if (reloc_size == 1)
+            assert(diff >= -128 && diff <= 127);
+        
+        memcpy(jit_code + reloc_loc, &diff, reloc_size);
+        
+        //printf("need to relocate: %s\n", relocation.info.name);
+    }
+    
+    mark_as_executable(jit_code, code_len);
     
     ptrdiff_t loc = -1;
     for (size_t i = 0; symbollist[i].name; i++)
@@ -96,12 +135,14 @@ int main(int argc, char ** argv)
     // suppress non-posix-compliant gcc function pointer casting warning
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
-    double (*jit_main) (int, int) = (double(*)(int, int))(void *)(&jit_code[loc]);
+    int64_t (*jit_main) (int, int) = (int64_t(*)(int, int))(void *)(&jit_code[loc]);
 #pragma GCC diagnostic pop
     
     assert(jit_main);
-    double asdf = jit_main(0, 0);
-    (void)asdf; // unused
+    int64_t asdf = jit_main(0, 0);
+    printf("%zd\n", asdf);
+    asdf = jit_main(0, 0);
+    printf("%zd\n", asdf);
     
     free_as_executable(jit_code, code_len);
     free_all_compiler_allocs();
