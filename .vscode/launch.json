@@ -13,7 +13,8 @@
             //"args": ["examples/gravity.bbae"],
             //"args": ["examples/gravtest.bbae"],
             //"args": ["examples/too_simple.bbae"],
-            "args": ["examples/global.bbae"],
+            //"args": ["examples/global.bbae"],
+            "args": ["examples/fib.bbae"],
             "cwd": "${workspaceFolder}"
         },
     ]

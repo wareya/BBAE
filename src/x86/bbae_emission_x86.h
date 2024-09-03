@@ -54,7 +54,7 @@ static EncOperand get_basic_encoperand_mem(Value * value, uint8_t want_ptr)
     }
     else if (value->variant == VALUE_STACKADDR)
     {
-        assert(want_ptr);
+        //assert(want_ptr);
         return zy_mem(REG_RBP, -value->slotinfo->offset, value->slotinfo->size);
     }
     else

@@ -1,0 +1,29 @@
+func main returns f64
+    stack_slot i 8
+    stack_slot a 8
+    stack_slot b 8
+    store i 1i64
+    store a 0i64
+    store b 1i64
+    goto loop_head
+block loop_head
+    ival = load i64 i
+    aval = load i64 a
+    bval = load i64 b
+    
+    b2 = add aval bval
+    
+    store a bval
+    store b b2
+    
+    ival2 = add ival 1i64
+    store i ival2
+    
+    cmp = cmp_g ival2 42i64
+    
+    if cmp goto out
+    goto loop_head
+block out
+    ret = load i64 b
+    return ret
+endfunc

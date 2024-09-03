@@ -10,6 +10,17 @@
 
 #include "memory.h"
 
+// On some backends, specific types of argument can't be used with specific functions.
+// For example, on x86, there's no <reg_a> = fmul <reg_a> <const> instruction.
+// So, we need to legalize literals/constants. Our const legalization runs immediately before an instruction is regalloced.
+typedef struct _ImmOpsAllowed
+{
+    uint8_t immediates_allowed[8];
+} ImmOpsAllowed;
+// implemented by backend
+struct _Statement;
+static ImmOpsAllowed imm_op_rule_determiner(struct _Statement * statement);
+
 typedef struct _SymbolEntry
 {
     const char * name;
@@ -322,7 +333,6 @@ enum BBAE_VALUE_VARIANT {
     VALUE_STACKADDR,
 };
 
-struct _Statement;
 struct _StackSlot;
 typedef struct _Value {
     enum BBAE_VALUE_VARIANT variant; // values can be constants, SSA values produced by operations, or func/block arguments
@@ -782,7 +792,11 @@ static void add_statement_output(Statement * statement)
         if (strcmp(statement->statement_name, "add") == 0 ||
             strcmp(statement->statement_name, "sub") == 0 ||
             strcmp(statement->statement_name, "mul") == 0 ||
+            strcmp(statement->statement_name, "imul") == 0 ||
             strcmp(statement->statement_name, "div") == 0 ||
+            strcmp(statement->statement_name, "idiv") == 0 ||
+            strcmp(statement->statement_name, "rem") == 0 ||
+            strcmp(statement->statement_name, "irem") == 0 ||
             strcmp(statement->statement_name, "shl") == 0 ||
             strcmp(statement->statement_name, "shr") == 0 ||
             strcmp(statement->statement_name, "fadd") == 0 ||
@@ -790,20 +804,36 @@ static void add_statement_output(Statement * statement)
             strcmp(statement->statement_name, "fmul") == 0 ||
             strcmp(statement->statement_name, "fdiv") == 0 ||
             strcmp(statement->statement_name, "fxor") == 0 ||
-            strcmp(statement->statement_name, "mov") == 0)
+            
+            strcmp(statement->statement_name, "mov") == 0
+            )
         {
             assert(statement->args[0].variant == OP_KIND_VALUE);
             statement->output = make_value(statement->args[0].value->type);
         }
         else if (strcmp(statement->statement_name, "load") == 0 ||
+                 // int casts
+                 strcmp(statement->statement_name, "trim") == 0 ||
+                 strcmp(statement->statement_name, "qext") == 0 ||
+                 strcmp(statement->statement_name, "sext") == 0 ||
+                 strcmp(statement->statement_name, "zext") == 0 ||
+                 // float-int casts
+                 strcmp(statement->statement_name, "float_to_uint") == 0 ||
+                 strcmp(statement->statement_name, "float_to_uint_unsafe") == 0 ||
                  strcmp(statement->statement_name, "uint_to_float") == 0 ||
-                 strcmp(statement->statement_name, "bitcast") == 0)
+                 strcmp(statement->statement_name, "float_to_sint") == 0 ||
+                 strcmp(statement->statement_name, "float_to_sint_unsafe") == 0 ||
+                 strcmp(statement->statement_name, "sint_to_float") == 0 ||
+                 
+                 strcmp(statement->statement_name, "bitcast") == 0 ||
+                 // non-casts
+                 strcmp(statement->statement_name, "extract") == 0
+                 )
         {
             assert(statement->args[0].variant == OP_KIND_TYPE);
             statement->output = make_value(statement->args[0].rawtype);
         }
         else if (strcmp(statement->statement_name, "cmp_g") == 0 ||
-                 strcmp(statement->statement_name, "cmp_ge") == 0 ||
                  strcmp(statement->statement_name, "cmp_ge") == 0)
         {
             statement->output = make_value(basic_type(TYPE_I8));
@@ -908,7 +938,7 @@ static void disconnect_statement_from_operand(Statement * statement, Operand op,
     }
 }
 
-size_t find_separator_index(Operand * args)
+static size_t find_separator_index(Operand * args)
 {
     for (size_t i = 2; i < array_len(args, Operand); i++)
     {
@@ -1200,15 +1230,5 @@ void print_ir_to(FILE * f, Program * program)
     }
     fflush(f);
 }
-
-// On some backends, specific types of argument can't be used with specific functions.
-// For example, on x86, there's no <reg_a> = fmul <reg_a> <const> instruction.
-// So, we need to legalize literals/constants. Our const legalization runs immediately before an instruction is regalloced.
-typedef struct _ImmOpsAllowed
-{
-    uint8_t immediates_allowed[8];
-} ImmOpsAllowed;
-// implemented by backend
-static ImmOpsAllowed imm_op_rule_determiner(Statement * statement);
 
 #endif // BBAE_COMPILER_COMMON
