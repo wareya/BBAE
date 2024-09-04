@@ -53,11 +53,11 @@ assign | vardec | defer | if | while | funccall
 block: @notokens
 "{" statement* "}"
 
-funcdefargs:
+funcdefargs: @notokens
 "(" (type name ",")* (type name)? ")"
 
-funcdef: @notokens
-type name "(" funcdefargs ")" block
+funcdef:
+type name funcdefargs block
 
 program:
 funcdef+

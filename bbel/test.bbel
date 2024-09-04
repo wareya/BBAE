@@ -1,4 +1,6 @@
-i64 myval;
-nextline(); asdf
-// comment
-asdf2
+i64 myfunc()
+{
+	
+}
+&&
+}
