@@ -502,18 +502,24 @@ static void legalize_last_statement_operands(Block * block)
     }
 }
 
-static Statement * parse_and_add_statement(Program * program, const char ** cursor)
+/// @brief Add a statement to the end of a block, creating the statement's output value and linking the statement back to the block.
+/// @param block 
+/// @param statement 
+static void block_append_statement(Block * block, Statement * statement)
 {
-    Statement * statement = parse_statement(program, cursor);
-    
     add_statement_output(statement);
     //add_statement(program, statement);
     
-    statement->block = program->current_block;
-    array_push(program->current_block->statements, Statement *, statement);
+    statement->block = block;
+    array_push(block->statements, Statement *, statement);
     
-    legalize_last_statement_operands(program->current_block);
-    
+    legalize_last_statement_operands(block);
+}
+
+static Statement * parse_and_add_statement(Program * program, const char ** cursor)
+{
+    Statement * statement = parse_statement(program, cursor);
+    block_append_statement(program->current_block, statement);
     return statement;
 }
 

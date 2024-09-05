@@ -876,7 +876,11 @@ typedef void* ZyanVoidPointer;
  */
 typedef const void* ZyanConstVoidPointer;
 
+#ifdef __cplusplus
+#define ZYAN_NULL nullptr
+#else
 #define ZYAN_NULL ((void*)0)
+#endif
 
 /* ============================================================================================== */
 /* Logic types                                                                                    */

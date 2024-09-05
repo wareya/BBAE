@@ -463,6 +463,7 @@ static void optimization_global_mem2reg(Program * program)
             uint8_t ever_loaded = 0;
             uint8_t ever_stored = 0;
             Type type;
+            const char * name;
             for (size_t s = 0; s < array_len(slot->edges_out, Statement *); s++)
             {
                 Statement * edge = slot->edges_out[s];
@@ -490,7 +491,7 @@ static void optimization_global_mem2reg(Program * program)
             printf("---- stack slot type %d\n", type.variant);
             
             // rewrite all blocks (except the first) to take and pass the variable as an argument, while handling stores/loads
-            const char * name = make_temp_name();
+            name = make_temp_name();
             for (size_t b = 0; b < array_len(func->blocks, Block *); b++)
             {
                 Block * block = func->blocks[b];

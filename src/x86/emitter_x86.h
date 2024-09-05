@@ -5,10 +5,15 @@
 #include <stdlib.h>
 #include <assert.h>
 
+#include "../buffers.h"
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
 #include "../../thirdparty/zydis/Zydis.h"
 #include "../../thirdparty/zydis/Zydis.c"
-
-#include "../buffers.h"
 
 typedef ZydisEncoderOperand EncOperand;
 
@@ -16,6 +21,10 @@ static uint8_t encops_equal(EncOperand a, EncOperand b)
 {
     return memcmp(&a, &b, sizeof(EncOperand)) == 0;
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 enum Register {
     REG_RAX,
@@ -443,10 +452,17 @@ static EncOperand zy_reg(enum Register reg, int size)
     
     ret.type = ZYDIS_OPERAND_TYPE_REGISTER;
     
-    ret.reg.value = reg_unsized_to_sized(reg, size);
+    ret.reg.value = (ZydisRegister)reg_unsized_to_sized(reg, size);
     
     return ret;
 }
+#ifdef __cplusplus
+static EncOperand zy_reg(uint64_t reg, int size)
+{
+    return zy_reg((enum Register)reg, size);
+}
+#endif
+
 static EncOperand zy_mem_full(enum Register base_reg, enum Register index_reg, int index_scale, int64_t offset, int word_size)
 {
     assert(index_scale == 0 || index_scale == 1 || index_scale == 2 || index_scale == 4 || index_scale == 8);
@@ -456,8 +472,8 @@ static EncOperand zy_mem_full(enum Register base_reg, enum Register index_reg, i
     
     ret.type = ZYDIS_OPERAND_TYPE_MEMORY;
     
-    ret.mem.base = reg_unsized_to_sized(base_reg, 8);
-    ret.mem.index = reg_unsized_to_sized(index_reg, 8);
+    ret.mem.base = (ZydisRegister)reg_unsized_to_sized(base_reg, 8);
+    ret.mem.index = (ZydisRegister)reg_unsized_to_sized(index_reg, 8);
     ret.mem.scale = index_scale;
     ret.mem.displacement = offset;
     ret.mem.size = word_size;
@@ -468,6 +484,12 @@ static EncOperand zy_mem(enum Register base_reg, int64_t offset, int word_size)
 {
     return zy_mem_full(base_reg, REG_NONE, 0, offset, word_size);
 }
+#ifdef __cplusplus
+static EncOperand zy_mem(uint64_t base_reg, int64_t offset, int word_size)
+{
+    return zy_mem((enum Register)base_reg, offset, word_size);
+}
+#endif
 
 static EncOperand zy_mem_add_offset(EncOperand op, uint64_t offset)
 {
@@ -549,11 +571,13 @@ const char * ZyanStatusText(ZyanStatus status)
 static void do_encode(ZydisEncoderRequest req, uint8_t * buf, size_t * len)
 {
     req.machine_mode = ZYDIS_MACHINE_MODE_LONG_64;
-    req.allowed_encodings =
+    
+    // FIXME: UB in C++ (i think)
+    req.allowed_encodings = (ZydisEncodableEncoding)(
         ZYDIS_ENCODABLE_ENCODING_LEGACY |
         ZYDIS_ENCODABLE_ENCODING_3DNOW |
         ZYDIS_ENCODABLE_ENCODING_XOP |
-        ZYDIS_ENCODABLE_ENCODING_VEX;
+        ZYDIS_ENCODABLE_ENCODING_VEX);
     
     *len = ZYDIS_MAX_INSTRUCTION_LENGTH;
     
@@ -572,7 +596,7 @@ static void zy_emit_n(byte_buffer * bytes, int name, EncOperand * ops, int n)
     ZydisEncoderRequest req;
     memset(&req, 0, sizeof(req));
     
-    req.mnemonic = name_to_mnemonic(name);
+    req.mnemonic = (ZydisMnemonic)name_to_mnemonic(name);
     req.operand_count = n;
     for (int i = 0; i < n; i++)
         req.operands[i] = ops[i];

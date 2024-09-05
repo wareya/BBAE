@@ -55,10 +55,10 @@ static void * zero_realloc(uint8_t * buf, size_t n)
 {
     if (0)
     {
-        void * new = zero_alloc(n);
+        void * ret = zero_alloc(n);
         uint64_t l = *alloc_get_size(alloc_base_loc(buf));
-        memcpy(new, buf, n < l ? n : l);
-        return new;
+        memcpy(ret, buf, n < l ? n : l);
+        return ret;
     }
     
     n += ALLOC_PREFIX_SIZE;
@@ -125,7 +125,7 @@ static void array_erase_impl(uint8_t ** array, size_t item_size, size_t index)
     size_t start = item_size * index;
     memmove(*array + start, *array + start + item_size, size - start - item_size);
     
-    *array = zero_realloc(*array, size - item_size);
+    *array = (uint8_t *)zero_realloc(*array, size - item_size);
 }
 #define array_erase(ARRAY, TYPE, INDEX) \
     (array_erase_impl((uint8_t **)(&(ARRAY)), sizeof(TYPE), INDEX))
@@ -133,7 +133,7 @@ static void array_erase_impl(uint8_t ** array, size_t item_size, size_t index)
 static void array_insert_impl(uint8_t ** array, size_t item_size, size_t index)
 {
     size_t size = *alloc_get_size(alloc_base_loc(*array)) + item_size;
-    *array = zero_realloc(*array, size);
+    *array = (uint8_t *)zero_realloc(*array, size);
     
     size_t start = item_size * index;
     memmove(*array + start + item_size, *array + start, size - start - item_size);
@@ -174,7 +174,7 @@ static uint8_t * array_chop_impl(uint8_t ** array, size_t start_offs, size_t end
     printf("offsets.... %zu %zu\n", start_offs, end_offs);
     printf("making RIGHT array with byte length %zu...\n", end_offs - start_offs);
     memcpy(ret, *array + start_offs, end_offs - start_offs);
-    *array = zero_realloc(*array, start_offs);
+    *array = (uint8_t *)zero_realloc(*array, start_offs);
     printf("making LEFT array with byte length %zu...\n", start_offs);
     return ret;
 }

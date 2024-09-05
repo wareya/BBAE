@@ -173,7 +173,7 @@ static char * make_temp_name(void)
     temp_ctr += 1;
     //size_t len = snprintf(0, 0, "__bbae_temp_%zu", temp_ctr) + 1;
     size_t len = snprintf(0, 0, "btemp_%zu", temp_ctr) + 1;
-    char * str = zero_alloc(len + 1);
+    char * str = (char *)zero_alloc(len + 1);
     //snprintf(str, len, "__bbae_temp_%zu", temp_ctr);
     snprintf(str, len, "btemp_%zu", temp_ctr);
     //assert(strcmp(str, "__bbae_temp_") != 0);
@@ -210,7 +210,7 @@ static Type basic_type(int x)
 {
     Type ret;
     memset(&ret, 0, sizeof(Type));
-    ret.variant = x;
+    ret.variant = (enum BBAE_TYPE_VARIANT)x;
     return ret;
 }
 
@@ -424,7 +424,7 @@ typedef struct _Block {
 
 static Block * new_block(void)
 {
-    Block * block = zero_alloc(sizeof(Block));
+    Block * block = (Block *)zero_alloc(sizeof(Block));
     block->args = (Value **)zero_alloc(0);
     block->edges_in = (Statement **)zero_alloc(0);
     block->statements = (Statement **)zero_alloc(0);
@@ -1006,7 +1006,7 @@ static uint8_t statements_same(Statement * a, Statement * b)
     return 1;
 }
 
-static void block_replace_statement_val_args(Block * block, Value * old, Value * new)
+static void block_replace_statement_val_args(Block * block, Value * old, Value * new_val)
 {
     for (size_t j = 0; j < array_len(block->statements, Statement *); j++)
     {
@@ -1016,7 +1016,7 @@ static void block_replace_statement_val_args(Block * block, Value * old, Value *
             if (statement->args[n].variant == OP_KIND_VALUE && statement->args[n].value == old)
             {
                 disconnect_statement_from_operand(statement, statement->args[n], 1);
-                statement->args[n].value = new;
+                statement->args[n].value = new_val;
                 connect_statement_to_operand(statement, statement->args[n]);
             }
         }

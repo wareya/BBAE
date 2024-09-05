@@ -9,6 +9,8 @@
 
 #include "grammar.hpp"
 
+#include "../src/bbae_builder.h"
+
 int main(int argc, char ** argv)
 {
     (void)argc;
