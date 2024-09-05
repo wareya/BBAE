@@ -511,6 +511,8 @@ static std::vector<std::shared_ptr<Token>> tokenize(const Grammar & grammar, con
                     column = 1;
                     line_index = i + 1;
                 }
+                else if (text[i] == '\t')
+                    column += 4;
                 else
                     column += 1;
                 i++;
@@ -884,7 +886,11 @@ static void print_tokenization_error(const std::vector<std::shared_ptr<Token>> &
             printf("\033[91m");
         else if (i >= text.size() || text[i] == ' ' || text[i] == '\t')
             printf("\033[0m");
-        putc(text[i++], stdout);
+        if (text[i] == '\t')
+            printf("    ");
+        else
+            putc(text[i], stdout);
+        i++;
     }
     printf("\033[0m");
     puts("");
@@ -912,13 +918,17 @@ static void print_parse_error(const std::vector<std::shared_ptr<Token>> & tokens
                 printf("\033[91m");
             else if (i == token->index + token->text->size())
                 printf("\033[0m");
-            putc(text[i++], stdout);
+            if (text[i] == '\t')
+                printf("    ");
+            else
+                putc(text[i], stdout);
+            i++;
         }
         printf("\033[0m");
         puts("");
         for (size_t n = 1; n < token->column; n++)
             putc(' ', stdout);
-        printf("^---\n");
+        printf("^--- %zu\n", token->column);
     }
 }
 
