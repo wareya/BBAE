@@ -512,7 +512,11 @@ static std::vector<std::shared_ptr<Token>> tokenize(const Grammar & grammar, con
                     line_index = i + 1;
                 }
                 else if (text[i] == '\t')
-                    column += 4;
+                {
+                    column += 1;
+                    while ((column - 1) % 4)
+                        column += 1;
+                }
                 else
                     column += 1;
                 i++;
@@ -912,6 +916,7 @@ static void print_parse_error(const std::vector<std::shared_ptr<Token>> & tokens
         auto token = tokens[furthest];
         printf("On line %zu at column %zu:\n", token->row, token->column);
         size_t i = token->line_index;
+        size_t col = 0;
         while (i < text.size() && text[i] != '\n')
         {
             if (i == token->index)
@@ -919,9 +924,20 @@ static void print_parse_error(const std::vector<std::shared_ptr<Token>> & tokens
             else if (i == token->index + token->text->size())
                 printf("\033[0m");
             if (text[i] == '\t')
-                printf("    ");
+            {
+                printf(" ");
+                col += 1;
+                while (col % 4)
+                {
+                    printf(" ");
+                    col += 1;
+                }
+            }
             else
+            {
                 putc(text[i], stdout);
+                col += 1;
+            }
             i++;
         }
         printf("\033[0m");
