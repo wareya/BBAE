@@ -28,6 +28,18 @@ int main(int argc, char ** argv)
     
     auto tokens = tokenize(grammar, text2.data());
     
+    if (tokens.size() == 0)
+    {
+        puts("Error: program is empty.");
+        return 0;
+    }
+    if (tokens.back()->text == 0)
+    {
+        auto s = std::string_view(text2.data(), text2.size());
+        print_tokenization_error(tokens, s);
+        return 0;
+    }
+    
     for (auto n : tokens)
     {
         //printf("%s\n", n->text->data());
@@ -41,30 +53,8 @@ int main(int argc, char ** argv)
         print_AST(*asdf);
     else
     {
-        printf("Parse failed. Expected one of:\n");
-        for (auto & str : furthest_maybes)
-            printf("  \033[92m%s\033[0m\n", str->data());
-        if (furthest >= tokens.size())
-            printf("At end of input stream.\n");
-        else
-        {
-            auto token = tokens[furthest];
-            printf("On line %zu at column %zu:\n", token->row, token->column);
-            size_t i = token->line_index;
-            while (i < text2.size() && text2[i] != '\n')
-            {
-                if (i == token->index)
-                    printf("\033[91m");
-                else if (i == token->index + token->text->size())
-                    printf("\033[0m");
-                putc(text2[i++], stdout);
-            }
-            printf("\033[0m");
-            puts("");
-            for (size_t n = 1; n < token->column; n++)
-                putc(' ', stdout);
-            printf("^---\n");
-        }
+        auto s = std::string_view(text2.data(), text2.size());
+        print_parse_error(tokens, s);
     }
     
     return 0;

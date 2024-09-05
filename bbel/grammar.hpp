@@ -474,8 +474,11 @@ struct Token {
     size_t line_index = 0;
     size_t row = 0;
     size_t column = 0;
+    bool valid = true;
 };
 
+// On success, the token stream is returned.
+// On failure, the tokenization process is returned, with an additional token with null text and regex at the end.
 static std::vector<std::shared_ptr<Token>> tokenize(const Grammar & grammar, const char * _text)
 {
     const std::vector<std::shared_ptr<MatchingRule>> & tokens = grammar.tokens;
@@ -594,7 +597,9 @@ static std::vector<std::shared_ptr<Token>> tokenize(const Grammar & grammar, con
         }
         if (!found)
         {
-            printf("failed to tokenize! got to line %zd column %zd (index %zd)\n", row, column, i);
+            //printf("failed to tokenize! got to line %zd column %zd (index %zd)\n", row, column, i);
+            // append dummy token to token stream to signifify failure
+            ret.push_back(std::make_shared<Token>(Token{0, 0, i, line_index, row, column}));
             return ret;
         }
         assert(found);
@@ -864,6 +869,57 @@ static auto parse_as(Grammar & grammar, const std::vector<std::shared_ptr<Token>
         ret = {};
     clear_parser_global_state();
     return ret;
+}
+
+static void print_tokenization_error(const std::vector<std::shared_ptr<Token>> & tokens, std::string_view & text)
+{
+    printf("Tokenization failed. Parsing cannot continue.\n");
+    
+    auto token = tokens.back();
+    printf("On line %zu at column %zu:\n", token->row, token->column);
+    size_t i = token->line_index;
+    while (i < text.size() && text[i] != '\n')
+    {
+        if (i == token->index)
+            printf("\033[91m");
+        else if (i >= text.size() || text[i] == ' ' || text[i] == '\t')
+            printf("\033[0m");
+        putc(text[i++], stdout);
+    }
+    printf("\033[0m");
+    puts("");
+    for (size_t n = 1; n < token->column; n++)
+        putc(' ', stdout);
+    printf("^---\n");
+    puts("The grammar does not recognize the pointed-to text as valid, not even on a single-chunk level.");
+}
+
+static void print_parse_error(const std::vector<std::shared_ptr<Token>> & tokens, std::string_view & text)
+{
+    printf("Parse failed. Expected one of:\n");
+    for (auto & str : furthest_maybes)
+        printf("  \033[92m%s\033[0m\n", str->data());
+    if (furthest >= tokens.size())
+        printf("At end of input stream.\n");
+    else
+    {
+        auto token = tokens[furthest];
+        printf("On line %zu at column %zu:\n", token->row, token->column);
+        size_t i = token->line_index;
+        while (i < text.size() && text[i] != '\n')
+        {
+            if (i == token->index)
+                printf("\033[91m");
+            else if (i == token->index + token->text->size())
+                printf("\033[0m");
+            putc(text[i++], stdout);
+        }
+        printf("\033[0m");
+        puts("");
+        for (size_t n = 1; n < token->column; n++)
+            putc(' ', stdout);
+        printf("^---\n");
+    }
 }
 
 #endif // BBEL_GRAMMAR
