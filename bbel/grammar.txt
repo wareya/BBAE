@@ -11,6 +11,7 @@ type:
 "i64" | "f64" | "iptr"
 
 simple_expr:
+"(" expr ")"
 int | float | name
 
 funccall: @notokens

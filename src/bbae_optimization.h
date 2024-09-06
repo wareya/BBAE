@@ -77,6 +77,34 @@ static void _block_edges_fix(Program * program)
     
 static void optimization_empty_block_removal(Program * program)
 {
+    // first, blocks that are never entered into
+    for (size_t f = 0; f < array_len(program->functions, Function *); f++)
+    {
+        Function * func = program->functions[f];
+        if (array_len(func->blocks, Block *) < 2)
+            continue;
+        for (size_t b = array_len(func->blocks, Block *) - 1; b > 0; b--)
+        {
+            Block * block = func->blocks[b];
+            if (array_len(block->edges_in, Statement *) == 0)
+                array_erase(func->blocks, Block *, b);
+            else
+            {
+                uint8_t different = 0;
+                for (size_t i = 0; i < array_len(block->edges_in, Statement *); i++)
+                {
+                    if (block->edges_in[i]->block != block)
+                    {
+                        different = 1;
+                        break;
+                    }
+                }
+                if (!different)
+                    array_erase(func->blocks, Block *, b);
+            }
+        }
+    }
+    // finally, actually empty blocks
     for (size_t f = 0; f < array_len(program->functions, Function *); f++)
     {
         Function * func = program->functions[f];
@@ -182,11 +210,11 @@ static void optimization_unused_value_removal(Program * program)
             for (size_t b = 0; b < array_len(func->blocks, Block *); b++)
             {
                 Block * block = func->blocks[b];
-                if (array_len(block->statements, Statement *) == 0)
+                if (array_len(block->statements, Statement *) < 2)
                     continue;
                 
                 // statements with no output usages or side effects
-                for (size_t i = 0; i < array_len(block->statements, Statement *) - 1; i++)
+                for (ptrdiff_t i = array_len(block->statements, Statement *) - 2; i >= 0; i--)
                 {
                     Statement * statement = block->statements[i];
                     // remove instruction if it has no outputs or side effects
@@ -206,7 +234,7 @@ static void optimization_unused_value_removal(Program * program)
                 }
                 
                 // statements that are a mov from one SSA variable to another
-                for (size_t i = 0; i < array_len(block->statements, Statement *) - 1; i++)
+                for (ptrdiff_t i = array_len(block->statements, Statement *) - 2; i >= 0; i--)
                 {
                     Statement * statement = block->statements[i];
                     if (strcmp(statement->statement_name, "mov") == 0)
@@ -478,14 +506,36 @@ static void optimization_global_mem2reg(Program * program)
                 }
                 else if (strcmp(edge->statement_name, "store") == 0)
                     ever_stored = 1;
-                else
+                else // anything else? we probably took its address. FUTURE: do capture/ownership leakage detection
                     goto full_continue;
             }
             // if the value is never loaded, we can eliminate it and all of its stores
             // TODO: do so instead of just skipping
             // TODO: implement volatile and make volatile stores count as loads
             if (!ever_loaded)
+            {
+                for (size_t b = 0; b < array_len(func->blocks, Block *); b++)
+                {
+                    Block * block = func->blocks[b];
+                    for (size_t i = 0; i < array_len(block->statements, Statement *); i++)
+                    {
+                        Statement * statement = block->statements[i];
+                        assert(statement);
+                        if (strcmp(statement->statement_name, "store") == 0 && statement->args[0].value == slot)
+                        {
+                            disconnect_statement_from_operand(statement, statement->args[0], 1);
+                            disconnect_statement_from_operand(statement, statement->args[1], 1);
+                            array_erase(block->statements, Statement *, i);
+                            i -= 1;
+                        }
+                    }
+                }
+                
+                array_erase(func->stack_slots, Value *, i);
+                i -= 1;
+                
                 continue;
+            }
             
             ever_stored = ever_stored + 0; // suppress unused variable warning
             
