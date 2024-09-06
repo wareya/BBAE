@@ -60,5 +60,9 @@ int main(int argc, char ** argv)
     SymbolEntry * symbollist;
     auto bytes = do_lowering(program, &symbollist);
     
+    
+    
+    free_all_compiler_allocs();
+    
     return 0;
 }

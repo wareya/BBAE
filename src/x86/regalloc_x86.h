@@ -161,7 +161,7 @@ static void do_spill(Function * func, Block * block, Value ** reg_int_alloced, V
     }
     
     assert(spillee->regalloced);
-    assert(spillee->regalloc >= 0);
+    assert((int64_t)spillee->regalloc >= 0);
     assert(!spillee->spilled);
     
     // first use is after current statement

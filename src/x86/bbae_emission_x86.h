@@ -175,11 +175,11 @@ void reg_shuffle_block_args(byte_buffer * code, Value ** block_args, Operand * a
         assert(args[i].value->variant == VALUE_SSA || args[i].value->variant == VALUE_ARG);
         
         assert(block_args[i]->regalloced);
-        assert(((void)"spilled block args not yet supported", block_args[i]->regalloc >= 0));
+        assert(((void)"spilled block args not yet supported", (int64_t)block_args[i]->regalloc >= 0));
         assert(block_args[i]->regalloc < 32);
         
         assert(args[i].value->regalloced);
-        assert(((void)"spilled block args not yet supported", args[i].value->regalloc >= 0));
+        assert(((void)"spilled block args not yet supported", (int64_t)args[i].value->regalloc >= 0));
         assert(args[i].value->regalloc < 32);
         
         // no MOV needed
@@ -216,7 +216,7 @@ void reg_shuffle_call(byte_buffer * code, Statement * call)
         assert(value->variant == VALUE_SSA || value->variant == VALUE_ARG);
         
         assert(value->regalloced);
-        assert(((void)"spilled call args not yet supported", value->regalloc >= 0));
+        assert(((void)"spilled call args not yet supported",  (int64_t)value->regalloc >= 0));
         assert(value->regalloc < 32);
         assert(type_is_basic(value->type));
         

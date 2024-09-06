@@ -796,11 +796,18 @@ static void add_statement_output(Statement * statement)
             strcmp(statement->statement_name, "mul") == 0 ||
             strcmp(statement->statement_name, "imul") == 0 ||
             strcmp(statement->statement_name, "div") == 0 ||
+            strcmp(statement->statement_name, "div_unsafe") == 0 ||
             strcmp(statement->statement_name, "idiv") == 0 ||
+            strcmp(statement->statement_name, "idiv_unsafe") == 0 ||
             strcmp(statement->statement_name, "rem") == 0 ||
+            strcmp(statement->statement_name, "rem_unsafe") == 0 ||
             strcmp(statement->statement_name, "irem") == 0 ||
+            strcmp(statement->statement_name, "irem_unsafe") == 0 ||
             strcmp(statement->statement_name, "shl") == 0 ||
             strcmp(statement->statement_name, "shr") == 0 ||
+            strcmp(statement->statement_name, "shr_unsafe") == 0 ||
+            strcmp(statement->statement_name, "sar") == 0 ||
+            strcmp(statement->statement_name, "sar_unsafe") == 0 ||
             strcmp(statement->statement_name, "fadd") == 0 ||
             strcmp(statement->statement_name, "fsub") == 0 ||
             strcmp(statement->statement_name, "fmul") == 0 ||
@@ -835,8 +842,22 @@ static void add_statement_output(Statement * statement)
             assert(statement->args[0].variant == OP_KIND_TYPE);
             statement->output = make_value(statement->args[0].rawtype);
         }
-        else if (strcmp(statement->statement_name, "cmp_g") == 0 ||
-                 strcmp(statement->statement_name, "cmp_ge") == 0)
+        else if (strcmp(statement->statement_name, "cmp_g" ) == 0 ||
+                 strcmp(statement->statement_name, "cmp_ge") == 0 ||
+                 strcmp(statement->statement_name, "cmp_l" ) == 0 ||
+                 strcmp(statement->statement_name, "cmp_le") == 0 ||
+                 strcmp(statement->statement_name, "cmp_eq") == 0 ||
+                 strcmp(statement->statement_name, "cmp_ne") == 0 ||
+                 strcmp(statement->statement_name, "icmp_g" ) == 0 ||
+                 strcmp(statement->statement_name, "icmp_ge") == 0 ||
+                 strcmp(statement->statement_name, "icmp_l" ) == 0 ||
+                 strcmp(statement->statement_name, "icmp_le") == 0 ||
+                 strcmp(statement->statement_name, "fcmp_g" ) == 0 ||
+                 strcmp(statement->statement_name, "fcmp_ge") == 0 ||
+                 strcmp(statement->statement_name, "fcmp_l" ) == 0 ||
+                 strcmp(statement->statement_name, "fcmp_le") == 0 ||
+                 strcmp(statement->statement_name, "fcmp_eq") == 0 ||
+                 strcmp(statement->statement_name, "fcmp_ne") == 0)
         {
             statement->output = make_value(basic_type(TYPE_I8));
         }

@@ -73,59 +73,8 @@
 
 
 /// Initializes a statement object with the given operation name and gives it an output.
-static Statement * init_statement_auto_output(const char * statement_name)
-{
-    if (strcmp(statement_name, "add") == 0 ||
-        strcmp(statement_name, "sub") == 0 ||
-        strcmp(statement_name, "mul") == 0 ||
-        strcmp(statement_name, "imul") == 0 ||
-        strcmp(statement_name, "div") == 0 ||
-        strcmp(statement_name, "idiv") == 0 ||
-        strcmp(statement_name, "rem") == 0 ||
-        strcmp(statement_name, "irem") == 0 ||
-        strcmp(statement_name, "shl") == 0 ||
-        strcmp(statement_name, "shr") == 0 ||
-        strcmp(statement_name, "fadd") == 0 ||
-        strcmp(statement_name, "fsub") == 0 ||
-        strcmp(statement_name, "fmul") == 0 ||
-        strcmp(statement_name, "fdiv") == 0 ||
-        strcmp(statement_name, "fxor") == 0 ||
-        strcmp(statement_name, "mov") == 0 ||
-        
-        strcmp(statement_name, "load") == 0 ||
-        strcmp(statement_name, "trim") == 0 ||
-        strcmp(statement_name, "qext") == 0 ||
-        strcmp(statement_name, "sext") == 0 ||
-        strcmp(statement_name, "zext") == 0 ||
-        // float-int casts
-        strcmp(statement_name, "float_to_uint") == 0 ||
-        strcmp(statement_name, "float_to_uint_unsafe") == 0 ||
-        strcmp(statement_name, "uint_to_float") == 0 ||
-        strcmp(statement_name, "float_to_sint") == 0 ||
-        strcmp(statement_name, "float_to_sint_unsafe") == 0 ||
-        strcmp(statement_name, "sint_to_float") == 0 ||
-        
-        strcmp(statement_name, "bitcast") == 0 ||
-        
-        strcmp(statement_name, "extract") == 0 ||
-        
-        strcmp(statement_name, "cmp_g") == 0 ||
-        strcmp(statement_name, "cmp_ge") == 0 ||
-    
-        strcmp(statement_name, "symbol_lookup_unsized") == 0 ||
-        strcmp(statement_name, "symbol_lookup") == 0 ||
-        
-        strcmp(statement_name, "call_eval") == 0 ||
-        strcmp(statement_name, "call") == 0)
-    {
-        Statement * statement = init_statement(statement_name);
-        statement->output_name = make_temp_name();
-        return statement;
-    }
-    else
-        return init_statement(statement_name);
-}
-
+// (contains a giant list of operation names, so is defined at the bottom)
+static Statement * init_statement_auto_output(const char * statement_name);
 
 /// Null if the statement is an instruction instead of an operation.
 Value * statement_get_output(Statement * statement)
@@ -135,6 +84,16 @@ Value * statement_get_output(Statement * statement)
 Block * function_get_entry_block(Function * func)
 {
     return func->entry_block;
+}
+static Statement * block_get_last_statement(Block * block)
+{
+    if (array_len(block->statements, Statement *) == 0)
+        return 0;
+    return block->statements[array_len(block->statements, Statement *) - 1];
+}
+static uint8_t block_is_terminated(Block * block)
+{
+    return statement_is_terminator(block_get_last_statement(block));
 }
 
 Statement * build_statement_3val(Block * block, const char * statement_name, Value * a, Value * b, Value * c)
@@ -171,12 +130,7 @@ Statement * build_statement_0val(Block * block, const char * statement_name)
     return ret;
 }
 
-Statement * build_add(Block * block, Value * a, Value * b)
-{
-    return build_statement_2val(block, "add", a, b);
-}
-
-Statement * build_store(Block * block, Value * a, Value * b)
+static Statement * build_store(Block * block, Value * a, Value * b)
 {
     Statement * ret = init_statement_auto_output("store");
     statement_add_value_op(ret, a);
@@ -184,7 +138,7 @@ Statement * build_store(Block * block, Value * a, Value * b)
     block_append_statement(block, ret);
     return ret;
 }
-Statement * build_load(Block * block, Type a, Value * b)
+static Statement * build_load(Block * block, Type a, Value * b)
 {
     Statement * ret = init_statement_auto_output("load");
     statement_add_type_op(ret, a);
@@ -193,25 +147,142 @@ Statement * build_load(Block * block, Type a, Value * b)
     return ret;
 }
 
-Statement * build_return_void(Block * block)
+static Statement * build_return_void(Block * block)
 {
     return build_statement_0val(block, "return");
 }
-Statement * build_return_1val(Block * block, Value * a)
+static Statement * build_return_1val(Block * block, Value * a)
 {
     return build_statement_1val(block, "return", a);
 }
 
-Statement * block_get_last_statement(Block * block)
+
+
+static Statement * build_add(Block * block, Value * a, Value * b)
 {
-    if (array_len(block->statements, Statement *) == 0)
-        return 0;
-    return block->statements[array_len(block->statements, Statement *) - 1];
+    return build_statement_2val(block, "add", a, b);
+}
+static Statement * build_sub(Block * block, Value * a, Value * b)
+{
+    return build_statement_2val(block, "sub", a, b);
+}
+static Statement * build_mul(Block * block, Value * a, Value * b)
+{
+    return build_statement_2val(block, "mul", a, b);
+}
+static Statement * build_imul(Block * block, Value * a, Value * b)
+{
+    return build_statement_2val(block, "imul", a, b);
 }
 
-uint8_t block_is_terminated(Block * block)
+/// @brief Unsafe variants of arithmetic functions avoid generating unspecified or undefined or trap values. See BBAE docs for more info.
+static Statement * build_div(Block * block, Value * a, Value * b, uint8_t is_unsafe)
 {
-    return statement_is_terminator(block_get_last_statement(block));
+    return build_statement_2val(block, !is_unsafe ? "div" : "div_unsafe", a, b);
+}
+static Statement * build_idiv(Block * block, Value * a, Value * b, uint8_t is_unsafe)
+{
+    return build_statement_2val(block, !is_unsafe ? "idiv" : "idiv_unsafe", a, b);
+}
+static Statement * build_rem(Block * block, Value * a, Value * b, uint8_t is_unsafe)
+{
+    return build_statement_2val(block, !is_unsafe ? "rem" : "rem_unsafe", a, b);
+}
+static Statement * build_irem(Block * block, Value * a, Value * b, uint8_t is_unsafe)
+{
+    return build_statement_2val(block, !is_unsafe ? "irem" : "irem_unsafe", a, b);
+}
+
+static Statement * build_shl(Block * block, Value * a, Value * b, uint8_t is_unsafe)
+{
+    return build_statement_2val(block, !is_unsafe ? "shl" : "shl_unsafe", a, b);
+}
+static Statement * build_shr(Block * block, Value * a, Value * b, uint8_t is_unsafe)
+{
+    return build_statement_2val(block, !is_unsafe ? "shr" : "shr_unsafe", a, b);
+}
+static Statement * build_sar(Block * block, Value * a, Value * b, uint8_t is_unsafe)
+{
+    return build_statement_2val(block, !is_unsafe ? "sar" : "sar_unsafe", a, b);
+}
+
+static Statement * build_fadd(Block * block, Value * a, Value * b)
+{
+    return build_statement_2val(block, "fadd", a, b);
+}
+static Statement * build_fsub(Block * block, Value * a, Value * b)
+{
+    return build_statement_2val(block, "fsub", a, b);
+}
+static Statement * build_fmul(Block * block, Value * a, Value * b)
+{
+    return build_statement_2val(block, "fmul", a, b);
+}
+static Statement * build_fdiv(Block * block, Value * a, Value * b)
+{
+    return build_statement_2val(block, "fdiv", a, b);
+}
+/*
+static Statement * build_fsqrt(Block * block, Value * a)
+{
+    return build_statement_1val(block, "fsqrt", a, b);
+}
+*/
+
+static Statement * init_statement_auto_output(const char * statement_name)
+{
+    if (strcmp(statement_name, "add") == 0 ||
+        strcmp(statement_name, "sub") == 0 ||
+        strcmp(statement_name, "mul") == 0 ||
+        strcmp(statement_name, "imul") == 0 ||
+        strcmp(statement_name, "div") == 0 ||
+        strcmp(statement_name, "idiv") == 0 ||
+        strcmp(statement_name, "rem") == 0 ||
+        strcmp(statement_name, "irem") == 0 ||
+        strcmp(statement_name, "shl") == 0 ||
+        strcmp(statement_name, "shr") == 0 ||
+        strcmp(statement_name, "sar") == 0 ||
+        
+        strcmp(statement_name, "fadd") == 0 ||
+        strcmp(statement_name, "fsub") == 0 ||
+        strcmp(statement_name, "fmul") == 0 ||
+        strcmp(statement_name, "fdiv") == 0 ||
+        strcmp(statement_name, "fxor") == 0 ||
+        
+        strcmp(statement_name, "mov") == 0 ||
+        
+        strcmp(statement_name, "load") == 0 ||
+        strcmp(statement_name, "trim") == 0 ||
+        strcmp(statement_name, "qext") == 0 ||
+        strcmp(statement_name, "sext") == 0 ||
+        strcmp(statement_name, "zext") == 0 ||
+        
+        strcmp(statement_name, "float_to_uint") == 0 ||
+        strcmp(statement_name, "float_to_uint_unsafe") == 0 ||
+        strcmp(statement_name, "uint_to_float") == 0 ||
+        strcmp(statement_name, "float_to_sint") == 0 ||
+        strcmp(statement_name, "float_to_sint_unsafe") == 0 ||
+        strcmp(statement_name, "sint_to_float") == 0 ||
+        
+        strcmp(statement_name, "bitcast") == 0 ||
+        
+        strcmp(statement_name, "extract") == 0 ||
+        
+        strcmp(statement_name, "cmp_g") == 0 ||
+        strcmp(statement_name, "cmp_ge") == 0 ||
+    
+        strcmp(statement_name, "symbol_lookup_unsized") == 0 ||
+        strcmp(statement_name, "symbol_lookup") == 0 ||
+        
+        strcmp(statement_name, "call_eval") == 0 ||
+        strcmp(statement_name, "call") == 0)
+    {
+        Statement * statement = init_statement(statement_name);
+        statement->output_name = make_temp_name();
+        return statement;
+    }
+    else
+        return init_statement(statement_name);
 }
         
 #endif // BBAE_BUILDER
