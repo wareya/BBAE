@@ -36,6 +36,11 @@
 [ ] and i i // bitwise and
 [ ] or i i  // bitwise or
 [ ] xor i i // bitwise xor
+[ ] bitnot i // flips each bit in the input value and produces a new value of the same type
+
+[ ] neg i    // produces the arithmetic negative of the input value (positive overflow is defined behavior -- neg 0x8000u16 produces 0x8000u16)
+[ ] bool i   // produces 0i8 for any integer 0 value (including iptr), 1i8 otherwise.
+[ ] not i    // produces 1i8 for any integer 0 value (including iptr), 0i8 otherwise.
 
 [ ] cmp_eq i i // produces 1i8 if the values are equal, 0 otherwise. i and i must be of the same type.
 [ ] cmp_ne i i // !=
@@ -56,11 +61,6 @@
 [ ] fcmp_le f f // <=
 [ ] fcmp_g f f // >
 [ ] fcmp_l f f // <
-
-[ ] bitnot i // flips each bit in the input value and produces a new value of the same type
-[ ] neg i    // produces the arithmetic negative of the input value (positive overflow is defined behavior -- neg 0x8000u16 produces 0x8000u16)
-[ ] not i    // produces 1i8 for any integer 0 value (including iptr), 0i8 otherwise.
-[ ] bool i   // produces 0i8 for any integer 0 value (including iptr), 1i8 otherwise.
 
 [x] fadd f f // f and f must be of the same type
 [x] fsub f f

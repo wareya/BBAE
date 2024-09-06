@@ -206,6 +206,54 @@ static Statement * build_sar(Block * block, Value * a, Value * b, uint8_t is_uns
     return build_statement_2val(block, !is_unsafe ? "sar" : "sar_unsafe", a, b);
 }
 
+static Statement * build_and(Block * block, Value * a)
+{
+    return build_statement_1val(block, "and", a);
+}
+static Statement * build_or(Block * block, Value * a)
+{
+    return build_statement_1val(block, "or", a);
+}
+static Statement * build_xor(Block * block, Value * a)
+{
+    return build_statement_1val(block, "xor", a);
+}
+static Statement * build_bitnot(Block * block, Value * a)
+{
+    return build_statement_1val(block, "bitnot", a);
+}
+
+static Statement * build_not(Block * block, Value * a)
+{
+    return build_statement_1val(block, "not", a);
+}
+static Statement * build_bool(Block * block, Value * a)
+{
+    return build_statement_1val(block, "bool", a);
+}
+static Statement * build_neg(Block * block, Value * a)
+{
+    return build_statement_1val(block, "neg", a);
+}
+
+static Statement * build_trim(Block * block, Value * a)
+{
+    return build_statement_1val(block, "trim", a);
+}
+static Statement * build_qext(Block * block, Value * a)
+{
+    return build_statement_1val(block, "qext", a);
+}
+static Statement * build_zext(Block * block, Value * a)
+{
+    return build_statement_1val(block, "zext", a);
+}
+static Statement * build_sext(Block * block, Value * a)
+{
+    return build_statement_1val(block, "sext", a);
+}
+
+
 static Statement * build_fadd(Block * block, Value * a, Value * b)
 {
     return build_statement_2val(block, "fadd", a, b);
@@ -225,9 +273,75 @@ static Statement * build_fdiv(Block * block, Value * a, Value * b)
 /*
 static Statement * build_fsqrt(Block * block, Value * a)
 {
-    return build_statement_1val(block, "fsqrt", a, b);
+    return build_statement_1val(block, "fsqrt", a);
 }
 */
+
+
+static Statement * build_fneg(Block * block, Value * a)
+{
+    return build_statement_1val(block, "fneg", a);
+}
+static Statement * build_fbool(Block * block, Value * a)
+{
+    return build_statement_1val(block, "fbool", a);
+}
+static Statement * build_fisnan(Block * block, Value * a)
+{
+    return build_statement_1val(block, "fisnan", a);
+}
+
+enum CmpComparison {
+    CMP_EQ,
+    CMP_NE,
+    CMP_GE,
+    CMP_G,
+    CMP_LE,
+    CMP_L,
+};
+
+static Statement * build_ucmp(Block * block, Value * a, Value * b, enum CmpComparison cmp)
+{
+    assert(a && b);
+    assert(types_same(a->type, b->type));
+    const char * s =
+        cmp == CMP_EQ ? "cmp_eq" :
+        cmp == CMP_NE ? "cmp_ne" :
+        cmp == CMP_GE ? "cmp_ge" :
+        cmp == CMP_G  ? "cmp_g"  :
+        cmp == CMP_LE ? "cmp_le" :
+        cmp == CMP_L  ? "cmp_l"  :
+        (assert(((void)"invalid kind-of-comparison input to comparison builder", 0)), "");
+    return build_statement_2val(block, s, a, b);
+}
+static Statement * build_icmp(Block * block, Value * a, Value * b, enum CmpComparison cmp)
+{
+    assert(a && b);
+    assert(types_same(a->type, b->type));
+    const char * s =
+        cmp == CMP_EQ ? "cmp_eq" :
+        cmp == CMP_NE ? "cmp_ne" :
+        cmp == CMP_GE ? "icmp_ge" :
+        cmp == CMP_G  ? "icmp_g"  :
+        cmp == CMP_LE ? "icmp_le" :
+        cmp == CMP_L  ? "icmp_l"  :
+        (assert(((void)"invalid kind-of-comparison input to comparison builder", 0)), "");
+    return build_statement_2val(block, s, a, b);
+}
+static Statement * build_fcmp(Block * block, Value * a, Value * b, enum CmpComparison cmp)
+{
+    assert(a && b);
+    assert(types_same(a->type, b->type));
+    const char * s =
+        cmp == CMP_EQ ? "fcmp_eq" :
+        cmp == CMP_NE ? "fcmp_ne" :
+        cmp == CMP_GE ? "fcmp_ge" :
+        cmp == CMP_G  ? "fcmp_g"  :
+        cmp == CMP_LE ? "fcmp_le" :
+        cmp == CMP_L  ? "fcmp_l"  :
+        (assert(((void)"invalid kind-of-comparison input to comparison builder", 0)), "");
+    return build_statement_2val(block, s, a, b);
+}
 
 static Statement * init_statement_auto_output(const char * statement_name)
 {

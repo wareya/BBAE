@@ -35,7 +35,7 @@ binexp_3 ("+"|"-"|"&"|"|"|"^") binexp_0
 binexp_3
 
 binexp_3: @left_recursive
-binexp_base ("*"|"+*"|"/"|"+/"|"%"|"<<"|">>"|"+>>") binexp_0
+binexp_base ("*"|"+*"|"/"|"+/"|"%"|"+%"|"<<"|">>"|"+>>") binexp_0
 binexp_base
 
 expr:

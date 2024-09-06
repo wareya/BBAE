@@ -240,10 +240,74 @@ void compile(CompilerState & state, std::shared_ptr<ASTNode> ast)
             printf("op: %s\n", op_text->data());
             
             Statement * operation = 0;
-            if (*op_text == "+")
-                operation = build_add(state.current_block, a, b);
+            if (types_same(a->type, basic_type(TYPE_F64)))
+            {
+                if (!types_same(b->type, basic_type(TYPE_F64)))
+                {
+                    assert(((void)"(unmatched types. TODO add real error)", 0));
+                }
+                if (*op_text == "+")
+                    operation = build_fadd(state.current_block, a, b);
+                else if (*op_text == "-")
+                    operation = build_fsub(state.current_block, a, b);
+                else if (*op_text == "*")
+                    operation = build_fmul(state.current_block, a, b);
+                else if (*op_text == "/")
+                    operation = build_fdiv(state.current_block, a, b);
+                else if (*op_text == "==")
+                    operation = build_fcmp(state.current_block, a, b, CMP_EQ);
+                else if (*op_text == "!=")
+                    operation = build_fcmp(state.current_block, a, b, CMP_NE);
+                else if (*op_text == ">=")
+                    operation = build_fcmp(state.current_block, a, b, CMP_GE);
+                else if (*op_text == ">")
+                    operation = build_fcmp(state.current_block, a, b, CMP_G);
+                else if (*op_text == "<=")
+                    operation = build_fcmp(state.current_block, a, b, CMP_LE);
+                else if (*op_text == "<")
+                    operation = build_fcmp(state.current_block, a, b, CMP_L);
+                else
+                {
+                    printf("culprit: %s\n", op_text->data());
+                    assert(((void)"unsupported floating-point infix operator", 0));
+                }
+            }
             else
-                assert(((void)"TODO", 0));
+            {
+                if (types_same(b->type, basic_type(TYPE_F64)))
+                {
+                    assert(((void)"(unmatched types. TODO add real error)", 0));
+                }
+                // TODO: error if i64 <op> iptr
+                // TODO: convert arg2 to iptr if iptr <op> i64
+                if (*op_text == "+")
+                    operation = build_add(state.current_block, a, b);
+                else if (*op_text == "+")
+                    operation = build_sub(state.current_block, a, b);
+                else if (*op_text == "*")
+                    operation = build_mul(state.current_block, a, b);
+                else if (*op_text == "/")
+                    operation = build_div(state.current_block, a, b, 1);
+                else if (*op_text == "%")
+                    operation = build_rem(state.current_block, a, b, 1);
+                else if (*op_text == "+*")
+                    operation = build_mul(state.current_block, a, b);
+                else if (*op_text == "+/")
+                    operation = build_div(state.current_block, a, b, 1);
+                else if (*op_text == "+%")
+                    operation = build_irem(state.current_block, a, b, 1);
+                else if (*op_text == "<<")
+                    operation = build_shl(state.current_block, a, b, 1);
+                else if (*op_text == ">>")
+                    operation = build_shr(state.current_block, a, b, 1);
+                else if (*op_text == "+>>")
+                    operation = build_sar(state.current_block, a, b, 1);
+                else
+                {
+                    printf("culprit: %s\n", op_text->data());
+                    assert(((void)"TODO", 0));
+                }
+            }
             
             auto val = statement_get_output(operation);
             state.stack.push_back(val);
