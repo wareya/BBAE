@@ -8,8 +8,7 @@
 #include <fstream>
 
 #include "grammar.hpp"
-
-#include "../src/bbae_builder.h"
+#include "compiler.hpp"
 
 int main(int argc, char ** argv)
 {
@@ -42,22 +41,24 @@ int main(int argc, char ** argv)
         return 0;
     }
     
-    for (auto n : tokens)
-    {
-        //printf("%s\n", n->text->data());
-    }
+    //for (auto n : tokens) printf("%s\n", n->text->data());
     
     auto asdf = parse_as(grammar, tokens, "program");
-    //printf("%d\n", !!asdf);
-    //printf("%zu\n", furthest);
     
-    if (asdf)
-        print_AST(*asdf);
-    else
+    if (!asdf)
     {
         auto s = std::string_view(text2.data(), text2.size());
         print_parse_error(tokens, s);
+        return 0;
     }
+    
+    //print_AST(*asdf);
+    
+    Program * program = compile_root(*asdf);
+    
+    do_optimization(program);
+    SymbolEntry * symbollist;
+    auto bytes = do_lowering(program, &symbollist);
     
     return 0;
 }

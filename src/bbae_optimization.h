@@ -182,6 +182,8 @@ static void optimization_unused_value_removal(Program * program)
             for (size_t b = 0; b < array_len(func->blocks, Block *); b++)
             {
                 Block * block = func->blocks[b];
+                if (array_len(block->statements, Statement *) == 0)
+                    continue;
                 
                 // statements with no output usages or side effects
                 for (size_t i = 0; i < array_len(block->statements, Statement *) - 1; i++)
@@ -449,6 +451,7 @@ static void optimization_local_CSE(Program * program)
 }
 static void optimization_global_mem2reg(Program * program)
 {
+    // TODO: also remove stack slots that are never loaded from or addressed
     for (size_t f = 0; f < array_len(program->functions, Function *); f++)
     {
         Function * func = program->functions[f];

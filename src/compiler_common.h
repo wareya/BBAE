@@ -206,11 +206,11 @@ typedef struct _Type {
     AggData aggdata;
 } Type;
 
-static Type basic_type(int x)
+static Type basic_type(enum BBAE_TYPE_VARIANT val)
 {
     Type ret;
     memset(&ret, 0, sizeof(Type));
-    ret.variant = (enum BBAE_TYPE_VARIANT)x;
+    ret.variant = val;
     return ret;
 }
 
@@ -299,14 +299,14 @@ static size_t type_size(Type type)
         assert(0);
 }
 
-uint8_t aggdata_same(AggData a, AggData b)
+static uint8_t aggdata_same(AggData a, AggData b)
 {
     if (a.align != b.align || a.packed != b.packed || a.size != b.size)
         return 0;
     return !memcmp(a.per_byte_likeness, b.per_byte_likeness, a.size);
 }
 
-uint8_t types_same(Type a, Type b)
+static uint8_t types_same(Type a, Type b)
 {
     if (a.variant == TYPE_INVALID || b.variant == TYPE_INVALID)
         return 0;
@@ -362,7 +362,7 @@ typedef struct _Value {
     uint64_t temp; // temporary, used by specific algorithms as a kind of cache
 } Value;
 
-uint8_t value_is_basic_zero_constant(Value * value)
+static uint8_t value_is_basic_zero_constant(Value * value)
 {
     return value->variant == VALUE_CONST && type_is_basic(value->type) && value->constant == 0;
 }
@@ -513,6 +513,8 @@ typedef struct _Program {
     // non-arrays
     Function * current_func;
     Block * current_block;
+    
+    uint8_t construction_finished;
 } Program;
 
 static Function * find_func(Program * program, const char * name)
@@ -950,6 +952,8 @@ static size_t find_separator_index(Operand * args)
 
 static uint8_t statement_is_terminator(Statement * a)
 {
+    if (!a)
+        return 0;
     if (strcmp(a->statement_name, "goto") == 0 ||
         strcmp(a->statement_name, "if") == 0 ||
         strcmp(a->statement_name, "exit") == 0 ||
@@ -1129,6 +1133,17 @@ static void verify_coherency(Program * program)
             assert(strcmp(last->statement_name, "if") == 0 ||
                    strcmp(last->statement_name, "goto") == 0 ||
                    strcmp(last->statement_name, "return") == 0);
+            
+            if (strcmp(last->statement_name, "return") == 0)
+            {
+                if (func->return_type.variant == TYPE_NONE)
+                    assert(((void)"Return type mismatch.", array_len(last->args, Operand) == 0));
+                else
+                {
+                    assert(((void)"Return type mismatch.", array_len(last->args, Operand) == 1));
+                    assert(((void)"Return type mismatch.", types_same(last->args[0].value->type, func->return_type)));
+                }
+            }
         }
     }
 }

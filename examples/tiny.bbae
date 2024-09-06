@@ -1,0 +1,19 @@
+
+func main returns i64
+    arg _arg_a i64
+    arg _arg_b i64
+    stack_slot a 8
+    stack_slot b 8
+    stack_slot x 8
+    store a _arg_a
+    store b _arg_b
+    store x 5i64
+    btemp_1 = load i64 a
+    btemp_2 = load i64 x
+    btemp_3 = add btemp_1 btemp_2
+    store x btemp_3
+    btemp_4 = load i64 x
+    return btemp_4
+block btemp_5
+    return 0i64
+endfunc

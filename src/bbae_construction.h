@@ -50,6 +50,82 @@ static void assert_no_redefinition(Function * func, Block * block, const char * 
     }
 }
 
+static Value * build_constant_f32(float f)
+{
+    Value * ret = make_value(basic_type(TYPE_F32));
+    ret->variant = VALUE_CONST;
+    memcpy(&ret->constant, &f, 4);
+    return ret;
+}
+static Value * build_constant_f64(double f)
+{
+    Value * ret = make_value(basic_type(TYPE_F64));
+    ret->variant = VALUE_CONST;
+    memcpy(&ret->constant, &f, 8);
+    return ret;
+}
+static Value * build_constant_i64(uint64_t n)
+{
+    Value * ret = make_value(basic_type(TYPE_I64));
+    ret->variant = VALUE_CONST;
+    ret->constant = n;
+    return ret;
+}
+static Value * build_constant_iptr(uint64_t n)
+{
+    Value * ret = make_value(basic_type(TYPE_IPTR));
+    ret->variant = VALUE_CONST;
+    ret->constant = n;
+    return ret;
+}
+static Value * build_constant_i32(uint32_t n)
+{
+    Value * ret = make_value(basic_type(TYPE_I32));
+    ret->variant = VALUE_CONST;
+    ret->constant = n;
+    return ret;
+}
+static Value * build_constant_i16(uint16_t n)
+{
+    Value * ret = make_value(basic_type(TYPE_I16));
+    ret->variant = VALUE_CONST;
+    ret->constant = n;
+    return ret;
+}
+static Value * build_constant_i8(uint8_t n)
+{
+    Value * ret = make_value(basic_type(TYPE_I8));
+    ret->variant = VALUE_CONST;
+    ret->constant = n;
+    return ret;
+}
+
+static Value * build_constant_zero(enum BBAE_TYPE_VARIANT variant)
+{
+    if (variant == TYPE_I8)
+        return build_constant_i8(0);
+    else if (variant == TYPE_I16)
+        return build_constant_i16(0);
+    else if (variant == TYPE_I32)
+        return build_constant_i32(0);
+    else if (variant == TYPE_I64)
+        return build_constant_i64(0);
+    else if (variant == TYPE_IPTR)
+        return build_constant_iptr(0);
+    else if (variant == TYPE_F32)
+        return build_constant_f32(0);
+    else if (variant == TYPE_F64)
+        return build_constant_f64(0);
+    else
+        assert(((void)"error: unsupported type for zero constant", 0));
+}
+/*
+static Value * build_constant_poison(Type type)
+{
+    
+}
+*/
+
 static Value * parse_value(Program * program, char * token)
 {
     Function * func = program->current_func;
@@ -66,25 +142,19 @@ static Value * parse_value(Program * program, char * token)
     if ((token[0] >= '0' && token[0] <= '9')
         || token[0] == '-'|| token[0] == '.')
     {
-        Value * ret = make_value(basic_type(TYPE_NONE));
-        
         if (str_ends_with(token, "f32"))
         {
             char * end = 0;
             float f = strtof(token, &end);
             assert(((void)"invalid float literal", strlen(token) - (size_t)(end - token) == 3));
-            ret->variant = VALUE_CONST;
-            ret->type = basic_type(TYPE_F32);
-            memcpy(&ret->constant, &f, 4);
+            return build_constant_f32(f);
         }
         else if (str_ends_with(token, "f64"))
         {
             char * end = 0;
             double f = strtod(token, &end);
             assert(((void)"invalid float literal", strlen(token) - (size_t)(end - token) == 3));
-            ret->variant = VALUE_CONST;
-            ret->type = basic_type(TYPE_F64);
-            memcpy(&ret->constant, &f, 8);
+            return build_constant_f64(f);
         }
         else if (str_ends_with(token, "i8") || str_ends_with(token, "i16")
                  || str_ends_with(token, "i32") || str_ends_with(token, "i64")
@@ -92,27 +162,24 @@ static Value * parse_value(Program * program, char * token)
         {
             uint64_t n = parse_int_nonbare(token);
             printf("parsed int... %zd\n", n);
-            ret->variant = VALUE_CONST;
             if (str_ends_with(token, "i8"))
-                ret->type = basic_type(TYPE_I8);
+                return build_constant_i8(n);
             else if (str_ends_with(token, "i16"))
-                ret->type = basic_type(TYPE_I16);
+                return build_constant_i16(n);
             else if (str_ends_with(token, "i32"))
-                ret->type = basic_type(TYPE_I32);
+                return build_constant_i32(n);
             else if (str_ends_with(token, "i64"))
-                ret->type = basic_type(TYPE_I64);
+                return build_constant_i64(n);
             else if (str_ends_with(token, "iptr"))
-                ret->type = basic_type(TYPE_IPTR);
+                return build_constant_iptr(n);
             else
                 assert(0);
-            ret->constant = n;
         }
         else
         {
             assert(((void)"unknown type of literal value", 0));
         }
-        
-        return ret;
+        assert(((void)"unreachable", 0));
     }
     else
     {
@@ -528,19 +595,21 @@ static Statement * parse_and_add_statement(Program * program, const char ** curs
 /// @param name 
 /// @param type 
 /// @return
-static Value * add_funcarg(Program * program, const char * name, Type type)
+static Value * add_funcarg(Function * func, const char * name, Type type)
 {
     if (!name)
         name = make_temp_name();
+    else
+        name = strcpy_z(name);
     
-    assert_no_redefinition(program->current_func, 0, name);
+    assert_no_redefinition(func, 0, name);
     
     Value * value = make_value(type);
     value->variant = VALUE_ARG;
     value->arg = name;
     printf("creating func arg with name %s\n", name);
     
-    array_push(program->current_func->args, Value *, value);
+    array_push(func->args, Value *, value);
     
     return value;
 }
@@ -629,6 +698,14 @@ static Statement * init_statement(const char * statement_name)
 /// @brief Add a value as an operand/argument to the given statement.
 /// @param statement
 /// @param val 
+static void statement_add_type_op(Statement * statement, Type type_)
+{
+    array_push(statement->args, Operand, new_op_type(type_));
+}
+
+/// @brief Add a value as an operand/argument to the given statement.
+/// @param statement
+/// @param val 
 static void statement_add_value_op(Statement * statement, Value * val)
 {
     array_push(statement->args, Operand, new_op_val(val));
@@ -642,13 +719,22 @@ static void statement_add_text_op(Statement * statement, const char * text)
     array_push(statement->args, Operand, new_op_text(strcpy_z(text)));
 }
 
-static Program * parse_file(const char * cursor)
+/// @brief Creates a program with no functions, globals, or statics in it.
+/// @param  
+/// @return 
+static Program * create_empty_program(void)
 {
     Program * program = (Program *)zero_alloc(sizeof(Program));
     program->functions = (Function **)zero_alloc(0);
     program->globals = (GlobalData *)zero_alloc(0);
     program->statics = (StaticData *)zero_alloc(0);
     program->unused_relocation_log = (UnusedRelocation *)zero_alloc(0);
+    return program;
+}
+
+static Program * parse_file(const char * cursor)
+{
+    Program * program = create_empty_program();
     
     enum BBAE_PARSER_STATE state = PARSER_STATE_ROOT;
     char * token = find_next_token_anywhere(&cursor);
@@ -718,7 +804,7 @@ static Program * parse_file(const char * cursor)
                 char * name = strcpy_z(token);
                 Type type = parse_type(&cursor);
                 
-                add_funcarg(program, name, type);
+                add_funcarg(program->current_func, name, type);
             }
             else
             {
@@ -992,6 +1078,7 @@ static void program_finish_construction(Program * program)
     split_blocks(program);
     block_statements_connect(program);
     block_edges_connect(program);
+    program->construction_finished = 1;
 }
 
 #endif // BBAE_CONSTRUCTION

@@ -19,6 +19,9 @@ static Program * parse(const char * buffer)
 
 static void do_optimization(Program * program)
 {
+    if (!program->construction_finished)
+        program_finish_construction(program);
+    
     puts("----- BEFORE OPTIMIZATION -----");
     print_ir_to(0, program);
     
@@ -38,6 +41,9 @@ static void do_optimization(Program * program)
 
 static byte_buffer * do_lowering(Program * program, SymbolEntry ** symbollist)
 {
+    if (!program->construction_finished)
+        program_finish_construction(program);
+    
     validate_links(program);
     verify_coherency(program);
     do_regalloc(program);

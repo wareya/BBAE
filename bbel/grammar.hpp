@@ -73,6 +73,8 @@ struct GrammarForm {
 struct GrammarPoint {
     std::shared_ptr<std::string> name = 0;
     std::vector<GrammarForm> forms;
+    bool left_recursive = false;
+    bool no_tokens = false;
     GrammarPoint()
     {
         forms.push_back(GrammarForm{});
@@ -230,6 +232,14 @@ static auto load_grammar(const char * text) -> Grammar
                 name += text[i];
                 i++;
             }
+            i++; // ':'
+            while (text[i] != 0 && (text[i] == ' ' || text[i] == '\t'))
+                i++;
+            if (starts_with(&text[i], "@left_recursive"))
+                current_point->left_recursive = true;
+            if (starts_with(&text[i], "@notokens"))
+                current_point->no_tokens = true;
+            
             current_point->name = std::make_shared<std::string>(name);
             mode = MODE_FORMS;
             
@@ -621,6 +631,7 @@ struct ASTNode
     size_t start_column = 1;
     size_t token_count = 0;
     std::shared_ptr<std::string> text;
+    bool is_token = false;
 };
 
 void print_AST(std::shared_ptr<ASTNode> node, size_t depth)
@@ -657,13 +668,17 @@ void print_AST(std::shared_ptr<ASTNode> node)
 
 std::shared_ptr<ASTNode> ast_node_from_token(std::shared_ptr<Token> token)
 {
-    return std::make_shared<ASTNode>(ASTNode{{}, token->row, token->column, 1, token->text});
+    return std::make_shared<ASTNode>(ASTNode{{}, token->row, token->column, 1, token->text, true});
 }
 
 struct ParseRecord
 {
     size_t token_index;
     std::shared_ptr<std::string> node_name;
+    bool operator==(const ParseRecord & other) const
+    {
+        return token_index == other.token_index && *node_name == *other.node_name;
+    }
 };
 
 template<>
@@ -702,6 +717,12 @@ static auto parse_with(const std::vector<std::shared_ptr<Token>> & tokens, size_
         printf("+ checking for a... %s\n", node_type->name->data());
     }
     auto base_key = ParseRecord{starting_token_index, node_type->name};
+    
+    if (node_type->name && parse_hits.count(base_key) > 0)
+        return parse_hits[base_key];
+    if (node_type->name && parse_misses.count(base_key) > 0)
+        return {};
+    
     // try to find a form that matches
     for (auto & _form : node_type->forms)
     {
@@ -848,12 +869,32 @@ static auto parse_with(const std::vector<std::shared_ptr<Token>> & tokens, size_
             ret.start_column = tokens[starting_token_index]->column;
             ret.token_count = token_index - starting_token_index;
             ret.text = node_type->name;
+            ret.is_token = false;
             if (PARSER_DO_DEBUG_PRINT)
             {
                 indent();
                 printf("- done checking! matched all %zu subrules of %s!!!\n", i, node_type->name->data());
             }
-            return {std::make_shared<ASTNode>(ret)};
+            if (node_type->no_tokens)
+            {
+                for (ptrdiff_t i = ret.children.size() - 1; i >= 0; i--)
+                {
+                    if (ret.children[i]->is_token)
+                        ret.children.erase(ret.children.begin() + i);
+                }
+            }
+            if (node_type->left_recursive && ret.children.size() > 1)
+            {
+                printf("\033[91mWARNING: HAVE NOT IMPLEMENTED LEFT-RECURSION ROTATION YET.\033[0m\n");
+                //assert(((void)"TODO", 0));
+            }
+            
+            auto ret_wrapped = std::make_shared<ASTNode>(ret);
+            
+            if (node_type->name)
+                parse_hits.insert({base_key, ret_wrapped});
+            
+            return {ret_wrapped};
         }
     }
     if (PARSER_DO_DEBUG_PRINT)

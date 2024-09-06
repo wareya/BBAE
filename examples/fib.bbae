@@ -1,4 +1,4 @@
-func main returns f64
+func main returns i64
     stack_slot i 8
     stack_slot a 8
     stack_slot b 8

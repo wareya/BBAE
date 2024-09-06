@@ -537,7 +537,10 @@ static void increment_operand_uses_impl(Statement * statement, size_t start, siz
 static void increment_operand_uses_early(Statement * statement)
 {
     if (statement_ops_live_until_after_statement(statement))
-        increment_operand_uses_impl(statement, 0, 1);
+    {
+        if (array_len(statement->args, Operand) > 0)
+            increment_operand_uses_impl(statement, 0, 1);
+    }
     else
         increment_operand_uses_impl(statement, 0, array_len(statement->args, Operand));
 }

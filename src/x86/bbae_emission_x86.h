@@ -298,21 +298,25 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
                 
                 if (strcmp(statement->statement_name, "return") == 0)
                 {
-                    Operand op = statement->args[0];
-                    assert(op.variant == OP_KIND_VALUE);
-                    
-                    EncOperand op2 = get_basic_encoperand(op.value);
-                    if (op.value->type.variant == TYPE_F64 || op.value->type.variant == TYPE_F64)
+                    assert(array_len(statement->args, Operand) == 0 || array_len(statement->args, Operand) == 1);
+                    if (array_len(statement->args, Operand) == 1)
                     {
-                        EncOperand op1 = zy_reg(REG_XMM0, type_size(op.value->type));
-                        if (!encops_equal(op1, op2))
-                            zy_emit_2(code, INST_MOVQ, op1, op2);
-                    }
-                    else
-                    {
-                        EncOperand op1 = zy_reg(REG_RAX, type_size(op.value->type));
-                        if (!encops_equal(op1, op2))
-                            zy_emit_2(code, INST_MOV, op1, op2);
+                        Operand op = statement->args[0];
+                        assert(op.variant == OP_KIND_VALUE);
+                        
+                        EncOperand op2 = get_basic_encoperand(op.value);
+                        if (op.value->type.variant == TYPE_F64 || op.value->type.variant == TYPE_F64)
+                        {
+                            EncOperand op1 = zy_reg(REG_XMM0, type_size(op.value->type));
+                            if (!encops_equal(op1, op2))
+                                zy_emit_2(code, INST_MOVQ, op1, op2);
+                        }
+                        else
+                        {
+                            EncOperand op1 = zy_reg(REG_RAX, type_size(op.value->type));
+                            if (!encops_equal(op1, op2))
+                                zy_emit_2(code, INST_MOV, op1, op2);
+                        }
                     }
                     
                     for (size_t i = 0; i < sizeof(func->written_registers); i++)

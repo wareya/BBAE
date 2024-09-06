@@ -1,23 +1,35 @@
 #ifndef BBAE_BUILDER
 #define BBAE_BUILDER
 
-/// Include this header file to construct BBAE code in memory, non-textually.
-
 #include "bbae_api.h"
 
-/// In addition to the functions defined here, you also want these from bbae_construction:
+/// Include this header file (bbae_builder.h) to construct BBAE code in memory, non-textually.
+
+/// In addition to the functions defined here, you also want these from bbae_construction.h:
 ///
-/// Value * add_stack_slot(Function * func, const char * name, uint64_t size)
-/// Adds a stack slot to a function.
+/// Type basic_type(enum BBAE_TYPE_VARIANT val)
+/// Gets a Type object describing a given basic (primitive) type.
+/// Basic types: TYPE_NONE, TYPE_I8, TYPE_I16, TYPE_I32, TYPE_I64, TYPE_IPTR, TYPE_F32, TYPE_F64
+///
+/// size_t type_size(Type type)
+/// Return the size of a type.
+///
+/// Program * create_empty_program(void)
+/// Creates a program to further operate on.
 ///
 /// Function * create_function(Program * program, const char * name, Type return_type)
-/// Creates a new function, including its initial entry block.
+/// Creates a new function, including its initial entry block, and makes it the implicitly-active function.
 ///
 /// Value * add_funcarg(Program * program, const char * name, Type type)
 /// Add an argument to a function.
 ///
+/// Value * add_stack_slot(Function * func, const char * name, uint64_t size)
+/// Adds a stack slot to a function.
+///
 /// Block * create_block(Program * program, const char * name)
-/// Creates a new block.
+/// Creates a new block in the currently-active function and makes it the program's implicitly-active block.
+/// (Some operations depend on what the current implicitly-active block is.)
+/// If the given name is null, gives the block a dummy name.
 ///
 /// Value * add_blockarg(Program * program, const char * name, Type type)
 /// Adds an argument to a block. BBAE uses block arguments instead of phi nodes.
@@ -33,23 +45,173 @@
 ///
 /// void block_append_statement(Block * block, Statement * statement)
 /// Inserts a configured statement at the end of a block.
+/// Might create additional statements before the given statement and rewrite its operands to be legal.
+///
+/// Value * build_constant_f32(float f)
+/// Value * build_constant_f64(double f)
+/// Value * build_constant_i64(uint64_t n)
+/// Value * build_constant_iptr(uint64_t n)
+/// Value * build_constant_i32(uint32_t n)
+/// Value * build_constant_i16(uint16_t n)
+/// Value * build_constant_i8(uint8_t n)
+/// Value * build_constant_zero(enum BBAE_TYPE_VARIANT variant)
+/// Build constants of various primitive types.
+///
+/// You also want these from bbae_api.h:
+///
+/// void do_optimization(Program * program)
+/// Perform all supported optimizations to all the functions in the given program.
+///
+/// byte_buffer * do_lowering(Program * program, SymbolEntry ** symbollist)
+/// Lower the program to machine code and produce a symbol list (for function addresses, static data addresses, and global variable addresses). See `buffers.h` for the API for the byte_buffer class.
+///
+///
+/// Typical usage first creates a program.
+/// Then a function, then adds blocks to that function, adding statements to each block as needed, for each function.
+/// Then runs optimizations.
+/// Then runs lowering.
 
+
+/// Initializes a statement object with the given operation name and gives it an output.
+static Statement * init_statement_auto_output(const char * statement_name)
+{
+    if (strcmp(statement_name, "add") == 0 ||
+        strcmp(statement_name, "sub") == 0 ||
+        strcmp(statement_name, "mul") == 0 ||
+        strcmp(statement_name, "imul") == 0 ||
+        strcmp(statement_name, "div") == 0 ||
+        strcmp(statement_name, "idiv") == 0 ||
+        strcmp(statement_name, "rem") == 0 ||
+        strcmp(statement_name, "irem") == 0 ||
+        strcmp(statement_name, "shl") == 0 ||
+        strcmp(statement_name, "shr") == 0 ||
+        strcmp(statement_name, "fadd") == 0 ||
+        strcmp(statement_name, "fsub") == 0 ||
+        strcmp(statement_name, "fmul") == 0 ||
+        strcmp(statement_name, "fdiv") == 0 ||
+        strcmp(statement_name, "fxor") == 0 ||
+        strcmp(statement_name, "mov") == 0 ||
+        
+        strcmp(statement_name, "load") == 0 ||
+        strcmp(statement_name, "trim") == 0 ||
+        strcmp(statement_name, "qext") == 0 ||
+        strcmp(statement_name, "sext") == 0 ||
+        strcmp(statement_name, "zext") == 0 ||
+        // float-int casts
+        strcmp(statement_name, "float_to_uint") == 0 ||
+        strcmp(statement_name, "float_to_uint_unsafe") == 0 ||
+        strcmp(statement_name, "uint_to_float") == 0 ||
+        strcmp(statement_name, "float_to_sint") == 0 ||
+        strcmp(statement_name, "float_to_sint_unsafe") == 0 ||
+        strcmp(statement_name, "sint_to_float") == 0 ||
+        
+        strcmp(statement_name, "bitcast") == 0 ||
+        
+        strcmp(statement_name, "extract") == 0 ||
+        
+        strcmp(statement_name, "cmp_g") == 0 ||
+        strcmp(statement_name, "cmp_ge") == 0 ||
+    
+        strcmp(statement_name, "symbol_lookup_unsized") == 0 ||
+        strcmp(statement_name, "symbol_lookup") == 0 ||
+        
+        strcmp(statement_name, "call_eval") == 0 ||
+        strcmp(statement_name, "call") == 0)
+    {
+        Statement * statement = init_statement(statement_name);
+        statement->output_name = make_temp_name();
+        return statement;
+    }
+    else
+        return init_statement(statement_name);
+}
+
+
+/// Null if the statement is an instruction instead of an operation.
 Value * statement_get_output(Statement * statement)
 {
     return statement->output;
 }
-
-Statement * build_statement_2op(const char * statement_name, Value * a, Value * b)
+Block * function_get_entry_block(Function * func)
 {
-    Statement * ret = init_statement(statement_name);
+    return func->entry_block;
+}
+
+Statement * build_statement_3val(Block * block, const char * statement_name, Value * a, Value * b, Value * c)
+{
+    Statement * ret = init_statement_auto_output(statement_name);
     statement_add_value_op(ret, a);
     statement_add_value_op(ret, b);
+    statement_add_value_op(ret, c);
+    block_append_statement(block, ret);
     return ret;
 }
 
-Statement * build_add(Value * a, Value * b)
+Statement * build_statement_2val(Block * block, const char * statement_name, Value * a, Value * b)
 {
-    return build_statement_2op("add", a, b);
+    Statement * ret = init_statement_auto_output(statement_name);
+    statement_add_value_op(ret, a);
+    statement_add_value_op(ret, b);
+    block_append_statement(block, ret);
+    return ret;
 }
 
+Statement * build_statement_1val(Block * block, const char * statement_name, Value * a)
+{
+    Statement * ret = init_statement_auto_output(statement_name);
+    statement_add_value_op(ret, a);
+    block_append_statement(block, ret);
+    return ret;
+}
+
+Statement * build_statement_0val(Block * block, const char * statement_name)
+{
+    Statement * ret = init_statement_auto_output(statement_name);
+    block_append_statement(block, ret);
+    return ret;
+}
+
+Statement * build_add(Block * block, Value * a, Value * b)
+{
+    return build_statement_2val(block, "add", a, b);
+}
+
+Statement * build_store(Block * block, Value * a, Value * b)
+{
+    Statement * ret = init_statement_auto_output("store");
+    statement_add_value_op(ret, a);
+    statement_add_value_op(ret, b);
+    block_append_statement(block, ret);
+    return ret;
+}
+Statement * build_load(Block * block, Type a, Value * b)
+{
+    Statement * ret = init_statement_auto_output("load");
+    statement_add_type_op(ret, a);
+    statement_add_value_op(ret, b);
+    block_append_statement(block, ret);
+    return ret;
+}
+
+Statement * build_return_void(Block * block)
+{
+    return build_statement_0val(block, "return");
+}
+Statement * build_return_1val(Block * block, Value * a)
+{
+    return build_statement_1val(block, "return", a);
+}
+
+Statement * block_get_last_statement(Block * block)
+{
+    if (array_len(block->statements, Statement *) == 0)
+        return 0;
+    return block->statements[array_len(block->statements, Statement *) - 1];
+}
+
+uint8_t block_is_terminated(Block * block)
+{
+    return statement_is_terminator(block_get_last_statement(block));
+}
+        
 #endif // BBAE_BUILDER

@@ -1,4 +1,6 @@
-i64 myfunc()
+i64 main(i64 a, i64 b)
 {
-    
+    i64 x = 5;
+    x = a + x;
+    return x;
 }
