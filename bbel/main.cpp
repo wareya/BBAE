@@ -9,6 +9,7 @@
 
 #include "grammar.hpp"
 #include "compiler.hpp"
+#include "../src/bbae_api_jit.h"
 
 int main(int argc, char ** argv)
 {
@@ -55,12 +56,41 @@ int main(int argc, char ** argv)
     //print_AST(*asdf);
     
     Program * program = compile_root(*asdf);
-    
     do_optimization(program);
-    SymbolEntry * symbollist;
-    auto bytes = do_lowering(program, &symbollist);
+    JitOutput jitinfo = do_jit_lowering(program);
+    SymbolEntry * symbollist = jitinfo.symbollist;
+    uint8_t * jit_code = jitinfo.jit_code;
     
+    if (symbollist == 0)
+    {
+        puts("produced no output. exiting");
+        return 0;
+    }
     
+    ptrdiff_t loc = -1;
+    for (size_t i = 0; symbollist[i].name; i++)
+    {
+        if (strcmp(symbollist[i].name, "main") == 0)
+        {
+            loc = symbollist[i].loc;
+            break;
+        }
+    }
+    assert(loc >= 0);
+    
+    // suppress non-posix-compliant gcc function pointer casting warning
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+    int64_t (*jit_main) (int, int) = (int64_t(*)(int, int))(void *)(&jit_code[loc]);
+#pragma GCC diagnostic pop
+    
+    assert(jit_main);
+    int64_t main_output = jit_main(0, 0);
+    printf("%zd\n", main_output);
+    main_output = jit_main(17, 0);
+    printf("%zd\n", main_output);
+    
+    jit_free(jitinfo);
     
     free_all_compiler_allocs();
     

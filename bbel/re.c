@@ -39,11 +39,11 @@
 #define MAX_CHAR_CLASS_LEN      40    /* Max length of character-class buffer in.   */
 
 
-enum { UNUSED, DOT, BEGIN, END, QUESTIONMARK, STAR, PLUS, CHAR, CHAR_CLASS, INV_CHAR_CLASS, DIGIT, NOT_DIGIT, ALPHA, NOT_ALPHA, WHITESPACE, NOT_WHITESPACE, /* BRANCH */ };
+enum { UNUSED, DOT, BEGIN, END, QUESTIONMARK, STAR, PLUS, CHARC, CHAR_CLASS, INV_CHAR_CLASS, DIGIT, NOT_DIGIT, ALPHA, NOT_ALPHA, WHITESPACE, NOT_WHITESPACE, /* BRANCH */ };
 
 typedef struct regex_t
 {
-  unsigned char  type;   /* CHAR, STAR, etc.                      */
+  unsigned char  type;   /* CHARC, STAR, etc.                      */
   union
   {
     unsigned char  ch;   /*      the character itself             */
@@ -152,7 +152,7 @@ regex_info re_compile(const char* pattern)
             /* Escaped character, e.g. '.' or '$' */
             default:
             {
-              re_compiled[j].type = CHAR;
+              re_compiled[j].type = CHARC;
               re_compiled[j].u.ch = pattern[i];
             } break;
           }
@@ -161,7 +161,7 @@ regex_info re_compile(const char* pattern)
 /*
         else
         {
-          re_compiled[j].type = CHAR;
+          re_compiled[j].type = CHARC;
           re_compiled[j].ch = pattern[i];
         }
 */
@@ -226,7 +226,7 @@ regex_info re_compile(const char* pattern)
       /* Other characters: */
       default:
       {
-        re_compiled[j].type = CHAR;
+        re_compiled[j].type = CHARC;
         re_compiled[j].u.ch = c;
       } break;
     }
@@ -265,7 +265,7 @@ regex_info re_compile(const char* pattern)
 
 void re_print(regex_t* pattern)
 {
-  const char* types[] = { "UNUSED", "DOT", "BEGIN", "END", "QUESTIONMARK", "STAR", "PLUS", "CHAR", "CHAR_CLASS", "INV_CHAR_CLASS", "DIGIT", "NOT_DIGIT", "ALPHA", "NOT_ALPHA", "WHITESPACE", "NOT_WHITESPACE", "BRANCH" };
+  const char* types[] = { "UNUSED", "DOT", "BEGIN", "END", "QUESTIONMARK", "STAR", "PLUS", "CHARC", "CHAR_CLASS", "INV_CHAR_CLASS", "DIGIT", "NOT_DIGIT", "ALPHA", "NOT_ALPHA", "WHITESPACE", "NOT_WHITESPACE", "BRANCH" };
 
   int i;
   int j;
@@ -292,7 +292,7 @@ void re_print(regex_t* pattern)
       }
       printf("]");
     }
-    else if (pattern[i].type == CHAR)
+    else if (pattern[i].type == CHARC)
     {
       printf(" '%c'", pattern[i].u.ch);
     }

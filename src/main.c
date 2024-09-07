@@ -7,8 +7,7 @@
 //#define BBAE_DEBUG_SPILLS
 
 #include "memory.h"
-#include "bbae_api.h"
-#include "jitify.h"
+#include "bbae_api_jit.h"
 
 void print_asm(byte_buffer * code)
 {
@@ -58,65 +57,21 @@ int main(int argc, char ** argv)
     
     Program * program = parse(buffer);
     do_optimization(program);
+    JitOutput jitinfo = do_jit_lowering(program);
+    SymbolEntry * symbollist = jitinfo.symbollist;
+    uint8_t * jit_code = jitinfo.jit_code;
     
-    SymbolEntry * symbollist = 0;
-    byte_buffer * code = do_lowering(program, &symbollist);
-    assert(symbollist);
-    
-    assert(code);
-    if (code->len == 0)
+    if (symbollist == 0)
     {
         puts("produced no output. exiting");
         return 0;
     }
     
-    for (size_t i = 0; i < code->len; i++)
-        printf("%02X ", code->data[i]);
+    for (size_t i = 0; i < jitinfo.raw_code->len; i++)
+        printf("%02X ", jitinfo.raw_code->data[i]);
     puts("");
     
-    print_asm(code);
-    
-    size_t globals_len = program->globals_bytecount;
-    uint8_t * jit_globals = alloc_near_executable(&globals_len);
-    memset(jit_globals, 0, globals_len);
-    
-    size_t code_len = code->len;
-    uint8_t * jit_code = alloc_near_executable(&code_len);
-    memset(jit_code, 0, code_len);
-    memcpy(jit_code, code->data, code->len);
-    
-    // relocate unresolved symbols over jit_code
-    for (size_t i = 0; i < array_len(program->unused_relocation_log, UnusedRelocation); i++)
-    {
-        UnusedRelocation relocation = program->unused_relocation_log[i];
-        size_t reloc_loc = relocation.info.loc;
-        size_t reloc_size = relocation.info.size;
-        assert(reloc_loc + reloc_size <= code->len);
-        assert(reloc_size == 1 || reloc_size == 4);
-        int64_t diff = 0;
-        
-        GlobalData global_data = find_global(program, relocation.info.name);
-        if (global_data.name != 0)
-        {
-            int64_t total_offset = (int64_t)(jit_code - jit_globals);
-            
-            diff = global_data.location - (reloc_loc + 4);
-            diff -= total_offset;
-        }
-        else
-            assert(((void)"TODO: check for other symbols like function names etc", 0));
-        
-        if (reloc_size == 4)
-            assert(diff >= -2147483648 && diff <= 2147483647);
-        else if (reloc_size == 1)
-            assert(diff >= -128 && diff <= 127);
-        
-        memcpy(jit_code + reloc_loc, &diff, reloc_size);
-        
-        //printf("need to relocate: %s\n", relocation.info.name);
-    }
-    
-    mark_as_executable(jit_code, code_len);
+    print_asm(jitinfo.raw_code);
     
     ptrdiff_t loc = -1;
     for (size_t i = 0; symbollist[i].name; i++)
@@ -144,7 +99,8 @@ int main(int argc, char ** argv)
     asdf = jit_main(0, 0);
     printf("%zd\n", asdf);
     
-    free_as_executable(jit_code, code_len);
+    jit_free(jitinfo);
+    
     free_all_compiler_allocs();
     
     free(buffer);

@@ -313,8 +313,8 @@ static auto load_grammar(const char * text) -> Grammar
                         }
                         else if (text[i] == '\\')
                         {
-                            i += 1;
                             in_escape = true;
+                            i += 1;
                         }
                         else if (line_is_at_eol())
                         {
@@ -634,7 +634,7 @@ struct ASTNode
     bool is_token = false;
 };
 
-void print_AST(std::shared_ptr<ASTNode> node, size_t depth)
+static void print_AST(std::shared_ptr<ASTNode> node, size_t depth)
 {
     auto indent = [&](){for (size_t i = 0; i < depth; i++) printf(" ");};
     
@@ -661,12 +661,12 @@ void print_AST(std::shared_ptr<ASTNode> node, size_t depth)
         printf("@-\n");
     }
 }
-void print_AST(std::shared_ptr<ASTNode> node)
+static void print_AST(std::shared_ptr<ASTNode> node)
 {
     print_AST(node, 0);
 }
 
-std::shared_ptr<ASTNode> ast_node_from_token(std::shared_ptr<Token> token)
+static std::shared_ptr<ASTNode> ast_node_from_token(std::shared_ptr<Token> token)
 {
     return std::make_shared<ASTNode>(ASTNode{{}, token->row, token->column, 1, token->text, true});
 }

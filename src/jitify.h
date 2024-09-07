@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdio.h>
+#include <assert.h>
 
 #ifdef _WIN32
 
@@ -58,7 +60,7 @@ static uint8_t * alloc_near_executable(size_t * len)
     printf("%zd\n", diff);
     assert(diff > -(1ll<<30ll) && diff < (1ll<<30ll));
     
-    return buffer;
+    return (uint8_t *)buffer;
 }
 
 /// marks an allocation previously returned by `alloc_near_executable` as being executable
@@ -69,7 +71,7 @@ static void mark_as_executable(uint8_t * mem, size_t len)
     assert(VirtualProtect(mem, len, PAGE_EXECUTE_READ, &dummy));
 }
 
-static void free_as_executable(uint8_t * mem, size_t len)
+static void free_near_executable(uint8_t * mem, size_t len)
 {
     (void)len; // unused
     VirtualFree(mem, 0, MEM_RELEASE);
@@ -98,7 +100,7 @@ static uint8_t * copy_as_executable(uint8_t * mem, size_t len)
     return x;
 }
 
-static void free_as_executable(uint8_t * mem)
+static void free_near_executable(uint8_t * mem)
 {
     munmap(mem, jit_alloc_size);
 }

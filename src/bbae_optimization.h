@@ -77,19 +77,23 @@ static void _block_edges_fix(Program * program)
     
 static void optimization_empty_block_removal(Program * program)
 {
-    // first, blocks that are never entered into
+    // first, remove blocks that are never entered into
     for (size_t f = 0; f < array_len(program->functions, Function *); f++)
     {
         Function * func = program->functions[f];
         if (array_len(func->blocks, Block *) < 2)
             continue;
+        // check block predecessors
+        // TODO: use graph coloring starting at entry block instead
         for (size_t b = array_len(func->blocks, Block *) - 1; b > 0; b--)
         {
             Block * block = func->blocks[b];
+            // no predecessors at all
             if (array_len(block->edges_in, Statement *) == 0)
                 array_erase(func->blocks, Block *, b);
             else
             {
+                // predecessors are only itself
                 uint8_t different = 0;
                 for (size_t i = 0; i < array_len(block->edges_in, Statement *); i++)
                 {
@@ -104,7 +108,7 @@ static void optimization_empty_block_removal(Program * program)
             }
         }
     }
-    // finally, actually empty blocks
+    // finally, remove actually empty blocks
     for (size_t f = 0; f < array_len(program->functions, Function *); f++)
     {
         Function * func = program->functions[f];
