@@ -878,6 +878,12 @@ static ImmOpsAllowed imm_op_rule_determiner(Statement * statement)
         if (type_is_float(statement->output->type))
             ret.immediates_allowed[1] = 0;
     }
+    else if (strcmp(statement->statement_name, "return") == 0)
+    {
+        assert(statement->args[0].value);
+        if (type_is_float(statement->args[0].value->type))
+            ret.immediates_allowed[0] = 0;
+    }
     
     return ret;
 }

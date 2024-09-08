@@ -564,7 +564,10 @@ const char * ZyanStatusText(ZyanStatus status)
         case 0x0A: return "INVALID_MASK";
         case 0x0B: return "SKIP_TOKEN";
         case 0x0C: return "IMPOSSIBLE_INSTRUCTION";
-        default: assert(0);
+        default:
+            return "UNKNOWN ZYDIS STATUS";
+            //printf("UNKNOWN ZYDIS STATUS %d\n", status);
+            //assert(0);
     };
 }
 
@@ -585,6 +588,7 @@ static void do_encode(ZydisEncoderRequest req, uint8_t * buf, size_t * len)
     if (ZYAN_FAILED(e))
     {
         printf("culprit: %s\n", ZyanStatusText(e));
+        printf("info: %d %d\n", req.mnemonic, req.operand_count);
         assert(((void)"Failed to encode instruction", 0));
     }
 }
