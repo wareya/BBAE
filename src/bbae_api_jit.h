@@ -91,6 +91,7 @@ JitOutput do_jit_lowering(Program * program)
 
 void jit_free(JitOutput jitinfo)
 {
+    free(jitinfo.raw_code->data);
     free_near_executable(jitinfo.jit_code, jitinfo.jit_code_len);
     free_near_executable(jitinfo.jit_globals, jitinfo.jit_globals_len);
 }

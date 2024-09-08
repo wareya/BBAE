@@ -90,14 +90,16 @@ int main(int argc, char ** argv)
     // suppress non-posix-compliant gcc function pointer casting warning
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
-    int64_t (*jit_main) (int, int) = (int64_t(*)(int, int))(void *)(&jit_code[loc]);
+    double (*jit_main) (int, int) = (double(*)(int, int))(void *)(&jit_code[loc]);
 #pragma GCC diagnostic pop
     
     assert(jit_main);
-    int64_t asdf = jit_main(0, 0);
-    printf("%zd\n", asdf);
-    asdf = jit_main(0, 0);
-    printf("%zd\n", asdf);
+    double jit_output = jit_main(0, 0);
+    printf("%f\n", jit_output);
+    printf("%d\n", *(uint32_t*)&jit_output);
+    jit_output = jit_main(0, 0);
+    printf("%f\n", jit_output);
+    printf("%d\n", *(uint32_t*)&jit_output);
     
     jit_free(jitinfo);
     

@@ -1183,7 +1183,10 @@ void print_ir_to(FILE * f, Program * program)
         for (size_t i = 0; i < array_len(func->args, Value *); i++)
         {
             Value * arg = func->args[i];
-            fprintf(f, "    arg %s %s\n", arg->arg, type_to_static_string(arg->type));
+            if (arg->regalloced)
+                fprintf(f, "    arg %s %s # reg %zd\n", arg->arg, type_to_static_string(arg->type), arg->regalloc);
+            else
+                fprintf(f, "    arg %s %s\n", arg->arg, type_to_static_string(arg->type));
         }
         for (size_t i = 0; i < array_len(func->stack_slots, Value *); i++)
         {
@@ -1198,7 +1201,10 @@ void print_ir_to(FILE * f, Program * program)
             for (size_t i = 0; i < array_len(block->args, Value *); i++)
             {
                 Value * arg = block->args[i];
-                fprintf(f, "    arg %s %s\n", arg->arg, type_to_static_string(arg->type));
+                if (arg->regalloced)
+                    fprintf(f, "    arg %s %s # reg %zd\n", arg->arg, type_to_static_string(arg->type), arg->regalloc);
+                else
+                    fprintf(f, "    arg %s %s\n", arg->arg, type_to_static_string(arg->type));
             }
             for (size_t i = 0; i < array_len(block->statements, Statement *); i++)
             {
@@ -1256,8 +1262,14 @@ void print_ir_to(FILE * f, Program * program)
                         assert(0);
                 }
                 
-                //if (statement->output)
-                //    fprintf(f, " # edges_out size: %zu", array_len(statement->output->edges_out, Statement *));
+                if (statement->output)
+                    fprintf(f, " # edges_out len: %zu", array_len(statement->output->edges_out, Statement *));
+                
+                if (statement->output && statement->output->regalloced)
+                    fprintf(f, " # reg: %zd", statement->output->regalloc);
+                
+                if (statement->num)
+                    fprintf(f, " # num: %zd", statement->num);
                 
                 fprintf(f, "\n");
             }

@@ -100,10 +100,10 @@ static void * zero_alloc_clone(void * buf)
 {
     uint8_t * old_alloc = alloc_base_loc(buf);
     uint64_t size = *alloc_get_size(old_alloc);
-    uint8_t * new_alloc = (uint8_t *)zero_alloc(size) - ALLOC_PREFIX_SIZE;
+    uint8_t * new_alloc = alloc_base_loc(zero_alloc(size));
     assert(new_alloc);
     
-    memcpy(new_alloc, old_alloc, size + ALLOC_PREFIX_SIZE);
+    memcpy(alloc_data_loc(new_alloc), alloc_data_loc(old_alloc), size);
     
     return alloc_data_loc(new_alloc);
 }

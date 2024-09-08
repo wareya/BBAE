@@ -57,6 +57,13 @@ int main(int argc, char ** argv)
     
     Program * program = compile_root(*asdf);
     do_optimization(program);
+    
+    /*
+    SymbolEntry * _symbollist;
+    auto bytes = do_lowering(program, &_symbollist);
+    return 0;
+    */
+    
     JitOutput jitinfo = do_jit_lowering(program);
     SymbolEntry * symbollist = jitinfo.symbollist;
     uint8_t * jit_code = jitinfo.jit_code;
