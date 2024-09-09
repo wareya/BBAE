@@ -98,12 +98,12 @@ int main(int argc, char ** argv)
     assert(jit_main);
     double jit_output = jit_main(0, 0);
     
-    printf("%f\n", jit_output);
+    printf("%.24f\n", jit_output);
     printf("%d\n", *(uint64_t*)&jit_output);
     
     jit_output = jit_main(0, 0);
     
-    printf("%f\n", jit_output);
+    printf("%.24f\n", jit_output);
     printf("%d\n", *(uint64_t*)&jit_output);
     
     assert(jitinfo.raw_code);
