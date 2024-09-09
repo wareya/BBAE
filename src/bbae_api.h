@@ -27,16 +27,16 @@ static void do_optimization(Program * program)
     
     validate_links(program);
     
-    /*
-    optimization_unused_value_removal(program);
+    //optimization_unused_value_removal(program);
     optimization_empty_block_removal(program);
     optimization_function_inlining(program);
     optimization_global_mem2reg(program);
-    optimization_unused_value_removal(program);
-    optimization_empty_block_removal(program);
+    //optimization_unused_value_removal(program);
+    //optimization_empty_block_removal(program);
     optimization_trivial_block_splicing(program);
-    optimization_local_CSE(program);
+    //optimization_local_CSE(program);
     optimization_unused_value_removal(program);
+    /*
     */
     puts("----- AFTER OPTIMIZATION -----");
     print_ir_to(0, program);

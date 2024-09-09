@@ -271,9 +271,9 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
             EncOperand height = zy_imm(func->stack_height, 4);
             zy_emit_2(code, INST_SUB, rsp, height);
             
+            size_t n = 0;
             for (size_t i = 0; i < sizeof(func->written_registers); i++)
             {
-                size_t n = 0;
                 if (func->written_registers[i] == 2 && i != REG_RBP && i != REG_RSP)
                 {
                     EncOperand mem = zy_mem(REG_RSP, n * 8, 8);
@@ -319,9 +319,9 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
                         }
                     }
                     
+                    size_t n = 0;
                     for (size_t i = 0; i < sizeof(func->written_registers); i++)
                     {
-                        size_t n = 0;
                         if (func->written_registers[i] == 2 && i != REG_RBP && i != REG_RSP)
                         {
                             EncOperand mem = zy_mem(REG_RSP, n * 8, 8);
