@@ -395,6 +395,8 @@ typedef struct _Statement {
     
     // array
     Operand * args;
+    
+    uint64_t temp; // temporary, used by specific algorithms as a kind of cache
 } Statement;
 
 static Statement * new_statement(void)
@@ -814,6 +816,10 @@ static void add_statement_output(Statement * statement)
             strcmp(statement->statement_name, "fdiv") == 0 ||
             strcmp(statement->statement_name, "fxor") == 0 ||
             
+            strcmp(statement->statement_name, "and") == 0 ||
+            strcmp(statement->statement_name, "or") == 0 ||
+            strcmp(statement->statement_name, "xor") == 0 ||
+            
             strcmp(statement->statement_name, "mov") == 0
             )
         {
@@ -1073,7 +1079,11 @@ static void validate_links(Program * program)
                     assert(next);
                     size_t block_arg_count = array_len(next->args, Value *);
                     size_t statement_arg_count = array_len(statement->args, Operand);
-                    assert(block_arg_count == statement_arg_count - 1);
+                    if (block_arg_count != statement_arg_count - 1)
+                    {
+                        printf("%zu %zu\n", block_arg_count, statement_arg_count - 1);
+                        assert(block_arg_count == statement_arg_count - 1);
+                    }
                 }
                 if (statement->output)
                 {
@@ -1114,18 +1124,22 @@ static void validate_links(Program * program)
                             assert(op.value->ssa->block == block);
                         else if (op.value->arg)
                         {
-                            uint8_t found = 0;
+                            uint8_t found_arg_used_by_statement = 0;
                             size_t ba_count = (b != 0) ? array_len(block->args, Value *) : array_len(func->args, Value *);
                             for (size_t ba = 0; ba < ba_count; ba++)
                             {
                                 Value * block_arg = (b != 0) ? block->args[ba] : func->args[ba];
                                 if (strcmp(block_arg->arg, op.value->arg) == 0)
                                 {
-                                    found = 1;
+                                    found_arg_used_by_statement = 1;
                                     break;
                                 }
                             }
-                            assert(found);
+                            if (!found_arg_used_by_statement)
+                            {
+                                printf("%s\n", op.value->arg);
+                                assert(found_arg_used_by_statement);
+                            }
                         }
                     }
                 }

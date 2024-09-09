@@ -1,10 +1,4 @@
 
-func mul_delta returns f64
-    arg n f64
-    n2 = fmul n 0.001f64
-    return n2
-endfunc
-
 func main returns f64
     i = mov 10i64
     goto grav i

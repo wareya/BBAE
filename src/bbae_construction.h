@@ -405,6 +405,10 @@ static Statement * parse_statement(Program * program, const char ** cursor)
                 array_push(ret->args, Operand, op);
             }
         }
+        else if (strcmp(ret->statement_name, "breakpoint") == 0)
+        {
+            // (no arguments)
+        }
         else if (strcmp(ret->statement_name, "store") == 0)
         {
             const char * op1_text = strcpy_z(find_next_token(cursor));

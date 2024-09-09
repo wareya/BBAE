@@ -269,14 +269,25 @@ static void optimization_unused_value_removal(Program * program)
                     continue;
                 
                 // block arguments with no uses
-                for (size_t a = 0; a < array_len(block->args, Value *); a++)
+                //for (size_t a = 0; a < array_len(block->args, Value *); a++)
+                for (ptrdiff_t a = array_len(block->args, Value *) - 1; a >= 0; a--)
                 {
+                    puts("next arg...");
                     Value * arg = block->args[a];
+                    //if (strcmp(arg->arg, "y") == 0)
+                    //    continue;
+                    
                     uint8_t non_jump_back_to_self_usage_exists = 0;
+                    
+                    for (size_t i = 0; i < array_len(arg->edges_out, Statement *); i++)
+                        arg->edges_out[i]->temp = 0;
+                    for (size_t i = 0; i < array_len(block->edges_in, Statement *); i++)
+                        block->edges_in[i]->temp = 0;
+                    
                     for (size_t i = 0; i < array_len(arg->edges_out, Statement *); i++)
                     {
                         Statement * statement = arg->edges_out[i];
-                        if (strcmp(statement->statement_name, "goto") == 0 && a + 1 < array_len(statement->args, Operand))
+                        if (strcmp(statement->statement_name, "goto") == 0)// && a + 1 < array_len(statement->args, Operand))
                         {
                             if (strcmp(statement->args[0].text, block->name) != 0 ||
                                 statement->args[a + 1].value != arg ||
@@ -286,27 +297,30 @@ static void optimization_unused_value_removal(Program * program)
                                 break;
                             }
                         }
-                        else if (strcmp(statement->statement_name, "if") == 0 && a + 2 < array_len(statement->args, Operand))
+                        else if (strcmp(statement->statement_name, "if") == 0)// && a + 2 < array_len(statement->args, Operand))
                         {
                             size_t separator_index = find_separator_index(statement->args);
                             assert(separator_index != (size_t)-1);
                             
                             if (strcmp(statement->args[1].text, block->name) != 0 ||
-                                statement->args[a + 2].value != arg ||
                                 count_op_num_times_used(statement->args, arg, 2, separator_index - 2) != 1)
                             {
                                 non_jump_back_to_self_usage_exists = 1;
                                 break;
                             }
                             
-                            if (separator_index + 2 + a < array_len(statement->args, Operand) &&
-                                (strcmp(statement->args[separator_index + 1].text, block->name) != 0 ||
-                                 statement->args[separator_index + 2 + a].value != arg ||
-                                 count_op_num_times_used(statement->args, arg, separator_index + 2, array_len(statement->args, Operand) - separator_index - 1) != 1))
+                            //printf("%zu vs %zu (%zu %zu) (%s)\n", separator_index + 2 + a, array_len(statement->args, Operand), separator_index, a, arg->arg);
+                            
+                            size_t count = array_len(statement->args, Operand) - separator_index - 1;
+                            if (strcmp(statement->args[separator_index + 1].text, block->name) != 0 ||
+                                count_op_num_times_used(statement->args, arg, separator_index + 2, count) != 1)
                             {
+                                puts("9100--1-1-1-1 -1_@ 4!_24 -14 23-");
                                 non_jump_back_to_self_usage_exists = 1;
                                 break;
                             }
+                            
+                            printf("rfda34ay (%s)\n", arg->arg);
                         }
                         else
                         {
@@ -316,9 +330,15 @@ static void optimization_unused_value_removal(Program * program)
                     }
                     if (!non_jump_back_to_self_usage_exists || array_len(arg->edges_out, Statement *) == 0)
                     {
+                        printf("removing arg... %s\n", arg->arg);
+                        printf("reason: %d %zu\n", non_jump_back_to_self_usage_exists, array_len(arg->edges_out, Statement *));
                         for (size_t i = 0; i < array_len(arg->edges_out, Statement *); i++)
                         {
                             Statement * statement = arg->edges_out[i];
+                            if (statement->temp)
+                                continue;
+                            statement->temp = 1;
+                            
                             if (strcmp(statement->statement_name, "goto") == 0)
                             {
                                 if (strcmp(statement->args[0].text, block->name) == 0)
@@ -330,16 +350,21 @@ static void optimization_unused_value_removal(Program * program)
                             else if (strcmp(statement->statement_name, "if") == 0)
                             {
                                 assert(a + 2 < array_len(statement->args, Operand));
-                                if (strcmp(statement->args[1].text, block->name) != 0)
+                                if (strcmp(statement->args[1].text, block->name) == 0)
                                 {
                                     disconnect_statement_from_operand(statement, statement->args[a + 2], 1);
                                     array_erase(statement->args, Operand, a + 2);
                                 }
+                                
                                 size_t separator_index = find_separator_index(statement->args);
                                 assert(separator_index != (size_t)-1);
-                                assert(separator_index + 2 + a < array_len(statement->args, Operand));
-                                if (strcmp(statement->args[separator_index + 1].text, block->name) != 0)
+                                //printf("%d, %d, %d\n", separator_index, a, array_len(statement->args, Operand));
+                                
+                                assert(separator_index + 1 < array_len(statement->args, Operand));
+                                assert(statement->args[separator_index + 1].text);
+                                if (strcmp(statement->args[separator_index + 1].text, block->name) == 0)
                                 {
+                                    assert(separator_index + 2 + a < array_len(statement->args, Operand));
                                     disconnect_statement_from_operand(statement, statement->args[separator_index + 2 + a], 1);
                                     array_erase(statement->args, Operand, separator_index + 2 + a);
                                 }
@@ -352,6 +377,9 @@ static void optimization_unused_value_removal(Program * program)
                         for (size_t i = 0; i < array_len(block->edges_in, Statement *); i++)
                         {
                             Statement * statement = block->edges_in[i];
+                            if (statement->temp)
+                                continue;
+                            statement->temp = 1;
                             
                             if (strcmp(statement->statement_name, "goto") == 0)
                             {
@@ -362,13 +390,15 @@ static void optimization_unused_value_removal(Program * program)
                             }
                             else if (strcmp(statement->statement_name, "if") == 0)
                             {
+                                size_t separator_index = find_separator_index(statement->args);
+                                assert(separator_index != a + 2);
                                 if (strcmp(statement->args[1].text, block->name) == 0)
                                 {
                                     assert(a + 2 < array_len(statement->args, Operand));
                                     disconnect_statement_from_operand(statement, statement->args[a + 2], 1);
                                     array_erase(statement->args, Operand, a + 2);
                                 }
-                                size_t separator_index = find_separator_index(statement->args);
+                                separator_index = find_separator_index(statement->args);
                                 assert(separator_index != (size_t)-1);
                                 if (strcmp(statement->args[separator_index + 1].text, block->name) == 0)
                                 {

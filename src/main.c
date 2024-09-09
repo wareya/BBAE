@@ -9,7 +9,7 @@
 #include "memory.h"
 #include "bbae_api_jit.h"
 
-void print_asm(byte_buffer * code)
+void print_asm(uint8_t * code, size_t len)
 {
     //FILE * logfile = 0;
     
@@ -19,8 +19,8 @@ void print_asm(byte_buffer * code)
     while (ZYAN_SUCCESS(ZydisDisassembleIntel(
         ZYDIS_MACHINE_MODE_LONG_64,
         runtime_address,
-        code->data + offset,  // buffer
-        code->len - offset,   // length
+        code + offset,  // buffer
+        len - offset,   // length
         &instruction
     )))
     {
@@ -67,12 +67,6 @@ int main(int argc, char ** argv)
         return 0;
     }
     
-    for (size_t i = 0; i < jitinfo.raw_code->len; i++)
-        printf("%02X ", jitinfo.raw_code->data[i]);
-    puts("");
-    
-    print_asm(jitinfo.raw_code);
-    
     ptrdiff_t loc = -1;
     for (size_t i = 0; symbollist[i].name; i++)
     {
@@ -83,6 +77,12 @@ int main(int argc, char ** argv)
         }
     }
     assert(loc >= 0);
+    
+    for (size_t i = 0; i < jitinfo.raw_code->len; i++)
+        printf("%02X ", jitinfo.jit_code[i]);
+    puts("");
+    
+    print_asm(jitinfo.jit_code, jitinfo.raw_code->len);
     
     printf("-- %p\n", (void *)jit_code);
     printf("-- %p\n", (void *)main);
@@ -96,10 +96,10 @@ int main(int argc, char ** argv)
     assert(jit_main);
     double jit_output = jit_main(0, 0);
     printf("%f\n", jit_output);
-    printf("%d\n", *(uint32_t*)&jit_output);
+    printf("%d\n", *(uint64_t*)&jit_output);
     jit_output = jit_main(0, 0);
     printf("%f\n", jit_output);
-    printf("%d\n", *(uint32_t*)&jit_output);
+    printf("%d\n", *(uint64_t*)&jit_output);
     
     jit_free(jitinfo);
     

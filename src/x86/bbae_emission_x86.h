@@ -169,7 +169,7 @@ void reg_shuffle_block_args(byte_buffer * code, Value ** block_args, Operand * a
         assert(args[i].value);
         if (args[i].value->variant == VALUE_CONST)
         {
-            assert(((void)"FIXME", 0));
+            assert(((void)"FIXME handle const block args", 0));
             continue;
         }
         assert(args[i].value->variant == VALUE_SSA || args[i].value->variant == VALUE_ARG);
@@ -210,7 +210,7 @@ void reg_shuffle_call(byte_buffer * code, Statement * call)
         assert(value);
         if (value->variant == VALUE_CONST)
         {
-            assert(((void)"FIXME", 0));
+            assert(((void)"FIXME handle const call args", 0));
             continue;
         }
         assert(value->variant == VALUE_SSA || value->variant == VALUE_ARG);
@@ -380,7 +380,7 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
                         zy_emit_1(code, INST_IDIV, op2);
                     }
                     else
-                        assert(((void)"FIXME", 0));
+                        assert(((void)"FIXME handle more operations 1", 0));
                 }
                 else if (strcmp(statement->statement_name, "mul") == 0 ||
                          strcmp(statement->statement_name, "imul") == 0 ||
@@ -388,6 +388,11 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
                          strcmp(statement->statement_name, "sub") == 0 ||
                          strcmp(statement->statement_name, "shl") == 0 ||
                          strcmp(statement->statement_name, "shr") == 0 ||
+                         
+                         strcmp(statement->statement_name, "and") == 0 ||
+                         strcmp(statement->statement_name, "or") == 0 ||
+                         strcmp(statement->statement_name, "xor") == 0 ||
+                         
                          strcmp(statement->statement_name, "fadd") == 0 ||
                          strcmp(statement->statement_name, "fsub") == 0 ||
                          strcmp(statement->statement_name, "fdiv") == 0 ||
@@ -409,6 +414,9 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
                     {
                         if (strcmp(statement->statement_name, "add") == 0 ||
                             strcmp(statement->statement_name, "mul") == 0 ||
+                            strcmp(statement->statement_name, "and") == 0 ||
+                            strcmp(statement->statement_name, "or") == 0 ||
+                            strcmp(statement->statement_name, "xor") == 0 ||
                             strcmp(statement->statement_name, "imul") == 0 ||
                             strcmp(statement->statement_name, "fadd") == 0 ||
                             strcmp(statement->statement_name, "fmul") == 0)
@@ -418,7 +426,7 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
                             op2 = temp;
                         }
                         else
-                            assert(((void)"FIXME", 0));
+                            assert(((void)"FIXME handle more operations 2", 0));
                     }
                     
                     uint8_t shift_mov_performed = 0;
@@ -470,6 +478,12 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
                         else
                             zy_emit_2(code, INST_SAR, op0, op2);
                     }
+                    else if (strcmp(statement->statement_name, "and") == 0)
+                        zy_emit_2(code, INST_AND, op0, op2);
+                    else if (strcmp(statement->statement_name, "or") == 0)
+                        zy_emit_2(code, INST_OR, op0, op2);
+                    else if (strcmp(statement->statement_name, "xor") == 0)
+                        zy_emit_2(code, INST_XOR, op0, op2);
                     else if (strcmp(statement->statement_name, "fadd") == 0 && statement->output->type.variant == TYPE_F32)
                         zy_emit_2(code, INST_ADDSS, op0, op2);
                     else if (strcmp(statement->statement_name, "fadd") == 0 && statement->output->type.variant == TYPE_F64)
@@ -760,7 +774,7 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
                     if (!next_statement || strcmp(next_statement->statement_name, "if") != 0)
                     {
                         if ((strcmp(statement->statement_name, "cmp_g") == 0))
-                            zy_emit_1(code, INST_SETNB, op0);
+                            zy_emit_1(code, INST_SETNBE, op0);
                         else
                             assert(((void)"TODO", 0));
                     }
@@ -778,7 +792,7 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
                     EncOperand op2 = get_basic_encoperand(op2_op.value);
                     // FIXME: handle sizes other than i32 properly
                     // i8/i16 need zero extension
-                    // i64 needs overflow handling (CVTSI2SD/INST_CVTSI2SS are signed)
+                    // i64 needs overflow handling (CVTSI2SD/CVTSI2SS are signed)
                     EncOperand op0 = get_basic_encoperand(statement->output);
                     
                     if (op1_op.rawtype.variant == TYPE_F64)
@@ -848,6 +862,10 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
                         zy_emit_2(code, INST_MOVQ, op0, zy_reg(REG_XMM0, 8));
                     
                     func->performs_calls = 1;
+                }
+                else if (strcmp(statement->statement_name, "breakpoint") == 0)
+                {
+                    zy_emit_0(code, INST_INT3);
                 }
                 else
                 {
