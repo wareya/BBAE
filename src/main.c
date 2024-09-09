@@ -84,12 +84,11 @@ int main(int argc, char ** argv)
     
     print_asm(jitinfo.jit_code, jitinfo.raw_code->len);
     
-    printf("-- %p\n", (void *)jit_code);
-    printf("-- %p\n", (void *)main);
-    
     // suppress non-posix-compliant gcc function pointer casting warning
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
+    printf("-- %p\n", (void *)jit_code);
+    printf("-- %p\n", (void *)main);
     double (*jit_main) (int, int) = (double(*)(int, int))(void *)(&jit_code[loc]);
 #pragma GCC diagnostic pop
     
@@ -97,14 +96,16 @@ int main(int argc, char ** argv)
     
     assert(jit_main);
     double jit_output = jit_main(0, 0);
+    uint64_t jit_output_int;
+    memcpy(&jit_output_int, &jit_output, 8);
     
     printf("%.24f\n", jit_output);
-    printf("%d\n", *(uint64_t*)&jit_output);
+    printf("%zd\n", jit_output_int);
     
     jit_output = jit_main(0, 0);
     
     printf("%.24f\n", jit_output);
-    printf("%d\n", *(uint64_t*)&jit_output);
+    printf("%zd\n", jit_output_int);
     
     assert(jitinfo.raw_code);
     

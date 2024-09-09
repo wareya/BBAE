@@ -1258,14 +1258,18 @@ void print_ir_to(FILE * f, Program * program)
                             fprintf(f, " %s", value->ssa->output_name);
                         else if (value->variant == VALUE_CONST)
                         {
+                            double nd;
+                            float nf;
+                            memcpy(&nd, &value->constant, 8);
+                            memcpy(&nf, &value->constant, 4);
                             if (type_is_int(value->type))
                                 fprintf(f, " %zu%s", value->constant, type_to_static_string(value->type));
                             else if (value->type.variant == TYPE_IPTR)
                                 fprintf(f, " %zu%s", value->constant, type_to_static_string(value->type));
                             else if (value->type.variant == TYPE_F64)
-                                fprintf(f, " %f%s", *(double *)&value->constant, type_to_static_string(value->type));
+                                fprintf(f, " %f%s", nd, type_to_static_string(value->type));
                             else if (value->type.variant == TYPE_F32)
-                                fprintf(f, " %f%s", *(float *)&value->constant, type_to_static_string(value->type));
+                                fprintf(f, " %f%s", nf, type_to_static_string(value->type));
                             else
                                 fprintf(f, " <aggregate>");
                         }

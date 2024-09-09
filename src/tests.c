@@ -59,7 +59,7 @@ uint64_t compile_and_run(const char * fname, uint64_t arg, uint8_t with_double)
     else
     {
         double temp = jit_main_double(arg);
-        jit_output = *(uint64_t*)&temp;
+        memcpy(&jit_output, &temp, 8);
     }
     
     
@@ -75,7 +75,8 @@ uint64_t compile_and_run(const char * fname, uint64_t arg, uint8_t with_double)
 
 #define TEST_XMM(X, T, V) { \
     uint64_t n = compile_and_run(X, 0, 1); \
-    T val = *(T*)&n; \
+    T val; \
+    memcpy(&val, &n, sizeof(T)); \
     assert(val == V); \
     fprintf(stderr, "%s: %.20f -- pass!\n", X, val); \
 }
@@ -101,7 +102,8 @@ int main(int argc, char ** argv)
 {
     (void)argc;
     (void)argv;
-    freopen(NULL_DEVICE, "w", stdout);
+    FILE * n = freopen(NULL_DEVICE, "w", stdout);
+    (void)n;
     TEST_XMM("examples/gravity.bbae", double, 489999999.990911543369293212890625);
     return 0;
 }

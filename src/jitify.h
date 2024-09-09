@@ -15,7 +15,10 @@
 static void * VirtualAllocNearProcess(size_t * len)
 {
     size_t check_size = 1 << 16;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
     size_t start_at = (size_t)(void *)VirtualAllocNearProcess;
+#pragma GCC diagnostic pop
     start_at = (start_at >> 16) << 16;
     size_t start_at_2 = start_at;
     *len = ((*len + (1 << 16) - 1) >> 16) << 16;
@@ -79,7 +82,10 @@ static void free_near_executable(uint8_t * mem, size_t len)
 static void * mmap_near_process(size_t * len)
 {
     size_t check_size = 1 << 16;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
     size_t start_at = (size_t)(void *)mmap_near_process;
+#pragma GCC diagnostic pop
     start_at = (start_at >> 16) << 16;
     size_t orig_start_at = start_at;
     size_t start_at_2 = start_at;

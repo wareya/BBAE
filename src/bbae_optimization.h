@@ -349,7 +349,7 @@ static void optimization_unused_value_removal(Program * program)
                             }
                             else if (strcmp(statement->statement_name, "if") == 0)
                             {
-                                assert(a + 2 < array_len(statement->args, Operand));
+                                assert(a + 2 < (ptrdiff_t)array_len(statement->args, Operand));
                                 if (strcmp(statement->args[1].text, block->name) == 0)
                                 {
                                     disconnect_statement_from_operand(statement, statement->args[a + 2], 1);
@@ -384,7 +384,7 @@ static void optimization_unused_value_removal(Program * program)
                             if (strcmp(statement->statement_name, "goto") == 0)
                             {
                                 assert(strcmp(statement->args[0].text, block->name) == 0);
-                                assert(a + 1 < array_len(statement->args, Operand));
+                                assert(a + 1 < (ptrdiff_t)array_len(statement->args, Operand));
                                 disconnect_statement_from_operand(statement, statement->args[a + 1], 1);
                                 array_erase(statement->args, Operand, a + 1);
                             }
@@ -393,8 +393,8 @@ static void optimization_unused_value_removal(Program * program)
                                 size_t separator_index = find_separator_index(statement->args);
                                 if (strcmp(statement->args[1].text, block->name) == 0)
                                 {
-                                    assert(separator_index != a + 2);
-                                    assert(a + 2 < array_len(statement->args, Operand));
+                                    assert(a + 2 != (ptrdiff_t)separator_index);
+                                    assert(a + 2 < (ptrdiff_t)array_len(statement->args, Operand));
                                     disconnect_statement_from_operand(statement, statement->args[a + 2], 1);
                                     array_erase(statement->args, Operand, a + 2);
                                 }
@@ -528,6 +528,7 @@ static void optimization_global_mem2reg(Program * program)
             uint8_t ever_loaded = 0;
             uint8_t ever_stored = 0;
             Type type;
+            memset(&type, 0, sizeof(Type));
             const char * name;
             for (size_t s = 0; s < array_len(slot->edges_out, Statement *); s++)
             {

@@ -254,8 +254,6 @@ static Statement * do_spill(Function * func, Block * block, Statement * on_behal
     
     spill->num = on_behalf_of->num - 1;
     
-    size_t orig_i = *i;
-    
     array_insert(block->statements, Statement *, *i, spill);
     *i += 1;
     
@@ -275,7 +273,7 @@ static Statement * do_spill(Function * func, Block * block, Statement * on_behal
                 ptrdiff_t inst_index = ptr_array_find(block->statements, st);
                 assert(inst_index != -1);
                 printf("%zu %zu\n", *i, inst_index);
-                assert(inst_index > *i);
+                assert(inst_index > (ptrdiff_t)*i);
                 
                 unspill = new_statement();
                 unspill->output_name = make_temp_name();
@@ -367,7 +365,7 @@ static void find_spillable(Statement * statement, uint8_t is_int, Value ** reg_i
         }
         if (!found)
         {
-            printf("skipping checking spillable %zu because... no usage after reference statement??? wtf\n");
+            printf("skipping checking spillable %zu because... no usage after reference statement??? wtf\n", n);
         }
         
         if (found && (*to_spill_reg == -1 || candidate_last_num > *to_spill_num))
@@ -792,9 +790,8 @@ static void do_regalloc_block(Function * func, Block * block)
                 // clobbered, but dies in or before current statement
                 if (alloc->edges_out[array_len(alloc->edges_out, Statement *) - 1]->num <= statement->num)
                     continue;
-                else
-                    printf("(for next: %d %d)\n", alloc->edges_out[array_len(alloc->edges_out, Statement *) - 1]->num, statement->num);
-                
+                //else
+                //    printf("(for next: %zd %zd)\n", alloc->edges_out[array_len(alloc->edges_out, Statement *) - 1]->num, statement->num);
                 printf("spilling %s because it's clobbered...\n", alloc->ssa ? alloc->ssa->output_name : alloc->arg);
                 
                 // check if used in current statement
@@ -811,10 +808,8 @@ static void do_regalloc_block(Function * func, Block * block)
                 // only need to do anything for this reg if it's allocated
                 if (alloc && alloc != (Value *)-1)
                 {
-                    Statement * sp = do_spill(func, block, statement, reg_int_alloced, reg_float_alloced, alloc, reg, statement->num + 1, ~rules.clobbered_registers, &i);
+                    do_spill(func, block, statement, reg_int_alloced, reg_float_alloced, alloc, reg, statement->num + 1, ~rules.clobbered_registers, &i);
                     // fix clobber spill usages in statements that use the clobbered register
-                    //if (used_here)
-                    //    sp.
                     if (used_here)
                         array_insert(alloc->edges_out, Statement *, 1, statement);
                 }
