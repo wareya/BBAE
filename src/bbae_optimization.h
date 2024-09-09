@@ -214,54 +214,54 @@ static void optimization_unused_value_removal(Program * program)
             for (size_t b = 0; b < array_len(func->blocks, Block *); b++)
             {
                 Block * block = func->blocks[b];
-                if (array_len(block->statements, Statement *) < 2)
-                    continue;
-                
-                // statements with no output usages or side effects
-                for (ptrdiff_t i = array_len(block->statements, Statement *) - 2; i >= 0; i--)
+                if (array_len(block->statements, Statement *) > 1)
                 {
-                    Statement * statement = block->statements[i];
-                    // remove instruction if it has no outputs or side effects
-                    if (statement->output && array_len(statement->output->edges_out, Statement *) == 0)
+                    // statements with no output usages or side effects
+                    for (ptrdiff_t i = array_len(block->statements, Statement *) - 2; i >= 0; i--)
                     {
-                        if (statement_has_side_effects(statement))
-                            continue;
-                        
-                        for (size_t i = 0; i < array_len(statement->args, Operand); i++)
-                            disconnect_statement_from_operand(statement, statement->args[i], 1);
-                        
-                        array_erase(block->statements, Statement *, i);
-                        i -= 1;
-                        
-                        did_work = 1;
+                        Statement * statement = block->statements[i];
+                        // remove instruction if it has no outputs or side effects
+                        if (statement->output && array_len(statement->output->edges_out, Statement *) == 0)
+                        {
+                            if (statement_has_side_effects(statement))
+                                continue;
+                            
+                            for (size_t i = 0; i < array_len(statement->args, Operand); i++)
+                                disconnect_statement_from_operand(statement, statement->args[i], 1);
+                            
+                            array_erase(block->statements, Statement *, i);
+                            i -= 1;
+                            
+                            did_work = 1;
+                        }
                     }
-                }
-                
-                // statements that are a mov from one SSA variable to another
-                for (ptrdiff_t i = array_len(block->statements, Statement *) - 2; i >= 0; i--)
-                {
-                    Statement * statement = block->statements[i];
-                    if (strcmp(statement->statement_name, "mov") == 0)
+                    
+                    // statements that are a mov from one SSA variable to another
+                    for (ptrdiff_t i = array_len(block->statements, Statement *) - 2; i >= 0; i--)
                     {
-                        assert(statement->output);
-                        assert(array_len(statement->args, Operand) > 0);
-                        
-                        if (!statement->args[0].value)
-                            continue;
-                        if (statement->args[0].value->variant != VALUE_SSA)
-                            continue;
-                        if (statement_has_side_effects(statement))
-                            continue;
-                        
-                        assert(statement->block == statement->args[0].value->ssa->block);
-                        
-                        disconnect_statement_from_operand(statement, statement->args[0], 0);
-                        block_replace_statement_val_args(block, statement->output, statement->args[0].value);
-                        
-                        array_erase(block->statements, Statement *, i);
-                        i -= 1;
-                        
-                        did_work = 1;
+                        Statement * statement = block->statements[i];
+                        if (strcmp(statement->statement_name, "mov") == 0)
+                        {
+                            assert(statement->output);
+                            assert(array_len(statement->args, Operand) > 0);
+                            
+                            if (!statement->args[0].value)
+                                continue;
+                            if (statement->args[0].value->variant != VALUE_SSA)
+                                continue;
+                            if (statement_has_side_effects(statement))
+                                continue;
+                            
+                            assert(statement->block == statement->args[0].value->ssa->block);
+                            
+                            disconnect_statement_from_operand(statement, statement->args[0], 0);
+                            block_replace_statement_val_args(block, statement->output, statement->args[0].value);
+                            
+                            array_erase(block->statements, Statement *, i);
+                            i -= 1;
+                            
+                            did_work = 1;
+                        }
                     }
                 }
                 
@@ -391,9 +391,9 @@ static void optimization_unused_value_removal(Program * program)
                             else if (strcmp(statement->statement_name, "if") == 0)
                             {
                                 size_t separator_index = find_separator_index(statement->args);
-                                assert(separator_index != a + 2);
                                 if (strcmp(statement->args[1].text, block->name) == 0)
                                 {
+                                    assert(separator_index != a + 2);
                                     assert(a + 2 < array_len(statement->args, Operand));
                                     disconnect_statement_from_operand(statement, statement->args[a + 2], 1);
                                     array_erase(statement->args, Operand, a + 2);
