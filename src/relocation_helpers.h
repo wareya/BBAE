@@ -52,10 +52,10 @@ static void apply_relocations(Program * program, NameUsageInfo * usages, byte_bu
     }
 }
 
-static NameUsageInfo * _emitter_label_usages = 0;
+static NameUsageInfo * emitter_label_usages = 0;
 static void add_label_relocation(uint64_t loc, const char * name, uint8_t size)
 {
-    add_relocation(&_emitter_label_usages, loc, name, size);
+    add_relocation(&emitter_label_usages, loc, name, size);
 }
 static int64_t get_block_loc_or_assert(const char * name, void * _func)
 {
@@ -70,7 +70,7 @@ static int64_t get_block_loc_or_assert(const char * name, void * _func)
 }
 static void apply_label_relocations(Program * program, byte_buffer * code, Function * func)
 {
-    apply_relocations(program, _emitter_label_usages, code, get_block_loc_or_assert, (void *)func);
+    apply_relocations(program, emitter_label_usages, code, get_block_loc_or_assert, (void *)func);
 }
 
 static NameUsageInfo * static_addr_relocations = 0;
@@ -113,10 +113,10 @@ static void apply_static_relocations(Program * _program, byte_buffer * code, Pro
     apply_relocations(_program, static_addr_relocations, code, get_static_or_assert, (void *)program);
 }
 
-static NameUsageInfo * _emitter_symbol_usages = 0;
+static NameUsageInfo * emitter_symbol_usages = 0;
 static void add_symbol_relocation(uint64_t loc, const char * name, uint8_t size)
 {
-    add_relocation(&_emitter_symbol_usages, loc, name, size);
+    add_relocation(&emitter_symbol_usages, loc, name, size);
 }
 static int64_t get_symbol_loc_or_dummy(const char * name, void * _list)
 {
@@ -131,7 +131,14 @@ static int64_t get_symbol_loc_or_dummy(const char * name, void * _list)
 }
 static void apply_symbol_relocations(Program * program, byte_buffer * code, SymbolEntry * list)
 {
-    apply_relocations(program, _emitter_symbol_usages, code, get_symbol_loc_or_dummy, (void *)list);
+    apply_relocations(program, emitter_symbol_usages, code, get_symbol_loc_or_dummy, (void *)list);
+}
+
+static void nullify_relocation_buffers(void)
+{
+    emitter_label_usages = 0;
+    static_addr_relocations = 0;
+    emitter_symbol_usages = 0;
 }
 
 #endif //BBAE_RELOCATION_HELPERS

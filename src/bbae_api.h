@@ -36,8 +36,7 @@ static void do_optimization(Program * program)
     optimization_trivial_block_splicing(program);
     optimization_local_CSE(program);
     optimization_unused_value_removal(program);
-    /*
-    */
+    
     puts("----- AFTER OPTIMIZATION -----");
     print_ir_to(0, program);
     puts("-----                    -----");

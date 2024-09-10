@@ -89,23 +89,18 @@ int main(int argc, char ** argv)
 #pragma GCC diagnostic ignored "-Wpedantic"
     printf("-- %p\n", (void *)jit_code);
     printf("-- %p\n", (void *)main);
-    double (*jit_main) (int, int) = (double(*)(int, int))(void *)(&jit_code[loc]);
+    uint64_t (*jit_main)(uint64_t) = (uint64_t(*)(uint64_t))(void *)(&jit_code[loc]);
+    double (*jit_main_double)(uint64_t) = (double(*)(uint64_t))(void *)(&jit_code[loc]);
 #pragma GCC diagnostic pop
     
     assert(jitinfo.raw_code);
     
     assert(jit_main);
-    double jit_output = jit_main(0, 0);
-    uint64_t jit_output_int;
-    memcpy(&jit_output_int, &jit_output, 8);
+    uint64_t jit_output = jit_main(0);
+    double jit_output_double = jit_main_double(0);
     
-    printf("%.24f\n", jit_output);
-    printf("%zd\n", jit_output_int);
-    
-    jit_output = jit_main(0, 0);
-    
-    printf("%.24f\n", jit_output);
-    printf("%zd\n", jit_output_int);
+    printf("%zd\n", jit_output);
+    printf("%.24f\n", jit_output_double);
     
     assert(jitinfo.raw_code);
     

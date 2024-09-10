@@ -1,4 +1,0 @@
-
-func main returns f64
-    return 0.0f64
-endfunc

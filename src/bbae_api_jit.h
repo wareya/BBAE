@@ -94,6 +94,8 @@ void jit_free(JitOutput jitinfo)
     free(jitinfo.raw_code->data);
     free_near_executable(jitinfo.jit_code, jitinfo.jit_code_len);
     free_near_executable(jitinfo.jit_globals, jitinfo.jit_globals_len);
+    
+    nullify_relocation_buffers();
 }
 
 #endif // BBAE_API_JIT

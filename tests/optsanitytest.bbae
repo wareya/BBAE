@@ -1,0 +1,14 @@
+
+func main returns f64
+    i = mov 10i64
+    goto grav i
+block grav
+    arg i i64
+    
+    i2 = sub i 1i64
+    cmp = cmp_g i2 0i64
+    if cmp goto grav i2
+    goto exit
+block exit
+    return 0.0f64
+endfunc

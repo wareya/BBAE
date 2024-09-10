@@ -90,10 +90,11 @@ static void free_all_compiler_allocs(void)
 {
     while (alloc_list)
     {
-        uint8_t * alloc_next = *alloc_get_prev_ptr(alloc_list);
+        uint8_t * alloc_next = *alloc_get_next_ptr(alloc_list);
         free(alloc_list);
         alloc_list = alloc_next;
     }
+    assert(!alloc_list);
 }
 
 static void * zero_alloc_clone(void * buf)

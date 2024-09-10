@@ -7,6 +7,27 @@
 #include "memory.h"
 #include "bbae_api_jit.h"
 
+void print_asm(uint8_t * code, size_t len)
+{
+    //FILE * logfile = 0;
+    
+    size_t offset = 0; 
+    size_t runtime_address = 0; 
+    ZydisDisassembledInstruction instruction; 
+    while (ZYAN_SUCCESS(ZydisDisassembleIntel(
+        ZYDIS_MACHINE_MODE_LONG_64,
+        runtime_address,
+        code + offset,  // buffer
+        len - offset,   // length
+        &instruction
+    )))
+    {
+        printf("0x%04zX    %s\n", offset, instruction.text);
+        offset += instruction.info.length;
+        runtime_address += instruction.info.length;
+    }
+}
+
 uint64_t compile_and_run(const char * fname, uint64_t arg, uint8_t with_double)
 {
     FILE * f = fopen(fname, "rb");
@@ -22,6 +43,7 @@ uint64_t compile_and_run(const char * fname, uint64_t arg, uint8_t with_double)
     size_t n = fread(buffer, 1, length, f);
     assert(n == (size_t)length);
     buffer[length] = 0;
+    
     fclose(f);
     
     Program * program = parse(buffer);
@@ -43,6 +65,8 @@ uint64_t compile_and_run(const char * fname, uint64_t arg, uint8_t with_double)
     }
     assert(loc >= 0);
     
+    print_asm(jitinfo.jit_code, jitinfo.raw_code->len);
+    
     // suppress non-posix-compliant gcc function pointer casting warning
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
@@ -52,6 +76,7 @@ uint64_t compile_and_run(const char * fname, uint64_t arg, uint8_t with_double)
     
     assert(jitinfo.raw_code);
     assert(jit_main);
+    assert(jit_main_double);
     
     uint64_t jit_output;
     if (!with_double)
@@ -59,9 +84,9 @@ uint64_t compile_and_run(const char * fname, uint64_t arg, uint8_t with_double)
     else
     {
         double temp = jit_main_double(arg);
+        //double temp = 0.0;
         memcpy(&jit_output, &temp, 8);
     }
-    
     
     assert(jitinfo.raw_code);
     
@@ -73,37 +98,86 @@ uint64_t compile_and_run(const char * fname, uint64_t arg, uint8_t with_double)
     return jit_output;
 }
 
-#define TEST_XMM(X, T, V) { \
-    uint64_t n = compile_and_run(X, 0, 1); \
-    T val; \
-    memcpy(&val, &n, sizeof(T)); \
-    assert(val == V); \
-    fprintf(stderr, "%s: %.20f -- pass!\n", X, val); \
-}
-#define TEST_RAX(X, T, V) { \
-    uint64_t n = compile_and_run(X, 0, 0); \
-    T val = *(T*)&n; \
-    assert(val == V); \
-    fprintf(stderr, "%s: %zd -- pass!\n", X, val); \
-}
-#define TEST_TERMINATES_SUCCESSFULLY(X, T, V) { \
-    uint64_t n = compile_and_run(X, 0, 0); \
-    T val = *(T*)&n; \
-    fprintf(stderr, "%s: (finished running) -- pass!\n", X, val); \
-}
-
 #ifdef _WIN32
 #define NULL_DEVICE "NUL:"
+#define STDOUT_DEVICE "CON"
 #else
 #define NULL_DEVICE "/dev/null"
+#define STDOUT_DEVICE "/dev/stdout"
 #endif
+
+#ifdef _WIN32
+#define CLOSE_STDOUT { \
+    FILE * n = freopen(NULL_DEVICE, "w", stdout); \
+    (void)n; }
+#else
+#include <unistd.h>
+static int _old_stdout = 0;
+#define CLOSE_STDOUT { \
+    _old_stdout = dup(0); \
+    FILE * n = freopen(NULL_DEVICE, "w", stdout); \
+    (void) n; }
+#endif
+
+#ifdef _WIN32
+#define REOPEN_STDOUT { FILE * n = freopen(STDOUT_DEVICE, "w", stdout); (void)n; }
+#else
+//#define REOPEN_STDOUT { freopen(STDOUT_DEVICE, "w", stdout); }
+#define REOPEN_STDOUT { stdout = fdopen(_old_stdout, "w"); }
+//#define REOPEN_STDOUT { dup2(_old_stdout, 0); }
+#endif
+
+/*
+#undef CLOSE_STDOUT
+#define CLOSE_STDOUT ;
+#undef REOPEN_STDOUT
+#define REOPEN_STDOUT ;
+*/
+
+#define TEST_XMM(X, T, V) { \
+    CLOSE_STDOUT; \
+    uint64_t n = compile_and_run(X, 0, 1); \
+    T val; \
+    REOPEN_STDOUT; \
+    memcpy(&val, &n, sizeof(T)); \
+    assert(val == V); \
+    printf("%s: %.20f -- pass!\n", X, val); \
+}
+#define TEST_RAX(X, T, V) { \
+    CLOSE_STDOUT; \
+    uint64_t n = compile_and_run(X, 0, 0); \
+    T val = *(T*)&n; \
+    REOPEN_STDOUT; \
+    assert(val == V); \
+    printf("%s: %zd -- pass!\n", X, val); \
+}
+#define TEST_RUNS(X) { \
+    CLOSE_STDOUT; \
+    compile_and_run(X, 0, 0); \
+    REOPEN_STDOUT; \
+    printf("%s: (finished running) -- pass!\n", X); \
+}
 
 int main(int argc, char ** argv)
 {
     (void)argc;
     (void)argv;
-    FILE * n = freopen(NULL_DEVICE, "w", stdout);
-    (void)n;
-    TEST_XMM("examples/gravity.bbae", double, 489999999.990911543369293212890625);
+    
+    TEST_XMM("tests/retsanitytest.bbae", double, 0.0);
+    TEST_RAX("tests/retsanitytest_int.bbae", uint64_t, 0);
+    
+    TEST_XMM("tests/optsanitytest.bbae", double, 0.0);
+    TEST_XMM("examples/gravity.bbae", double, 4899999.999928221106529235839844);
+    TEST_XMM("tests/gravtest.bbae", double, 4899999.999928221106529235839844);
+    TEST_XMM("tests/loopsanity.bbae", double, 0.0);
+    // this pi calculation doesn't fully finish, inaccuracy from actual pi is expected
+    TEST_XMM("examples/too_simple.bbae", double, 3.141592652588050427198141);
+    
+    TEST_RAX("examples/fib.bbae", uint64_t, 433494437);
+    
+    TEST_RUNS("examples/global.bbae");
+    
+    puts("Tests finished!");
+    fflush(stdout);
     return 0;
 }

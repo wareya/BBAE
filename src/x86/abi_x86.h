@@ -207,7 +207,7 @@ static uint64_t abi_get_clobber_mask(void)
                   (1 << _ABI_XMM0 ) | (1 << _ABI_XMM1 ) | (1 << _ABI_XMM2 ) | (1 << _ABI_XMM3 ) |
                   (1 << _ABI_XMM4 ) | (1 << _ABI_XMM5 ) | (1 << _ABI_XMM6 ) | (1 << _ABI_XMM7 ) |
                   (1 << _ABI_XMM8 ) | (1 << _ABI_XMM9 ) | (1 << _ABI_XMM10) | (1 << _ABI_XMM11) |
-                  (1 << _ABI_XMM12) | (1 << _ABI_XMM13) | (1 << _ABI_XMM14) | (1 << _ABI_XMM15);
+                  (1 << _ABI_XMM12) | (1 << _ABI_XMM13) | (1 << _ABI_XMM14) | (1U << _ABI_XMM15);
     }
     return clobber;
 }

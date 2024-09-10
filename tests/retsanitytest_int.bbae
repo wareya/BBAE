@@ -1,0 +1,4 @@
+
+func main returns i64
+    return 0i64
+endfunc

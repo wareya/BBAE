@@ -6,7 +6,7 @@ func mul_delta returns f64
 endfunc
 
 func main returns f64
-    i = mov 10000000i64
+    i = mov 1000000i64
     y = mov 0.0f64
     vel = mov 0.0f64
     g = mov 9.8f64

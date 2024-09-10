@@ -1,6 +1,6 @@
 global i64 my_global
 
-func main returns f64
+func main returns i64
     my_global = symbol_lookup my_global 8
     gd = load i64 my_global
     gd2 = add gd 1i64
