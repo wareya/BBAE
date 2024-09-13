@@ -1,6 +1,6 @@
 # BBAE
 
-BBAE (Basic Block Analysis Enabler) is a WIP low-level compiler backend language, both a spec and a basic implementation. It sits between programming languages and the hardware, with a format that's easier to optimize than high-level code.
+BBAE (Basic Block Analysis Enabler) is a WIP low-level compiler backend language, both a spec and a basic implementation. It sits between programming languages and the hardware, with a format that's easier to optimize than high-level code. The reference implementation is a C99/C++17 program and/or header set (can be used as either).
 
 ## Design philosophy
 
@@ -67,6 +67,35 @@ i64 main(i64 a, i64 b)
     x = a + x;
     return x;
 }
+```
+
+BBEL is implemented in C++. Here's an example of what its code looks like, with BBAE builder API function calls noted:
+
+```c++
+// in function:  void compile(CompilerState & state, std::shared_ptr<ASTNode> ast)
+// ...
+    else if (*ast->text == "return")
+    {
+        if (ast->children.size() == 0)
+        {
+            build_return_void(state.current_block); // BBAE builder call
+        }
+        else if (ast->children.size() == 1)
+        {
+            compile(state, ast->children[0]);
+            auto a = state.stack.back();
+            state.stack.pop_back();
+            
+            assert(a);
+            
+            build_return_1val(state.current_block, a); // BBAE builder call
+        }
+        else
+            assert(0);
+        
+        state.current_block = create_block(state.program, 0); // BBAE builder call
+    }
+// ...
 ```
 
 ## License
