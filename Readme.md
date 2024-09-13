@@ -66,3 +66,23 @@ i64 main(i64 a, i64 b)
     return x;
 }
 ```
+
+## License
+
+(Some files, like those under the `thirdparty` directory, may be licensed under other licenses.)
+
+Copyright "Wareya" (wareya@gmail.com) and any contributors
+
+Licensed under the Apache License v2.0, with LLVM Exceptions and an additional custom exception that makes the license more permissive. The custom exception may be removed, allowing you to use this software under the SPDX-identified Apache-2.0 WITH LLVM-exception license. See LICENSE.txt and the below License Exceptions section for details.
+
+Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
+
+## License Exceptions
+
+This section is not legal code, it's a human-readable summary.
+
+This software is licensed with the LLVM exceptions on top of the Apache 2.0 license. These exceptions make it compatible with the GNU GPLv2 and also waive certain restrictions when distributing binaries.
+
+This software is licensed with an additional, custom exception that makes the Apache 2.0 license more permissive by not requiring modified source files to be marked with prominent notices. This exception can be removed, turning the license into pure Apache-2.0 WITH LLVM-exception. In other words, as a user or downstream project or dependent, you can ignore this exception's existence, and as a contributor or maintainer, it means that you have one less responsibility.
+
+These exceptions do not necessarily apply to any dependencies or dependents of this software, unless they independently have the same or similar exceptions.
