@@ -8,7 +8,9 @@ BBAE is heavily inspired by LLVM, but aims to be much simpler and more intuitive
 
 ## Current status
 
-BBAE has a reference implementation that can compile and run basic textual programs, which have a format that looks like the following (a partial pi calculation program). Various important features outside of small tests like these are not yet implemented.
+BBAE has a reference implementation that can compile and run basic textual programs, which have a format that looks like the following (a partial pi calculation program).
+
+The compiler is largely unfinished, and is missing a lot of important instructions and optimizations.
 
 ```rs
 func main returns f64
@@ -54,7 +56,7 @@ block out
 endfunc
 ```
 
-The compiler is largely unfinished, and is missing a lot of important instructions and optimizations.
+### BBEL
 
 I'm also working on a toy high-level language called BBEL (BBAE Basic Example Language) that cn be studied as a reference for how to interface with BBAE via an LLVM-style "builder" API. It can currently compile and run programs that look like this:
 
