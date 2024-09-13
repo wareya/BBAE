@@ -172,11 +172,11 @@ static size_t array_find_impl(void * array, size_t item_size, void * ptr)
 static uint8_t * array_chop_impl(uint8_t ** array, size_t start_offs, size_t end_offs)
 {
     uint8_t * ret = (uint8_t *)zero_alloc(end_offs - start_offs);
-    printf("offsets.... %zu %zu\n", start_offs, end_offs);
-    printf("making RIGHT array with byte length %zu...\n", end_offs - start_offs);
+    //printf("offsets.... %zu %zu\n", start_offs, end_offs);
+    //printf("making RIGHT array with byte length %zu...\n", end_offs - start_offs);
     memcpy(ret, *array + start_offs, end_offs - start_offs);
     *array = (uint8_t *)zero_realloc(*array, start_offs);
-    printf("making LEFT array with byte length %zu...\n", start_offs);
+    //printf("making LEFT array with byte length %zu...\n", start_offs);
     return ret;
 }
 

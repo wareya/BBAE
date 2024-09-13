@@ -48,7 +48,7 @@ static uint8_t * alloc_near_executable(size_t * len)
 {
     if (*len == 0)
         *len = 1;
-    printf("allocating %zu length\n", *len);
+    //printf("allocating %zu length\n", *len);
     // we want an allocation that's near our own process memory
     // so that we can do 32-bit relocations when calling non-JIT functions
     void * const buffer = VirtualAllocNearProcess(len);

@@ -149,7 +149,7 @@ RegAllocRules regalloc_rule_determiner(Statement * statement)
 // returns null on fast spill (regalloc changed, no instructions emitted) (yes this happens)
 static Statement * do_spill(Function * func, Block * block, Statement * on_behalf_of, Value ** reg_int_alloced, Value ** reg_float_alloced, Value * spillee, int64_t to_spill_reg, uint64_t to_spill_num, uint64_t allowed_mask, size_t * i)
 {
-    printf("want to spill reg %zu (%p)\n", to_spill_reg, (void *)spillee);
+    //printf("want to spill reg %zu (%p)\n", to_spill_reg, (void *)spillee);
     
     if (to_spill_reg >= _ABI_XMM0)
     {
@@ -189,7 +189,7 @@ static Statement * do_spill(Function * func, Block * block, Statement * on_behal
                 else 
                     reg_int_alloced[temp] = spillee;
                 
-                printf("fast spilling into %zu\n", temp);
+                //printf("fast spilling into %zu\n", temp);
                 spillee->regalloc = temp;
                 return 0;
             }
@@ -215,7 +215,7 @@ static Statement * do_spill(Function * func, Block * block, Statement * on_behal
             else 
                 reg_int_alloced[temp] = spill->output;
             
-            printf("mov spilling into %zu\n", temp);
+            //printf("mov spilling into %zu\n", temp);
             
             spill->num = on_behalf_of->num - 1;
             
@@ -240,8 +240,8 @@ static Statement * do_spill(Function * func, Block * block, Statement * on_behal
             return spill;
         }
     }
-    else
-        printf("can't fast-spill %s because a suitable register was not found. allowed mask: %08zX\n", spillee->arg ? spillee->arg : spillee->ssa->output_name, allowed_mask);
+    //else
+    //    printf("can't fast-spill %s because a suitable register was not found. allowed mask: %08zX\n", spillee->arg ? spillee->arg : spillee->ssa->output_name, allowed_mask);
     
     // spill statements don't need to be numbered because they're never an outward edge of an SSA value
     Value * spill_slot = add_stack_slot(func, make_temp_name(), type_size(spillee->type));
@@ -263,16 +263,16 @@ static Statement * do_spill(Function * func, Block * block, Statement * on_behal
     for (size_t j = 0; j < array_len(spillee->edges_out, Statement *); j++)
     {
         Statement * st = spillee->edges_out[j];
-        printf("checking for unspilling %s... %zu vs %zu\n", spillee->arg ? spillee->arg : spillee->ssa->output_name, st->num, to_spill_num);
+        //printf("checking for unspilling %s... %zu vs %zu\n", spillee->arg ? spillee->arg : spillee->ssa->output_name, st->num, to_spill_num);
         if (st->num >= to_spill_num)
         {
             if (first)
             {
-                printf("unspilling...\n");
+                //printf("unspilling...\n");
                 
                 ptrdiff_t inst_index = ptr_array_find(block->statements, st);
                 assert(inst_index != -1);
-                printf("%zu %zu\n", *i, inst_index);
+                //printf("%zu %zu\n", *i, inst_index);
                 assert(inst_index > (ptrdiff_t)*i);
                 
                 unspill = new_statement();
@@ -325,7 +325,7 @@ static void find_spillable(Statement * statement, uint8_t is_int, Value ** reg_i
     {
         if (!((allowed_mask >> n) & 1))
         {
-            printf("skipping checking spillable %zu because not allowed\n", n);
+            //printf("skipping checking spillable %zu because not allowed\n", n);
             continue;
         }
         Value * spill_candidate = 0;
@@ -363,10 +363,8 @@ static void find_spillable(Statement * statement, uint8_t is_int, Value ** reg_i
                 break;
             }
         }
-        if (!found)
-        {
-            printf("skipping checking spillable %zu because... no usage after reference statement??? wtf\n", n);
-        }
+        //if (!found)
+        //    printf("skipping checking spillable %zu because... no usage after reference statement??? wtf\n", n);
         
         if (found && (*to_spill_reg == -1 || candidate_last_num > *to_spill_num))
         {
@@ -395,7 +393,7 @@ static void regalloc_func_args(Function * func, Value ** reg_int_alloced, Value 
             else 
                 reg_int_alloced[where] = value;
             
-            printf("allocated register %zd to func arg %s\n", where, value->arg);
+            //printf("allocated register %zd to func arg %s\n", where, value->arg);
             
             value->regalloc = where;
             value->regalloced = 1;
@@ -511,7 +509,7 @@ static void expire_unused_regs(Value ** reg_int_alloced, Value ** reg_float_allo
             assert(value->alloced_use_count <= array_len(value->edges_out, Value *));
             if (value->alloced_use_count == array_len(value->edges_out, Value *))
             {
-                printf("freeing float register %zu...\n", n);
+                //printf("freeing float register %zu...\n", n);
                 reg_float_alloced[n] = 0;
             }
         }
@@ -552,18 +550,20 @@ static void increment_operand_uses_impl(Statement * statement, size_t start, siz
             arg->alloced_use_count += 1;
             if (arg->ssa)
                 assert(arg->ssa->output_name);
-            if (arg->ssa && strcmp(arg->ssa->output_name, "btemp_7") == 0)
-                printf("!!~~ allocing btemp_7 usage in statement with num %zu (start-end %zu %zu)\n", statement->num, start, end);
+            //if (arg->ssa && strcmp(arg->ssa->output_name, "btemp_7") == 0)
+            //    printf("!!~~ allocing btemp_7 usage in statement with num %zu (start-end %zu %zu)\n", statement->num, start, end);
             size_t arg_edges_out_len = array_len(arg->edges_out, Value *);
-            if (arg->alloced_use_count > arg_edges_out_len)
-            {
-                print_ir_to(0, _______asdf);
-                
-                if (arg->ssa)
-                    printf("arg... %s\n", arg->ssa->output_name);
-                printf("output... %s\n", statement->output_name);
-                printf("%zu vs %zu...\n", arg->alloced_use_count, arg_edges_out_len);
-            }
+            
+            //if (arg->alloced_use_count > arg_edges_out_len)
+            //{
+            //    print_ir_to(0, _______asdf);
+            //    
+            //    if (arg->ssa)
+            //        printf("arg... %s\n", arg->ssa->output_name);
+            //    printf("output... %s\n", statement->output_name);
+            //    printf("%zu vs %zu...\n", arg->alloced_use_count, arg_edges_out_len);
+            //}
+            
             assert(arg->alloced_use_count <= arg_edges_out_len);
         }
     }
@@ -626,7 +626,7 @@ static void do_regalloc_block(Function * func, Block * block)
         // skip this statement if it doesn't have an output to allocate
         if (!statement->output)
             continue;
-        printf("--- regallocing statement %zu out of %zu (output name: %s)\n", i, array_len(block->statements, Statement *), statement->output_name);
+        //printf("--- regallocing statement %zu out of %zu (output name: %s)\n", i, array_len(block->statements, Statement *), statement->output_name);
         
         assert(!statement->output->regalloced);
         
@@ -640,7 +640,7 @@ static void do_regalloc_block(Function * func, Block * block)
         uint8_t op_is_commutative = is_statement_commutative(statement);
         
         uint64_t allow_mask = is_special ? rules.allowed_output_registers : 0xFFFFFFFF;
-        printf("our mask: %zX\n", allow_mask);
+        //printf("our mask: %zX\n", allow_mask);
         
         // reuse an operand register if possible
         for (size_t j = 0; j < array_len(statement->args, Operand); j++)
@@ -684,16 +684,16 @@ static void do_regalloc_block(Function * func, Block * block)
             where = first_empty(reg_int_alloced, BBAE_REGISTER_COUNT, allow_mask, func->performs_calls, 0);
         else
         {
-            puts("looking for float register...");
+            //puts("looking for float register...");
             //puts("candidates:");
             //for (size_t i = 0; i < 16; i++)
             //    printf("%p\n", reg_float_alloced[i]);
             if (reg_float_alloced[0] && reg_float_alloced[0] != (Value *) -1 && reg_float_alloced[0]->ssa)
             {
                 Value * v = reg_float_alloced[0];
-                Statement * s = v->ssa;
                 assert(v->ssa);
-                printf("first... %s, %zu, %zu\n", s->output_name, array_len(v->edges_out, Statement *), v->alloced_use_count);
+                //Statement * s = v->ssa;
+                //printf("first... %s, %zu, %zu\n", s->output_name, array_len(v->edges_out, Statement *), v->alloced_use_count);
             }
             where = first_empty(reg_float_alloced, BBAE_REGISTER_COUNT, allow_mask >> 16, func->performs_calls, 1);
             if (where >= 0)
@@ -703,18 +703,18 @@ static void do_regalloc_block(Function * func, Block * block)
         // spill a register away if needed
         if (where < 0)
         {
-            printf("spilling away a register to use for %s...\n", statement->output_name);
+            //printf("spilling away a register to use for %s...\n", statement->output_name);
             
             int64_t to_spill_reg = -1;
             uint64_t to_spill_num = 0;
             find_spillable(statement, is_int, reg_int_alloced, reg_float_alloced, &to_spill_reg, &to_spill_num, is_int ? allow_mask : (allow_mask >> 16));
             if (to_spill_reg != -1)
                 assert(to_spill_num > statement->num);
-            else
-            {
-                print_ir_to(0, _______asdf);
-                printf("currently in: %s\n", statement->output_name);
-            }
+            //else
+            //{
+            //    print_ir_to(0, _______asdf);
+            //    printf("currently in: %s\n", statement->output_name);
+            //}
             assert(to_spill_reg >= 0);
             assert(to_spill_reg < 16);
             
@@ -731,7 +731,7 @@ static void do_regalloc_block(Function * func, Block * block)
             
             where = spillee->regalloc;
             
-            printf("spilling %s...\n", spillee->ssa ? spillee->ssa->output_name : spillee->arg);
+            //printf("spilling %s...\n", spillee->ssa ? spillee->ssa->output_name : spillee->arg);
             
             do_spill(func, block, statement, reg_int_alloced, reg_float_alloced, spillee, to_spill_reg, to_spill_num, (~rules.clobbered_registers) & (~(1 << where)), &i);
             
@@ -792,7 +792,7 @@ static void do_regalloc_block(Function * func, Block * block)
                     continue;
                 //else
                 //    printf("(for next: %zd %zd)\n", alloc->edges_out[array_len(alloc->edges_out, Statement *) - 1]->num, statement->num);
-                printf("spilling %s because it's clobbered...\n", alloc->ssa ? alloc->ssa->output_name : alloc->arg);
+                //printf("spilling %s because it's clobbered...\n", alloc->ssa ? alloc->ssa->output_name : alloc->arg);
                 
                 // check if used in current statement
                 uint8_t used_here = 0;
@@ -824,7 +824,7 @@ static void do_regalloc(Program * program)
     for (size_t f = 0; f < array_len(program->functions, Function *); f++)
     {
         Function * func = program->functions[f];
-        puts("---!!!    regallocing another function");
+        //puts("---!!!    regallocing another function");
         for (size_t b = 0; b < array_len(func->blocks, Block *); b++)
         {
             Block * block = func->blocks[b];

@@ -22,8 +22,10 @@ static void do_optimization(Program * program)
     if (!program->construction_finished)
         program_finish_construction(program);
     
+#ifndef COMPILER_DEBUG_QUIET
     puts("----- BEFORE OPTIMIZATION -----");
     print_ir_to(0, program);
+#endif
     
     validate_links(program);
     
@@ -37,9 +39,11 @@ static void do_optimization(Program * program)
     optimization_local_CSE(program);
     optimization_unused_value_removal(program);
     
+#ifndef COMPILER_DEBUG_QUIET
     puts("----- AFTER OPTIMIZATION -----");
     print_ir_to(0, program);
     puts("-----                    -----");
+#endif
 }
 
 static byte_buffer * do_lowering(Program * program, SymbolEntry ** symbollist)
@@ -50,9 +54,13 @@ static byte_buffer * do_lowering(Program * program, SymbolEntry ** symbollist)
     validate_links(program);
     verify_coherency(program);
     do_regalloc(program);
+    
+#ifndef COMPILER_DEBUG_QUIET
     puts("-----   AFTER REGALLOC   -----");
     print_ir_to(0, program);
     puts("-----                    -----");
+#endif
+    
     allocate_stack_slots(program);
     
     *symbollist = (SymbolEntry *)zero_alloc(0);

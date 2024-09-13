@@ -30,10 +30,8 @@ block loop_head
     ival2 = add ival 1i64
     
     cmp = cmp_g ival2 nval
-    if cmp goto out
-    
     store i ival2
-    
+    if cmp goto out
     goto loop_head
 block out
     ret = load f64 sum

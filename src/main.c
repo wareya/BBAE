@@ -77,18 +77,22 @@ int main(int argc, char ** argv)
         }
     }
     assert(loc >= 0);
-    
+
+#ifndef COMPILER_DEBUG_QUIET
     for (size_t i = 0; i < jitinfo.raw_code->len; i++)
         printf("%02X ", jitinfo.jit_code[i]);
     puts("");
     
     print_asm(jitinfo.jit_code, jitinfo.raw_code->len);
+#endif
     
     // suppress non-posix-compliant gcc function pointer casting warning
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
+#ifndef COMPILER_DEBUG_QUIET
     printf("-- %p\n", (void *)jit_code);
     printf("-- %p\n", (void *)main);
+#endif
     uint64_t (*jit_main)(uint64_t) = (uint64_t(*)(uint64_t))(void *)(&jit_code[loc]);
     double (*jit_main_double)(uint64_t) = (double(*)(uint64_t))(void *)(&jit_code[loc]);
 #pragma GCC diagnostic pop
@@ -96,11 +100,14 @@ int main(int argc, char ** argv)
     assert(jitinfo.raw_code);
     
     assert(jit_main);
+#ifndef SKIP_INT
     uint64_t jit_output = jit_main(0);
-    double jit_output_double = jit_main_double(0);
-    
     printf("%zd\n", jit_output);
+#endif
+#ifndef SKIP_DOUBLE
+    double jit_output_double = jit_main_double(0);
     printf("%.24f\n", jit_output_double);
+#endif
     
     assert(jitinfo.raw_code);
     

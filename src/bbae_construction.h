@@ -161,7 +161,7 @@ static Value * parse_value(Program * program, char * token)
                  || str_ends_with(token, "iptr"))
         {
             uint64_t n = parse_int_nonbare(token);
-            printf("parsed int... %zd\n", n);
+            //printf("parsed int... %zd\n", n);
             if (str_ends_with(token, "i8"))
                 return build_constant_i8(n);
             else if (str_ends_with(token, "i16"))
@@ -611,7 +611,7 @@ static Value * add_funcarg(Function * func, const char * name, Type type)
     Value * value = make_value(type);
     value->variant = VALUE_ARG;
     value->arg = name;
-    printf("creating func arg with name %s\n", name);
+    //printf("creating func arg with name %s\n", name);
     
     array_push(func->args, Value *, value);
     
@@ -633,7 +633,7 @@ static Value * add_blockarg(Program * program, const char * name, Type type)
     Value * value = make_value(type);
     value->variant = VALUE_ARG;
     value->arg = name;
-    printf("creating block arg with name %s\n", name);
+    //printf("creating block arg with name %s\n", name);
     
     array_push(program->current_block->args, Value *, value);
     
@@ -869,7 +869,7 @@ static Program * parse_file(const char * cursor)
         token = find_next_token_anywhere(&cursor);
     }
     
-    puts("finished parsing program!");
+    //puts("finished parsing program!");
     
     return program;
 }
@@ -953,9 +953,9 @@ static void split_blocks(Program * program)
                     for (size_t s = 0; s < array_len(next_block->statements, Statement *); s++)
                         next_block->statements[s]->block = next_block;
                     
-                    printf("splitting block %s at instruction %zu\n", block->name, i);
-                    printf("left len: %zu\n", array_len(block->statements, Statement *));
-                    printf("right len: %zu\n", array_len(next_block->statements, Statement *));
+                    //printf("splitting block %s at instruction %zu\n", block->name, i);
+                    //printf("left len: %zu\n", array_len(block->statements, Statement *));
+                    //printf("right len: %zu\n", array_len(next_block->statements, Statement *));
                     
                     array_push(branch->args, Operand, new_op_separator());
                     array_push(branch->args, Operand, new_op_text(next_block->name));
@@ -972,7 +972,7 @@ static void split_blocks(Program * program)
                         
                         Value * arg = make_value(value->type);
                         arg->variant = VALUE_ARG;
-                        printf("creating dummy block arg with name %s\n", output_names[a]);
+                        //printf("creating dummy block arg with name %s\n", output_names[a]);
                         arg->arg = output_names[a];
                         
                         array_push(next_block->args, Value *, arg);
@@ -984,7 +984,7 @@ static void split_blocks(Program * program)
                             {
                                 if (statement->args[n].variant == OP_KIND_VALUE && statement->args[n].value == value)
                                 {
-                                    printf("replaced a usage of %s in statement type %s\n", output_names[a], statement->statement_name);
+                                    //printf("replaced a usage of %s in statement type %s\n", output_names[a], statement->statement_name);
                                     disconnect_statement_from_operand(statement, statement->args[n], 1);
                                     statement->args[n].value = arg;
                                     connect_statement_to_operand(statement, statement->args[n]);

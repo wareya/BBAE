@@ -272,7 +272,7 @@ static void optimization_unused_value_removal(Program * program)
                 //for (size_t a = 0; a < array_len(block->args, Value *); a++)
                 for (ptrdiff_t a = array_len(block->args, Value *) - 1; a >= 0; a--)
                 {
-                    puts("next arg...");
+                    //puts("next arg...");
                     Value * arg = block->args[a];
                     //if (strcmp(arg->arg, "y") == 0)
                     //    continue;
@@ -315,12 +315,12 @@ static void optimization_unused_value_removal(Program * program)
                             if (strcmp(statement->args[separator_index + 1].text, block->name) != 0 ||
                                 count_op_num_times_used(statement->args, arg, separator_index + 2, count) != 1)
                             {
-                                puts("9100--1-1-1-1 -1_@ 4!_24 -14 23-");
+                                //puts("9100--1-1-1-1 -1_@ 4!_24 -14 23-");
                                 non_jump_back_to_self_usage_exists = 1;
                                 break;
                             }
                             
-                            printf("rfda34ay (%s)\n", arg->arg);
+                            //printf("rfda34ay (%s)\n", arg->arg);
                         }
                         else
                         {
@@ -330,8 +330,8 @@ static void optimization_unused_value_removal(Program * program)
                     }
                     if (!non_jump_back_to_self_usage_exists || array_len(arg->edges_out, Statement *) == 0)
                     {
-                        printf("removing arg... %s\n", arg->arg);
-                        printf("reason: %d %zu\n", non_jump_back_to_self_usage_exists, array_len(arg->edges_out, Statement *));
+                        //printf("removing arg... %s\n", arg->arg);
+                        //printf("reason: %d %zu\n", non_jump_back_to_self_usage_exists, array_len(arg->edges_out, Statement *));
                         for (size_t i = 0; i < array_len(arg->edges_out, Statement *); i++)
                         {
                             Statement * statement = arg->edges_out[i];
@@ -472,7 +472,7 @@ static void optimization_trivial_block_splicing(Program * program)
             // may need to join on same block again
             b -= 1;
             
-            puts("-------!!!-!-! spliced a block");
+            //puts("-------!!!-!-! spliced a block");
         }
     }
     _block_edges_fix(program);
@@ -576,7 +576,7 @@ static void optimization_global_mem2reg(Program * program)
             
             assert(type_set);
             
-            printf("---- stack slot type %d\n", type.variant);
+            //printf("---- stack slot type %d\n", type.variant);
             
             // rewrite all blocks (except the first) to take and pass the variable as an argument, while handling stores/loads
             name = make_temp_name();
@@ -731,31 +731,31 @@ static void optimization_function_inlining(Program * program)
             // dynamically loaded, can't inline
             if (!call_arg->ssa)
             {
-                puts("------- skipping inlining because inlinee is dynamically loaded (not SSA)");
+                //puts("------- skipping inlining because inlinee is dynamically loaded (not SSA)");
                 continue;
             }
             // dynamically loaded, can't inline
             if (strcmp(call_arg->ssa->statement_name, "symbol_lookup") != 0 &&
                 strcmp(call_arg->ssa->statement_name, "symbol_lookup_unsized") != 0)
             {
-                puts("------- skipping inlining because inlinee is dynamically loaded (not symbol lookup)");
+                //puts("------- skipping inlining because inlinee is dynamically loaded (not symbol lookup)");
                 continue;
             }
             Function * called_func = find_func(program, call_arg->ssa->args[0].text);
             // TODO: support inlining functions that perform calls. need to check for recursion.
             if (called_func->performs_calls)
             {
-                puts("------- skipping inlining because inlinee calls another function");
+                //puts("------- skipping inlining because inlinee calls another function");
                 continue;
             }
             // our inlining heuristic.
             if (called_func->statement_count > 100)
             {
-                puts("------- skipping inlining because inlinee too long");
+                //puts("------- skipping inlining because inlinee too long");
                 continue;
             }
             
-            printf("------- inlining %s into %s...\n", call_arg->ssa->args[0].text, func->name);
+            //printf("------- inlining %s into %s...\n", call_arg->ssa->args[0].text, func->name);
             
             // Now we need to split the block at the function call statement.
             
@@ -819,9 +819,9 @@ static void optimization_function_inlining(Program * program)
             for (size_t s = 0; s < array_len(next_block->statements, Statement *); s++)
                 next_block->statements[s]->block = next_block;
             
-            printf("splitting block %s at instruction %zu\n", block->name, call_index);
-            printf("left len: %zu\n", array_len(block->statements, Statement *));
-            printf("right len: %zu\n", array_len(next_block->statements, Statement *));
+            //printf("splitting block %s at instruction %zu\n", block->name, call_index);
+            //printf("left len: %zu\n", array_len(block->statements, Statement *));
+            //printf("right len: %zu\n", array_len(next_block->statements, Statement *));
             
             // For the sake of simplicity we dump every cross-call live SSA variable to a stack slot.
             // This way we don't have to rewrite all the blocks in the inlined function.
@@ -846,7 +846,7 @@ static void optimization_function_inlining(Program * program)
                         cloned->block = next_block;
                         cloned->output->edges_out = (Statement **)zero_alloc(0);
                         
-                        printf("------????? %s\n", cloned->output_name);
+                        //printf("------????? %s\n", cloned->output_name);
                         
                         block_replace_statement_val_args(next_block, outputs[i], cloned->output);
                         

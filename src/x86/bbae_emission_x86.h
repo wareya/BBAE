@@ -93,7 +93,7 @@ void reg_shuffle_single(byte_buffer * code, int64_t * in2out, uint8_t * in2out_c
     
     if (in2out[out] < 0) // not a typo
     {
-        puts("a");
+        //puts("a");
         if (in <= REG_R15)
             zy_emit_2(code, INST_MOV, reg_out, reg_in);
         else
@@ -105,7 +105,7 @@ void reg_shuffle_single(byte_buffer * code, int64_t * in2out, uint8_t * in2out_c
         // hit a cycle! mov into temp register. will be mov'd out of at the end of the cycle
         if (in2out_color[out])
         {
-            puts("b");
+            //puts("b");
             if (out <= REG_R15)
             {
                 zy_emit_2(code, INST_MOV, reg_scratch_int, reg_out);
@@ -122,12 +122,12 @@ void reg_shuffle_single(byte_buffer * code, int64_t * in2out, uint8_t * in2out_c
         }
         else
         {
-            puts("c");
+            //puts("c");
             in2out_color[in] = 1;
             reg_shuffle_single(code, in2out, in2out_color, out);
             if (in2out_color[in] == 2)
             {
-                puts("d");
+                //puts("d");
                 if (in <= REG_R15)
                     zy_emit_2(code, INST_MOV, reg_out, reg_scratch_int);
                 else
@@ -135,7 +135,7 @@ void reg_shuffle_single(byte_buffer * code, int64_t * in2out, uint8_t * in2out_c
             }
             else
             {
-                puts("e");
+                //puts("e");
                 if (in <= REG_R15)
                     zy_emit_2(code, INST_MOV, reg_out, reg_in);
                 else
@@ -148,7 +148,7 @@ void reg_shuffle_single(byte_buffer * code, int64_t * in2out, uint8_t * in2out_c
 
 void do_reg_shuffle(byte_buffer * code, int64_t * in2out, uint8_t * in2out_color)
 {
-    puts("----");
+    //puts("----");
     for (size_t out = 0; out < 32; out++)
     {
         if (in2out[out] < 0)
@@ -688,7 +688,7 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
                     uint8_t if_shuffle_needed = reg_shuffle_needed(if_target_block->args, if_s_args, iba_len);
                     uint8_t else_shuffle_needed = reg_shuffle_needed(else_target_block->args, else_s_args, eba_len);
                     
-                    printf("00-`-`-`1 - -3`2    %d %d\n", if_shuffle_needed, else_shuffle_needed);
+                    //printf("00-`-`-`1 - -3`2    %d %d\n", if_shuffle_needed, else_shuffle_needed);
                     
                     if (if_shuffle_needed && else_shuffle_needed)
                     {

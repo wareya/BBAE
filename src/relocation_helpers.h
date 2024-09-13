@@ -100,7 +100,7 @@ static void apply_static_relocations(Program * _program, byte_buffer * code, Pro
         
         stat.location = code->len;
         
-        printf("allocating static %s at %zu\n", stat.name, stat.location);
+        //printf("allocating static %s at %zu\n", stat.name, stat.location);
         
         if (type_size(stat.type) <= 8)
             bytes_push(code, (uint8_t *)&stat.init_data_short, type_size(stat.type));
