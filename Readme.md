@@ -1,6 +1,6 @@
 # BBAE
 
-BBAE (Basic Block Analysis Enabler) is a low-level compiler backend language, both a spec and a basic implementation. It sits between programming languages and the hardware, with a format that's easier to optimize than high-level code.
+BBAE (Basic Block Analysis Enabler) is a WIP low-level compiler backend language, both a spec and a basic implementation. It sits between programming languages and the hardware, with a format that's easier to optimize than high-level code.
 
 ## Design philosophy
 
@@ -8,7 +8,7 @@ BBAE is heavily inspired by LLVM, but aims to be much simpler and more intuitive
 
 ## Current status
 
-BBAE has a reference implementation that can compile and run basic textual programs, which have a format that looks like this (partial pi calculation):
+BBAE has a reference implementation that can compile and run basic textual programs, which have a format that looks like the following (a partial pi calculation program). Various important features outside of small tests like these are not yet implemented.
 
 ```rs
 func main returns f64
