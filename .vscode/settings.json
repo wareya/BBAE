@@ -11,5 +11,17 @@
     ],
     "cSpell.ignoreWords": [
         "myfunc"
-    ]
+    ],
+    "files.exclude": {
+        "/thirdparty": true
+    },
+    "C_Cpp.files.exclude": {
+        "**/.vscode": true,
+        "**/.vs": true,
+        "/": true,
+        "/thirdparty/Zydis.c": true
+    },
+    "C_Cpp.codeAnalysis.exclude": {
+        "/thirdparty/Zydis.c": true
+    }
 }

@@ -10,5 +10,5 @@ case "$OSTYPE" in
   *)        asan="-fsanitize=undefined -fno-sanitize=function" ;;
 esac
 
-clang --std=gnu99 src/tests.c -Wall -Wextra -pedantic -O3 -g -ggdb $asan -Wno-unused-function -o $f || exit 1
+clang++ --std=c++20 -x c++ src/tests.c -Wall -Wextra -pedantic -O3 -g -ggdb $asan -Wno-unused-function -o $f || exit 1
 ./$f
