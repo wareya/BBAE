@@ -821,9 +821,38 @@ static int64_t regex_match(const RegexToken * tokens, const char * text)
                                 continue;
                             }
                             
-                            // continue to next match if not zero-length AND if not past range limit (TODO)
+                            // clear unwanted memory if possessive
+                            if ((tokens[k].mode & RXTOK_MODE_POSSESSIVE))
+                            {
+                                if (q_group_state[tokens[k].mask[0]] == 0)
+                                {
+                                    uint32_t k2 = k + tokens[k].pair_offset;
+                                    printf("!!!!!!@@@@@  looking for k %d...\n", k);
+                                    
+                                    if (stack_n == 0)
+                                        return -1;
+                                    
+                                    stack_n -= 1;
+                                    while (stack_n > 0 && rewind_stack[stack_n].k != k2)
+                                        stack_n -= 1;
+                                    
+                                    if (stack_n == 0)
+                                        return -1;
+                                }
+                                else
+                                {
+                                    uint32_t k2 = k;
+                                    printf("!!!!!!@@@@@  looking for k %d...\n", k);
+                                    
+                                    while (stack_n > 0 && rewind_stack[stack_n].k != k2)
+                                        stack_n -= 1;
+                                }
+                            }
+                            // continue to next match
                             q_group_state[tokens[k].mask[0]] += 1;
+                            
                             _REWIND_DO_SAVE(k)
+                            
                             k += tokens[k].pair_offset; // back to start of group
                             k -= 1; // ensure we actually hit the group node next and not the node after it
                         }
@@ -831,18 +860,16 @@ static int64_t regex_match(const RegexToken * tokens, const char * text)
                     else
                     {
                         just_rewinded = 0;
-                        puts("pfpfpfpfpfpf");
                         
                         if (tokens[k].mode & RXTOK_MODE_LAZY)
                         {
-                            printf("%d........\n", q_group_state[tokens[k].mask[0]]);
                             // lazy rewind: need to try matching the group again
                             k += tokens[k].pair_offset; // back to start of group
                             k -= 1; // ensure we actually hit the group node next and not the node after it
                         }
                         else
                         {
-                            // if we're going to go outside the acceptable range, rewind
+                            // greedy. if we're going to go outside the acceptable range, rewind
                             if (q_group_state[tokens[k].mask[0]] < tokens[k].count_lo && !q_group_accepts_zero[tokens[k].mask[0]])
                                 _REWIND_OR_ABORT()
                             // otherwise continue on to past the group
@@ -1056,7 +1083,7 @@ int main(void)
     //int e = regex_parse("a*?a*", tokens, &token_count, 0);
     //int e = regex_parse("(b|a)*b", tokens, &token_count, 0);
     //int e = regex_parse("(b|a)*?b", tokens, &token_count, 0);
-    int e = regex_parse("(b|a|)*bb", tokens, &token_count, 0);
+    //int e = regex_parse("(b|a|)*bb", tokens, &token_count, 0);
     //int e = regex_parse("(b|a|)*?bb", tokens, &token_count, 0);
     //int e = regex_parse("(|a)+", tokens, &token_count, 0);
     //int e = regex_parse("()+", tokens, &token_count, 0);
@@ -1065,6 +1092,13 @@ int main(void)
     //int e = regex_parse("a(|)*a", tokens, &token_count, 0);
     //int e = regex_parse("a(|)*?a", tokens, &token_count, 0);
     //int e = regex_parse("(a|(((()))))*b", tokens, &token_count, 0);
+    
+    //int e = regex_parse("(b|a|)*+", tokens, &token_count, 0);
+    //int e = regex_parse("(b|a|)*+b", tokens, &token_count, 0);
+    //int e = regex_parse("(b|a|as|q)*", tokens, &token_count, 0);
+    //int e = regex_parse("(b|a|as|q)*X", tokens, &token_count, 0);
+    int e = regex_parse("(b|a|as|q)*+", tokens, &token_count, 0);
+    //int e = regex_parse("(b|a|as|q)*+X", tokens, &token_count, 0);
     
     if (e) return (puts("regex has error"), 0);
     print_regex_tokens(tokens);
@@ -1090,9 +1124,10 @@ int main(void)
     //int64_t match_len = regex_match(tokens, "11.53) ");
     //int64_t match_len = regex_match(tokens, "1.53) ");
     //int64_t match_len = regex_match(tokens, "aa");
-    int64_t match_len = regex_match(tokens, "aaaaaaaaababababb");
+    //int64_t match_len = regex_match(tokens, "aaaaaaaaababababb");
     //int64_t match_len = regex_match(tokens, "aaaaabbbbbbbx");
     //int64_t match_len = regex_match(tokens, "bbbbbbb");
+    int64_t match_len = regex_match(tokens, "asqbX");
     printf("########### return: %zd\n", match_len);
     return 0;
 }
