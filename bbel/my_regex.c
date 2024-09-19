@@ -186,7 +186,7 @@ static int regex_parse(const char * pattern, RegexToken * tokens, int16_t * toke
                                 puts("quantifier range is backwards");
                                 return -1; // unsupported length
                             }
-                            token.count_hi = val2;
+                            token.count_hi = val2; // FIXME add 1 then adjust everything else
                             if (val2 == 0) // unmatchable quantifier. deliberately create unmatchable token
                             {
                                 token.count_lo = 2;
@@ -595,7 +595,7 @@ typedef struct _RegexMatcherState {
 
 typedef struct RegexGreedState {
     size_t i;
-    size_t k;
+    uint32_t k;
 } RegexGreedState;
 
 // NOTE: undef'd later
@@ -662,9 +662,7 @@ static int64_t regex_match(const RegexToken * tokens, const char * text)
     }
     
     #define _GREED_POP() { \
-        if (greed_stack_n == 0) \
-            return -1; \
-        if (k == greed_stack[greed_stack_n - 1].k) \
+        if (greed_stack_n > 0 && k == greed_stack[greed_stack_n - 1].k) \
             i = greed_stack[--greed_stack_n].i; \
     }
     
@@ -694,7 +692,7 @@ static int64_t regex_match(const RegexToken * tokens, const char * text)
         k = rewind_stack[stack_n].k; \
         if (tokens[k].kind == RXTOK_KIND_CLOSE) \
             q_group_state[tokens[k].mask[0]] = rewind_stack[stack_n].group_state; \
-        printf("-- rewound to k %u i %zd rl %zu rh %zu (kind %d)\n", k, i, range_min, range_max, tokens[k].kind); \
+        printf("-- rewound to k %u i %zd rmin %zu rmax %zu (kind %d)\n", k, i, range_min, range_max, tokens[k].kind); \
         _P_TEXT_HIGHLIGHTED() \
         k -= 1; \
     }
@@ -773,16 +771,28 @@ static int64_t regex_match(const RegexToken * tokens, const char * text)
                         if (tokens[k].kind == RXTOK_KIND_END) // unbalanced parens
                             return -4;
                         
+                        puts("--------12-41-234bwuh?!?!$?!#");
+                        printf("%d\n", q_group_state[tokens[k].mask[0]]);
                         if (tokens[k].kind == RXTOK_KIND_CLOSE)
                         {
+                            puts("bwuh?!?!$?!#");
+                            _REWIND_OR_ABORT()
+                            continue;
+                            /*
+                            // do nothing and continue on if we don't need this group
                             if (tokens[k].count_lo == 0 || q_group_accepts_zero[tokens[k].mask[0]])
-                                continue; // do nothing and continue on if we don't need this group
+                            {
+                                puts("continuing because we don't need this group");
+                                continue;
+                            }
+                            // otherwise go to the last point before the group
                             else
                             {
                                 puts("!!~!~!~~~~!!~~!~   hit CLOSE. rewinding");
-                                _REWIND_OR_ABORT() // to last point before group
+                                _REWIND_OR_ABORT()
                                 continue;
                             }
+                            */
                         }
                         
                         assert(tokens[k].kind == RXTOK_KIND_OR);
@@ -792,9 +802,9 @@ static int64_t regex_match(const RegexToken * tokens, const char * text)
                     range_min = k_diff + 1;
                     
                     puts("(saving in paren after rewinding)");
+                    printf("%zd\n", range_min);
                     _REWIND_DO_SAVE(k - k_diff)
                     
-                    puts("!!~!~!~~~~!!~~!~   hit OR. continuing");
                     continue;
                 }
             }
@@ -804,50 +814,50 @@ static int64_t regex_match(const RegexToken * tokens, const char * text)
                 {
                     if (!just_rewinded)
                     {
-                        if (tokens[k].mode & RXTOK_MODE_LAZY)
+                        // can only match at most once; do nothing, advance to next
+                        if (tokens[k].count_hi == 1)
                         {
-                            // can only match at most once; do nothing, advance to next
-                            if (tokens[k].count_hi == 1)
-                            {
-                                puts("----!!!! RESSETTING.");
-                                q_group_state[tokens[k].mask[0]] = 0;
-                            }
-                            // minimum requirement not yet met
-                            else if (q_group_state[tokens[k].mask[0]] < tokens[k].count_lo)
-                            {
-                                puts("bruh????");
-                                q_group_state[tokens[k].mask[0]] += 1;
-                                _REWIND_DO_SAVE(k)
-                                k += tokens[k].pair_offset; // back to start of group
-                                k -= 1; // ensure we actually hit the group node next and not the node after it
-                            }
-                            // make a state and continue on to rest of regex
-                            else if (tokens[k].count_hi == 0 || q_group_state[tokens[k].mask[0]] < tokens[k].count_hi)
+                            puts("----!!!! RESSETTING.");
+                            q_group_state[tokens[k].mask[0]] = 0;
+                        }
+                        // minimum requirement not yet met
+                        else if (q_group_state[tokens[k].mask[0]] < tokens[k].count_lo)
+                        {
+                            puts("bruh????");
+                            q_group_state[tokens[k].mask[0]] += 1;
+                            _REWIND_DO_SAVE(k)
+                            k += tokens[k].pair_offset; // back to start of group
+                            k -= 1; // ensure we actually hit the group node next and not the node after it
+                        }
+                        else if (tokens[k].mode & RXTOK_MODE_LAZY)
+                        {
+                            // if okay, make a state and continue on to rest of regex
+                            if (tokens[k].count_hi == 0 || q_group_state[tokens[k].mask[0]] < tokens[k].count_hi)
                             {
                                 puts("uggggg");
                                 _REWIND_DO_SAVE(k)
+                                continue;
                             }
-                            // not allowed to continue matching, go back
-                            else
-                            {
-                                puts("fslgwriwgri");
-                                _REWIND_OR_ABORT()
-                            }
+                            // otherwise not allowed to continue matching, go back
+                            puts("fslgwriwgri");
+                            _REWIND_OR_ABORT()
                         }
                         else // greedy
                         {
                             // reject zero-length matches
                             if ((uint32_t)q_group_state[tokens[k + tokens[k].pair_offset].mask[0]] == (uint32_t)i)
                             {
-                                puts("abort...............");
-                                uint32_t m2 = tokens[k].mask[0];
-                                if (!q_group_accepts_zero[m2])
-                                    q_group_accepts_zero[m2] = 1;
+                                puts("### REJECTING ZERO LENGTH MATCH");
+                                if (!q_group_accepts_zero[tokens[k].mask[0]])
+                                    q_group_accepts_zero[tokens[k].mask[0]] = 1;
+                                //range_max = -1;
+                                //_REWIND_DO_SAVE(k)
                                 _REWIND_OR_ABORT()
                                 continue;
                             }
                             
-                            // all the other interesting logic for greed is handled in the rewind case
+                            // continue to next match if not zero-length AND if not past range limit (TODO)
+                            puts("fuwufuwufuwufuwu");
                             q_group_state[tokens[k].mask[0]] += 1;
                             _GREED_PUSH(i, k)
                             _REWIND_DO_SAVE(k)
@@ -863,13 +873,14 @@ static int64_t regex_match(const RegexToken * tokens, const char * text)
                         {
                             printf("???? %d\n", q_group_state[tokens[k].mask[0]]);
                             
-                            if (q_group_state[tokens[k].mask[0]] < tokens[k].count_hi)
+                            if (q_group_state[tokens[k].mask[0]] < tokens[k].count_hi || tokens[k].count_hi == 0)
                             {
-                                q_group_state[tokens[k].mask[0]] += 1;
+                                q_group_state[tokens[k].mask[0]] -= 1; // FIXME: ....?
                                 puts("oio.");
                                 _REWIND_DO_SAVE(k)
-                                k += tokens[k].pair_offset; // back to start of group
-                                k -= 1; // ensure we actually hit the group node next and not the node after it
+                                // FIXME: ....?
+                                //k += tokens[k].pair_offset; // back to start of group
+                                //k -= 1; // ensure we actually hit the group node next and not the node after it
                             }
                             else
                             {
@@ -879,40 +890,57 @@ static int64_t regex_match(const RegexToken * tokens, const char * text)
                         }
                         else
                         {
+                            /*
+                            // rejected zero-length match. continue on to next token
+                            if (range_max == (uint64_t)-1)
+                            {
+                                puts("zero length?!");
+                                puts("zero length?!");
+                                puts("zero length?!");
+                                range_max = 0;
+                                continue;
+                            }
+                            */
+                            
                             uint32_t old_k = k;
                             size_t old_i = i;
                             _GREED_POP()
+                            
+                            printf("qrqrqr %zd %zd %d\n", i, old_i, q_group_state[tokens[k].mask[0]]);
                             // first time backtracking from this greedy bit.
                             // this means we just tried matching this group and it failed.
                             // let's try to match the rest of the regex past this group.
                             // we don't need to set any more state to do this; greed_pop sets it up properly.
                             if (i == old_i)
                             {
+                                puts("famifami");
                                 // if we're outside the acceptable range, rewind
-                                if (q_group_state[tokens[k].mask[0]] < tokens[k].count_lo ||
+                                if ((q_group_state[tokens[k].mask[0]] < tokens[k].count_lo && !q_group_accepts_zero[tokens[k].mask[0]]) ||
                                     (q_group_state[tokens[k].mask[0]] > tokens[k].count_hi && tokens[k].count_hi != 0))
                                 {
+                                    puts("famifamiBAD");
                                     _REWIND_OR_ABORT()
                                     continue;
                                 }
+                                puts("famifami but GOOD");
                                 // otherwise keep going
-                                // FIXME: ....?
-                                //q_group_state[tokens[k].mask[0]] = 0;
                             }
-                            // second time. need to start actually backtracking
-                            else if (k == old_k)
+                            // second or later time. need to start actually backtracking
+                            else
                             {
+                                assert(k == old_k);
+                                puts("wahiwahi");
                                 _REWIND_OR_ABORT()
                                 while (k + 1 != old_k)
                                     _REWIND_OR_ABORT()
                                 k += 1; // _REWIND_OR_ABORT() subtracts 1 from k; we don't want that here
+                                puts("done wahiwahi-ing");
                                 
                                 assert(q_group_state[tokens[k].mask[0]] > 0);
                                 q_group_state[tokens[k].mask[0]] -= 1;
+                                puts("wahiwahi but GOOD");
                                 _REWIND_DO_SAVE(k)
                             }
-                            else
-                                _REWIND_OR_ABORT()
                         }
                     }
                 }
@@ -933,13 +961,13 @@ static int64_t regex_match(const RegexToken * tokens, const char * text)
                     // do whatever the obligatory minimum amount of matching is
                     while (n < tokens[k].count_lo && _REGEX_CHECK_MASK(k, text[i]))
                     {
-                        printf("match?? (%c)\n", text[i]);
+                        printf("match?? (%c) (token %d)\n", text[i], k);
                         i += 1;
                         n += 1;
                     }
                     if (n < tokens[k].count_lo)
                     {
-                        puts("non-match A. rewinding");
+                        printf("non-match A. rewinding (token %d)\n", k);
                         _REWIND_OR_ABORT()
                         continue;
                     }
@@ -986,6 +1014,7 @@ static int64_t regex_match(const RegexToken * tokens, const char * text)
                         }
                         else
                         {
+                            printf("core rewind A (token %d)\n", k);
                             _REWIND_OR_ABORT()
                             continue;
                         }
@@ -1000,7 +1029,7 @@ static int64_t regex_match(const RegexToken * tokens, const char * text)
                         }
                         else
                         {
-                            printf("can't rewind greedy match, %zd vs %zd (token %d)\n", range_max, range_min, k);
+                            printf("core rewind B (token %d)\n", k);
                             _REWIND_OR_ABORT()
                             continue;
                         }
@@ -1116,9 +1145,11 @@ int main(void)
     //int e = regex_parse("(a|)*b", tokens, &token_count, 0);
     //int e = regex_parse("a(|b)+?a", tokens, &token_count, 0);
     //int e = regex_parse("(a|b)*?b", tokens, &token_count, 0);
+    //int e = regex_parse("(b|a)*b", tokens, &token_count, 0);
     //int e = regex_parse("(b|a)*?b", tokens, &token_count, 0);
+    int e = regex_parse("(b|a|)*b", tokens, &token_count, 0);
     //int e = regex_parse("(|a)+", tokens, &token_count, 0);
-    int e = regex_parse("()+", tokens, &token_count, 0);
+    //int e = regex_parse("()+", tokens, &token_count, 0);
     //int e = regex_parse("()+?", tokens, &token_count, 0);
     //int e = regex_parse("(|)+?", tokens, &token_count, 0);
     //int e = regex_parse("a(|)*a", tokens, &token_count, 0);
@@ -1143,10 +1174,10 @@ int main(void)
     printf("########### return: %zd\n", match_len);
     */
     //int64_t match_len = regex_match(tokens, "0120.53) ");
-    int64_t match_len = regex_match(tokens, "1.53) ");
+    //int64_t match_len = regex_match(tokens, "1431.53) ");
     //int64_t match_len = regex_match(tokens, "aa");
-    //int64_t match_len = regex_match(tokens, "aaaaaaaaababababb");
-    //int64_t match_len = regex_match(tokens, "aaaaabbbbbbb");
+    int64_t match_len = regex_match(tokens, "aaaaaaaaababababb");
+    //int64_t match_len = regex_match(tokens, "aaaaabbbbbbbx");
     //int64_t match_len = regex_match(tokens, "bbbbbbb");
     printf("########### return: %zd\n", match_len);
     return 0;
