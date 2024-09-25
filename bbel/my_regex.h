@@ -240,26 +240,32 @@ static int regex_parse(const char * pattern, RegexToken * tokens, int16_t * toke
                          c == 'D' || c == 'S' || c == 'W')
                 {
                     uint8_t is_upper = c <= 'Z';
-                    assert(((void)"FIXME need to rewrite these", 0));
+                    
+                    uint16_t m[16];
+                    memset(m, 0, sizeof(m));
+                    
                     if (is_upper)
                         c += 0x20;
                     if (c == 'd' || c == 'w')
-                    {
-                        token.mask[6] |= is_upper ? ~0xFF : 0xFF; // 0~7
-                        token.mask[7] |= is_upper ? ~3 : 3; // 8-9
-                    }
+                        m[3] |= 0x03FF; // 0~7
                     if (c == 's')
                     {
-                        token.mask[1] |= is_upper ? ~0x3E : 0x3E; // \t-\r (includes \n, \v, and \f in the middle. 5 enabled bits.)
-                        token.mask[4] |= is_upper ? ~1 : 1; // ' '
+                        m[0] |= 0x3E00; // \t-\r (includes \n, \v, and \f in the middle. 5 enabled bits.)
+                        m[2] |= 1; // ' '
                     }
                     if (c == 'w')
                     {
-                        token.mask[8] |= is_upper ? ~0xFE : 0xFE; // A-G
-                        token.mask[9] |= is_upper ? ~0xFF : 0xFF; // H-O
-                        token.mask[10] |= is_upper ? ~0xFF : 0xFF; // P-W
-                        token.mask[11] |= is_upper ? ~7 : 7; // X-Z
+                        m[4] |= 0xFFFE; // A-O
+                        m[5] |= 0x87FF; // P-Z_
+                        m[6] |= 0xFFFE; // a-o
+                        m[7] |= 0x07FF; // p-z
                     }
+                    
+                    for (int i = 0; i < 16; i++)
+                        token.mask[i] |= is_upper ? ~m[i] : m[i];
+                    
+                    token.kind = RXTOK_KIND_NORMAL;
+                    state = STATE_QUANT;
                 }
                 else if (c == '{' || c == '}' ||
                          c == '[' || c == ']' || c == '-' ||
@@ -403,32 +409,6 @@ static int regex_parse(const char * pattern, RegexToken * tokens, int16_t * toke
                 {
                     token.kind = RXTOK_KIND_OR;
                     state = STATE_NORMAL;
-                    
-                    // find corresponding ( and how far away it is. store in token
-                    int balance = 0;
-                    ptrdiff_t found = -1;
-                    for (ptrdiff_t l = k - 1; l >= 0; l--)
-                    {
-                        if (tokens[l].kind == RXTOK_KIND_NCOPEN || tokens[l].kind == RXTOK_KIND_OPEN)
-                        {
-                            if (balance == 0)
-                            {
-                                found = l;
-                                break;
-                            }
-                            else
-                                balance -= 1;
-                        }
-                        else if (tokens[l].kind == RXTOK_KIND_CLOSE)
-                            balance += 1;
-                    }
-                    if (found == -1)
-                        return -1; // unbalanced parens
-                    ptrdiff_t diff = k - found;
-                    if (diff > 32767)
-                        return -1; // too long
-                    
-                    token.pair_offset = -diff;
                 }
                 else
                 {
@@ -458,6 +438,24 @@ static int regex_parse(const char * pattern, RegexToken * tokens, int16_t * toke
                     esc_c = '\v';
                 else if (c == 'f')
                     esc_c = '\f';
+                else if (c == 'x')
+                {
+                    if (pattern[i+1] == 0 || pattern[i+2] == 0)
+                        return -1; // too-short hex pattern
+                    uint8_t n0 = pattern[i+1];
+                    uint8_t n1 = pattern[i+1];
+                    if (n0 < '0' || n0 > 'f' || n1 < '0' || n1 > 'f' ||
+                        (n0 > '9' && n0 < 'A') || (n1 > '9' && n1 < 'A'))
+                        return -1; // invalid hex digit
+                    if (n0 > 'F') n0 -= 0x20;
+                    if (n1 > 'F') n1 -= 0x20;
+                    if (n0 >= 'A') n0 -= 'A' - 10;
+                    if (n1 >= 'A') n1 -= 'A' - 10;
+                    n0 -= '0';
+                    n1 -= '0';
+                    esc_c = (n1 << 4) | n0;
+                    i += 2;
+                }
                 else if (c == '{' || c == '}' ||
                          c == '[' || c == ']' || c == '-' ||
                          c == '(' || c == ')' ||
@@ -476,25 +474,29 @@ static int regex_parse(const char * pattern, RegexToken * tokens, int16_t * toke
                         return -1; // range shorthands can't be part of a range
                     }
                     uint8_t is_upper = c <= 'Z';
+                    
+                    uint16_t m[16];
+                    memset(m, 0, sizeof(m));
+                    
                     if (is_upper)
                         c += 0x20;
                     if (c == 'd' || c == 'w')
-                    {
-                        token.mask[6] |= is_upper ? ~0xFF : 0xFF; // 0~7
-                        token.mask[7] |= is_upper ? ~3 : 3; // 8-9
-                    }
+                        m[3] |= 0x03FF; // 0~7
                     if (c == 's')
                     {
-                        token.mask[1] |= is_upper ? ~0x3E : 0x3E; // \t-\r (includes \n, \v, and \f in the middle. 5 enabled bits.)
-                        token.mask[4] |= is_upper ? ~1 : 1; // ' '
+                        m[0] |= 0x3E00; // \t-\r (includes \n, \v, and \f in the middle. 5 enabled bits.)
+                        m[2] |= 1; // ' '
                     }
                     if (c == 'w')
                     {
-                        token.mask[8] |= is_upper ? ~0xFE : 0xFE; // A-G
-                        token.mask[9] |= is_upper ? ~0xFF : 0xFF; // H-O
-                        token.mask[10] |= is_upper ? ~0xFF : 0xFF; // P-W
-                        token.mask[11] |= is_upper ? ~7 : 7; // X-Z
+                        m[4] |= 0xFFFE; // A-O
+                        m[5] |= 0x87FF; // P-Z_
+                        m[6] |= 0xFFFE; // a-o
+                        m[7] |= 0x07FF; // p-z
                     }
+                    
+                    for (int i = 0; i < 16; i++)
+                        token.mask[i] |= is_upper ? ~m[i] : m[i];
                     
                     char_class_mem = -1; // range shorthands can't be part of a range
                     continue;
@@ -612,8 +614,50 @@ static int regex_parse(const char * pattern, RegexToken * tokens, int16_t * toke
             tokens[k3].mode = tokens[k2].mode;
             
             //if (n > 65535)
-            if (n > 2048)
+            if (n > 1024)
                 return -1; // too many quantified groups
+        }
+        else if (tokens[k2].kind == RXTOK_KIND_OR || tokens[k2].kind == RXTOK_KIND_OPEN || tokens[k2].kind == RXTOK_KIND_NCOPEN)
+        {
+            // find next | or ) and how far away it is. store in token
+            int balance = 0;
+            ptrdiff_t found = -1;
+            for (ptrdiff_t l = k2 + 1; l < tokens_len; l++)
+            {
+                if (tokens[l].kind == RXTOK_KIND_OR && balance == 0)
+                {
+                    found = l;
+                    break;
+                }
+                else if (tokens[l].kind == RXTOK_KIND_CLOSE)
+                {
+                    if (balance == 0)
+                    {
+                        found = l;
+                        break;
+                    }
+                    else
+                        balance -= 1;
+                }
+                else if (tokens[l].kind == RXTOK_KIND_NCOPEN || tokens[l].kind == RXTOK_KIND_OPEN)
+                    balance += 1;
+            }
+            if (found == -1)
+            {
+                puts("unbalanced parens...");
+                return -1; // unbalanced parens
+            }
+            ptrdiff_t diff = found - k2;
+            if (diff > 32767)
+            {
+                puts("too long...");
+                return -1; // too long
+            }
+            
+            if (tokens[k2].kind == RXTOK_KIND_OR)
+                tokens[k2].pair_offset = diff;
+            else
+                tokens[k2].mask[15] = diff;
         }
     }
     
@@ -754,6 +798,16 @@ static int64_t regex_match(const RegexToken * tokens, const char * text)
     }
     // the -= 1 is because of the k++ in the for loop
     
+    // used in boundary anchor checker
+    uint64_t w_mask[16];
+    memset(w_mask, 0, sizeof(w_mask));
+    w_mask[3] = 0x03FF;
+    w_mask[4] = 0xFFFE;
+    w_mask[5] = 0x87FF;
+    w_mask[6] = 0xFFFE;
+    w_mask[7] = 0x07FF;
+    #define _REGEX_CHECK_IS_W(byte) (!!(w_mask[((uint8_t)byte)>>4] & (1 << ((uint8_t)byte & 0xF))))
+    
     size_t limit = 10000;
     for (k = 0; k < tokens_len; k++)
     {
@@ -773,13 +827,27 @@ static int64_t regex_match(const RegexToken * tokens, const char * text)
         }
         else if (tokens[k].kind == RXTOK_KIND_DOLLAR)
         {
-            if (i == 0 || text[i-1] != 0)
+            if (text[i] != 0)
                 _REWIND_OR_ABORT()
             continue;
         }
-        else if (tokens[k].kind == RXTOK_KIND_BOUND || tokens[k].kind == RXTOK_KIND_NBOUND)
+        else if (tokens[k].kind == RXTOK_KIND_BOUND)
         {
-            assert(((void)"TODO word boundary token", 0));
+            if (i == 0 && !_REGEX_CHECK_IS_W(text[i]))
+                _REWIND_OR_ABORT()
+            else if (i != 0 && text[i] == 0 && !_REGEX_CHECK_IS_W(text[i-1]))
+                _REWIND_OR_ABORT()
+            else if (i != 0 && text[i] != 0 && _REGEX_CHECK_IS_W(text[i-1]) == _REGEX_CHECK_IS_W(text[i]))
+                _REWIND_OR_ABORT()
+        }
+        else if (tokens[k].kind == RXTOK_KIND_NBOUND)
+        {
+            if (i == 0 && _REGEX_CHECK_IS_W(text[i]))
+                _REWIND_OR_ABORT()
+            else if (i != 0 && text[i] == 0 && _REGEX_CHECK_IS_W(text[i-1]))
+                _REWIND_OR_ABORT()
+            else if (i != 0 && text[i] != 0 && _REGEX_CHECK_IS_W(text[i-1]) != _REGEX_CHECK_IS_W(text[i]))
+                _REWIND_OR_ABORT()
         }
         else
         {
@@ -804,7 +872,7 @@ static int64_t regex_match(const RegexToken * tokens, const char * text)
                     // if we're lazy and the min length is 0, we need to try the non-group case first
                     if ((tokens[k].mode & RXTOK_MODE_LAZY) && (tokens[k].count_lo == 0 || q_group_accepts_zero[tokens[k + tokens[k].pair_offset].mask[0]]))
                     {
-                        puts("trying non-group case first.....");
+                        IF_VERBOSE(puts("trying non-group case first.....");)
                         range_min = 0;
                         range_max = 0;
                         _REWIND_DO_SAVE(k)
@@ -831,6 +899,13 @@ static int64_t regex_match(const RegexToken * tokens, const char * text)
                         IF_VERBOSE(puts("rangemin is not zero. checking...");)
                         k += range_min;
                         IF_VERBOSE(printf("start kind: %d\n", tokens[k].kind);)
+                        IF_VERBOSE(printf("before start kind: %d\n", tokens[k-1].kind);)
+                        if (tokens[k-1].kind == RXTOK_KIND_OR)
+                            k += tokens[k-1].pair_offset - 1;
+                        else if (tokens[k-1].kind == RXTOK_KIND_OPEN || tokens[k-1].kind == RXTOK_KIND_NCOPEN)
+                            k += tokens[k-1].mask[15] - 1;
+                        /*
+                        //IF_VERBOSE(printf("after start kind: %d\n", tokens[k+1].kind);)
                         int32_t pb = 0;
                         while (tokens[k].kind != RXTOK_KIND_END)
                         {
@@ -844,6 +919,8 @@ static int64_t regex_match(const RegexToken * tokens, const char * text)
                             
                             k += 1;
                         }
+                        */
+                        
                         IF_VERBOSE(printf("kamakama %d %d\n", k, tokens[k].kind);)
                         
                         if (tokens[k].kind == RXTOK_KIND_END) // unbalanced parens
@@ -861,6 +938,7 @@ static int64_t regex_match(const RegexToken * tokens, const char * text)
                             if (tokens[k].count_lo == 0 || q_group_accepts_zero[tokens[k].mask[0]])
                             {
                                 IF_VERBOSE(puts("continuing because we don't need this group");)
+                                q_group_state[tokens[k].mask[0]] = 0;
                                 continue;
                             }
                             // otherwise go to the last point before the group
@@ -949,12 +1027,12 @@ static int64_t regex_match(const RegexToken * tokens, const char * text)
                         {
                             IF_VERBOSE(printf("nidnfasidfnidfndifn-------      %d, %d, %zd\n", q_group_state[tokens[k].mask[0]], tokens[k].count_lo, range_min);)
                             if (prev)
-                                printf("lazy doesn't think it's zero-length. prev i %zd vs i %zd (depth %d)\n", rewind_stack[prev].i, i, stack_n);
+                                IF_VERBOSE(printf("lazy doesn't think it's zero-length. prev i %zd vs i %zd (depth %d)\n", rewind_stack[prev].i, i, stack_n);)
                             // continue on to past the group; group retry is in rewind state
                             q_group_state[tokens[k].mask[0]] += 1;
                             _REWIND_DO_SAVE(k)
                             q_group_state[tokens[k].mask[0]] = 0;
-                            //q_group_stack[tokens[k].mask[0]] = 0;
+                            q_group_stack[tokens[k].mask[0]] = 0;
                         }
                         else // greedy
                         {
@@ -981,11 +1059,14 @@ static int64_t regex_match(const RegexToken * tokens, const char * text)
                             // continue to next match if sane
                             if ((uint32_t)q_group_state[tokens[k + tokens[k].pair_offset].mask[0]] < (uint32_t)i)
                             {
+                                IF_VERBOSE(puts("REWINDING FROM GREEDY NON-REWIND CLOSER");)
                                 q_group_state[tokens[k].mask[0]] += 1;
                                 _REWIND_DO_SAVE(k)
                                 k += tokens[k].pair_offset; // back to start of group
                                 k -= 1; // ensure we actually hit the group node next and not the node after it
                             }
+                            else
+                                IF_VERBOSE(puts("CONTINUING FROM GREEDY NON-REWIND CLOSER");)
                         }
                     }
                     else
@@ -1007,7 +1088,7 @@ static int64_t regex_match(const RegexToken * tokens, const char * text)
                             //uint64_t old_i = i;
                             if (q_group_state[tokens[k].mask[0]] < range_min)
                             {
-                                IF_VERBOSE(puts("rewinding from greedy group");)
+                                IF_VERBOSE(printf("rewinding from greedy group because we're going to go out of range (%d vs %zd)\n", q_group_state[tokens[k].mask[0]], range_min);)
                                 //i = old_i;
                                 _REWIND_OR_ABORT()
                             }
@@ -1024,9 +1105,8 @@ static int64_t regex_match(const RegexToken * tokens, const char * text)
             }
             else if (tokens[k].kind == RXTOK_KIND_OR)
             {
-                //assert(((void)"BUG", !just_rewinded));
-                while (tokens[k].kind != RXTOK_KIND_END && tokens[k].kind != RXTOK_KIND_CLOSE)
-                    k += 1;
+                IF_VERBOSE(printf("hit OR at %d. adding %d\n", k, tokens[k].pair_offset);)
+                k += tokens[k].pair_offset;
                 k -= 1;
             }
             else if (tokens[k].kind == RXTOK_KIND_NORMAL)
@@ -1132,6 +1212,8 @@ static int64_t regex_match(const RegexToken * tokens, const char * text)
     
     #undef _REWIND_DO_SAVE
     #undef _REWIND_OR_ABORT
+    #undef _REGEX_CHECK_IS_W
+    #undef _P_TEXT_HIGHLIGHTED
     
     return i;
 }
@@ -1197,9 +1279,11 @@ void print_regex_tokens(RegexToken * tokens)
             }
         }
         
+        /*
         printf("\t");
         for (int i = 0; i < 16; i++)
             printf("%04x", tokens[k].mask[i]);
+        */
         
         printf("\t{%d,%d}\t(%d)\n", tokens[k].count_lo, tokens[k].count_hi - 1, tokens[k].pair_offset);
         
