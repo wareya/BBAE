@@ -1,4 +1,4 @@
-#define REGEX_VERBOSE
+//#define REGEX_VERBOSE
 #include "my_regex.h"
 
 #include <regex>
@@ -21,16 +21,15 @@ void testify(void)
         
         
         // possessive
-        //"(b|a|)*+",
-        //"(a|)*+b",
-        //"(?>(b|a|)*)",
-        //"(b|a|)*+b",
-        //"(b|a|as|q)*+",
-        //"(b|a|as|q)*+X",
-        //"(b|a|as|q)*",
-        //"(b|a|as|q)*X",
+        "(b|a|)*+",
+        "(a|)*+b",
+        "(?>(b|a|)*)",
+        "(b|a|)*+b",
+        "(b|a|as|q)*+",
+        "(b|a|as|q)*+X",
+        "(b|a|as|q)*",
+        "(b|a|as|q)*X",
         
-        /*
         "[0-9]+\\.[0-9]+",
         "[0-9]+0\\.[0-9]+",
         
@@ -75,19 +74,15 @@ void testify(void)
         "((a?b|a)b?)*",
         "(.*?,){11}P",
         "(.*,){11}P",
-        */
     };
     static const char * texts[] = {
         "",
         "a",
         "aa",
         "aba) ",
-        /*
         "aaaaaaaaa",
         "aaaaaaaaaa",
         "aaaaaaaaaaaaaa",
-        */
-        /*
         "abc) ",
         "abba) ",
         "abbc) ",
@@ -108,7 +103,6 @@ void testify(void)
         "asqbX",
         "1,2,3,4,5,6,7,8,9,10,11,12",
         "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
-        */
         
         //"1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22",
         //"1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25",
