@@ -901,6 +901,27 @@ static int64_t regex_match(const RegexToken * tokens, const char * text)
                         //if (prev) assert(rewind_stack[prev].i <= i);
                         IF_VERBOSE(printf("qzqzqzqzqzqzqzq-------      rmin %zd, rmax %zd\n", range_min, range_max);)
                         
+                        // minimum requirement not yet met
+                        if (q_group_state[tokens[k].mask[0]] + 1 < range_min && !q_group_accepts_zero[tokens[k].mask[0]])
+                        {
+                            IF_VERBOSE(puts("???????????????     bruh????");)
+                            q_group_state[tokens[k].mask[0]] += 1;
+                            _REWIND_DO_SAVE(k)
+                            k += tokens[k].pair_offset; // back to start of group
+                            k -= 1; // ensure we actually hit the group node next and not the node after it
+                            continue;
+                        }
+                        // maximum allowance exceeded
+                        else if (tokens[k].count_hi != 0 && q_group_state[tokens[k].mask[0]] + 1 > range_max && !q_group_accepts_zero[tokens[k].mask[0]])
+                        {
+                            IF_VERBOSE(printf("!!!!!!!!!!!     max???? %d %zd\n", q_group_state[tokens[k].mask[0]], range_max);)
+                            range_max -= 1;
+                            _REWIND_OR_ABORT()
+                            continue;
+                        }
+                        
+                        // fallback case to detect zero-length matches when we backtracked into the inside of this group
+                        // after an attempted parse of a second copy of itself
                         uint8_t force_zero = 0;
                         if ((tokens[k].mode & RXTOK_MODE_LAZY) && prev != 0 && (uint32_t)rewind_stack[prev].i > (uint32_t)i)
                         {
@@ -913,24 +934,8 @@ static int64_t regex_match(const RegexToken * tokens, const char * text)
                                 force_zero = 1;
                         }
                         
-                        // minimum requirement not yet met
-                        if (q_group_state[tokens[k].mask[0]] + 1 < range_min && !q_group_accepts_zero[tokens[k].mask[0]])
-                        {
-                            IF_VERBOSE(puts("???????????????     bruh????");)
-                            q_group_state[tokens[k].mask[0]] += 1;
-                            _REWIND_DO_SAVE(k)
-                            k += tokens[k].pair_offset; // back to start of group
-                            k -= 1; // ensure we actually hit the group node next and not the node after it
-                        }
-                        // maximum allowance exceeded
-                        else if (tokens[k].count_hi != 0 && q_group_state[tokens[k].mask[0]] + 1 > range_max && !q_group_accepts_zero[tokens[k].mask[0]])
-                        {
-                            IF_VERBOSE(printf("!!!!!!!!!!!     max???? %d %zd\n", q_group_state[tokens[k].mask[0]], range_max);)
-                            range_max -= 1;
-                            _REWIND_OR_ABORT()
-                        }
                         // reject zero-length matches
-                        else if (force_zero || (prev != 0 && (uint32_t)rewind_stack[prev].i == (uint32_t)i)) //  && q_group_state[tokens[k].mask[0]] > 0
+                        if (force_zero || (prev != 0 && (uint32_t)rewind_stack[prev].i == (uint32_t)i)) //  && q_group_state[tokens[k].mask[0]] > 0
                         {
                             IF_VERBOSE(puts("rejecting zero-length match.....");)
                             IF_VERBOSE(printf("%d (k: %d)\n", q_group_state[tokens[k].mask[0]], k);)
