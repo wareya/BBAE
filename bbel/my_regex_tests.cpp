@@ -15,18 +15,22 @@
 void testify(void)
 {
     static const char * regexes[] = {
+        "(b|a|as|q|)*?X",
         "",
         "(|b|a|as|q)*X",
         "(b|a|as|q|)*X",
-        "(b|a|as|q|)*?X",
+        "(b|a|as|q|)+X",
+        "(b|a|as|q|)+?X",
         "((b|a|as|q|))*X",
         "((b|a|as|q|))*?X",
         "(b|a|as|q)*X",
         "(b|a|as|q)*?X",
         "(b|a|as|q)+X",
-        "(b|a|as|q|)+X",
         
         "(|a?)+?a{10}",
+        "(a?)*a{10}",
+        "(a?)*?a{10}",
+        "(a?)+?a{100}",
         "(a?)+?a{10}",
         "(a?)+a{10}",
         "(a)+a{9}",
@@ -170,8 +174,9 @@ void testify(void)
         "mistaken bogus regex",
     };
     static const char * texts[] = {
-        "aaaaaaaaaa",
         "asqbX",
+        
+        "aaaaaaaaaa",
         "asqb",
         "abh",
         

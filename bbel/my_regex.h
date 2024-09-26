@@ -1033,15 +1033,9 @@ static int64_t regex_match(const RegexToken * tokens, const char * text, size_t 
                             {
                                 IF_VERBOSE(puts("continuing because we don't need this group");)
                                 q_group_state[tokens[k].mask[0]] = 0;
-                                if (tokens[k].count_lo == 0) // ?????? WTF
-                                    q_group_stack[tokens[k].mask[0]] = 0;
                                 
-                                /*
-                                // for captures
-                                uint16_t cap_index = q_group_cap_index[tokens[k].mask[0]];
-                                if (cap_index != 0xFFFF)
-                                    _REWIND_DO_SAVE_DUMMY(k)
-                                */
+                                if (!(tokens[k].mode & RXTOK_MODE_LAZY))
+                                    q_group_stack[tokens[k].mask[0]] = 0;
                                 
                                 continue;
                             }
@@ -1095,7 +1089,7 @@ static int64_t regex_match(const RegexToken * tokens, const char * text, size_t 
                         IF_VERBOSE(printf("qzqzqzqzqzqzqzq-------      rmin %zd, rmax %zd\n", range_min, range_max);)
                         
                         // minimum requirement not yet met
-                        if (q_group_state[tokens[k].mask[0]] + 1 < range_min)// && !q_group_accepts_zero[tokens[k].mask[0]])
+                        if (q_group_state[tokens[k].mask[0]] + 1 < range_min)
                         {
                             IF_VERBOSE(puts("continuing minimum matches for a quantified group");)
                             q_group_state[tokens[k].mask[0]] += 1;
@@ -1106,7 +1100,7 @@ static int64_t regex_match(const RegexToken * tokens, const char * text, size_t 
                             continue;
                         }
                         // maximum allowance exceeded
-                        else if (tokens[k].count_hi != 0 && q_group_state[tokens[k].mask[0]] + 1 > range_max)// && !q_group_accepts_zero[tokens[k].mask[0]])
+                        else if (tokens[k].count_hi != 0 && q_group_state[tokens[k].mask[0]] + 1 > range_max)
                         {
                             IF_VERBOSE(printf("hit maximum allowed instances of a quantified group %d %zd\n", q_group_state[tokens[k].mask[0]], range_max);)
                             range_max -= 1;
@@ -1133,7 +1127,7 @@ static int64_t regex_match(const RegexToken * tokens, const char * text, size_t 
                         {
                             IF_VERBOSE(printf("rejecting zero-length match..... %d %zd %zd\n", force_zero, rewind_stack[prev].i, i);)
                             IF_VERBOSE(printf("%d (k: %d)\n", q_group_state[tokens[k].mask[0]], k);)
-                            //range_max = q_group_state[tokens[k].mask[0]];
+                            
                             q_group_accepts_zero[tokens[k].mask[0]] = 1;
                             _REWIND_OR_ABORT()
                             //range_max = q_group_state[tokens[k].mask[0]];
@@ -1194,6 +1188,7 @@ static int64_t regex_match(const RegexToken * tokens, const char * text, size_t 
                         if (tokens[k].mode & RXTOK_MODE_LAZY)
                         {
                             // lazy rewind: need to try matching the group again
+                            _REWIND_DO_SAVE_DUMMY(k)
                             q_group_stack[tokens[k].mask[0]] = stack_n;
                             k += tokens[k].pair_offset; // back to start of group
                             k -= 1; // ensure we actually hit the group node next and not the node after it
