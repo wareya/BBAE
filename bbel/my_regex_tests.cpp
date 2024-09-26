@@ -16,10 +16,27 @@ void testify(void)
 {
     static const char * regexes[] = {
         "",
+        "(|b|a|as|q)*X",
+        "(b|a|as|q|)*X",
+        "(b|a|as|q|)*?X",
+        "((b|a|as|q|))*X",
+        "((b|a|as|q|))*?X",
         "(b|a|as|q)*X",
+        "(b|a|as|q)*?X",
+        "(b|a|as|q)+X",
+        "(b|a|as|q|)+X",
         
+        "(|a?)+?a{10}",
         "(a?)+?a{10}",
         "(a?)+a{10}",
+        "(a)+a{9}",
+        "(a)+?a{9}",
+        "(|a)+a{9}",
+        "(|a)+a{10}",
+        "(|a)+a{11}",
+        "(|a)+?a{11}",
+        "^a(bc+|b[eh])g|.h$",
+        "(bc+d$|ef*g.|h?i(j|k))",
         
         "(b|a|as|q)*?X",
         // (?:[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*|"(?:[\x01-\x08\x0b\x0c\x0e-\x1f\x21\x23-\x5b\x5d-\x7f]|\\[\x01-\x09\x0b\x0c\x0e-\x7f])*")@(?:(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?|\[(?:(?:(2(5[0-5]|[0-4][0-9])|1[0-9][0-9]|[1-9]?[0-9]))\.){3}(?:(2(5[0-5]|[0-4][0-9])|1[0-9][0-9]|[1-9]?[0-9])|[a-z0-9-]*[a-z0-9]:(?:[\x01-\x08\x0b\x0c\x0e-\x1f\x21-\x5a\x53-\x7f]|\\[\x01-\x09\x0b\x0c\x0e-\x7f])+)\])
@@ -149,11 +166,20 @@ void testify(void)
         "((a?b|a)b?)*",
         "(.*,){11}P",
         "(.*?,){11}P",
+        
+        "mistaken bogus regex",
     };
     static const char * texts[] = {
         "aaaaaaaaaa",
         "asqbX",
         "asqb",
+        "abh",
+        
+        "effgz",
+        "ij",
+        "effg",
+        "bcdd",
+        "reffgz",
         
         "testacc@example.com",
         
@@ -240,6 +266,10 @@ void testify(void)
         "asdf000",
         "000asdf000",
         "a,b,easbe_1:a,:a",
+        
+        "uh-uh",
+        "words, yeah",
+        "mistaken bogus regex",
     };
     
     
@@ -291,8 +321,8 @@ void testify(void)
             int submatch_count = pcre2_match(re, PCRE2_SPTR8(text), text_str.size(), 0, PCRE2_ANCHORED | PCRE2_NO_UTF_CHECK, match_data, 0); 
             double t = std::chrono::duration_cast<std::chrono::microseconds>(clock::now() - start).count() / 1000000.0;
             
-            printf("submatch count: %d\n", submatch_count);
-            printf("ovector count: %d\n", pcre2_get_ovector_count(match_data));
+            //printf("submatch count: %d\n", submatch_count);
+            //printf("ovector count: %d\n", pcre2_get_ovector_count(match_data));
             
             PCRE2_SIZE * ovector;
             if (submatch_count > 0)

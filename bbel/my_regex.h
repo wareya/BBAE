@@ -131,19 +131,6 @@ static int regex_parse(const char * pattern, RegexToken * tokens, int16_t * toke
     if (token_count == 0)
         return -2;
     
-    RegexToken token;
-    #define _REGEX_CLEAR_TOKEN(TOKEN) { memset(&(TOKEN), 0, sizeof(RegexToken)); token.count_lo = 1; token.count_hi = 2; }
-    _REGEX_CLEAR_TOKEN(token);
-    
-    if (pattern_len == 0)
-    {
-        token.kind = RXTOK_KIND_END;
-        tokens[0] = token;
-        *token_count = 1;
-        return 0;
-    }
-    
-    
     // 0: normal
     // 1: just saw a backslash
     int esc_state = 0;
@@ -166,6 +153,9 @@ static int regex_parse(const char * pattern, RegexToken * tokens, int16_t * toke
     
     int char_class_mem = -1;
     
+    RegexToken token;
+    #define _REGEX_CLEAR_TOKEN(TOKEN) { memset(&(TOKEN), 0, sizeof(RegexToken)); token.count_lo = 1; token.count_hi = 2; }
+    _REGEX_CLEAR_TOKEN(token);
     
     #define _REGEX_DO_INVERT() { \
         for (int n = 0; n < 16; n++) \
@@ -1043,7 +1033,7 @@ static int64_t regex_match(const RegexToken * tokens, const char * text, size_t 
                             {
                                 IF_VERBOSE(puts("continuing because we don't need this group");)
                                 q_group_state[tokens[k].mask[0]] = 0;
-                                if (!q_group_accepts_zero[tokens[k].mask[0]])
+                                if (tokens[k].count_lo == 0) // ?????? WTF
                                     q_group_stack[tokens[k].mask[0]] = 0;
                                 
                                 /*
@@ -1105,9 +1095,9 @@ static int64_t regex_match(const RegexToken * tokens, const char * text, size_t 
                         IF_VERBOSE(printf("qzqzqzqzqzqzqzq-------      rmin %zd, rmax %zd\n", range_min, range_max);)
                         
                         // minimum requirement not yet met
-                        if (q_group_state[tokens[k].mask[0]] + 1 < range_min && !q_group_accepts_zero[tokens[k].mask[0]])
+                        if (q_group_state[tokens[k].mask[0]] + 1 < range_min)// && !q_group_accepts_zero[tokens[k].mask[0]])
                         {
-                            IF_VERBOSE(puts("???????????????     bruh????");)
+                            IF_VERBOSE(puts("continuing minimum matches for a quantified group");)
                             q_group_state[tokens[k].mask[0]] += 1;
                             _REWIND_DO_SAVE(k)
                             
@@ -1116,9 +1106,9 @@ static int64_t regex_match(const RegexToken * tokens, const char * text, size_t 
                             continue;
                         }
                         // maximum allowance exceeded
-                        else if (tokens[k].count_hi != 0 && q_group_state[tokens[k].mask[0]] + 1 > range_max && !q_group_accepts_zero[tokens[k].mask[0]])
+                        else if (tokens[k].count_hi != 0 && q_group_state[tokens[k].mask[0]] + 1 > range_max)// && !q_group_accepts_zero[tokens[k].mask[0]])
                         {
-                            IF_VERBOSE(printf("!!!!!!!!!!!     max???? %d %zd\n", q_group_state[tokens[k].mask[0]], range_max);)
+                            IF_VERBOSE(printf("hit maximum allowed instances of a quantified group %d %zd\n", q_group_state[tokens[k].mask[0]], range_max);)
                             range_max -= 1;
                             _REWIND_OR_ABORT()
                             continue;
@@ -1158,8 +1148,8 @@ static int64_t regex_match(const RegexToken * tokens, const char * text, size_t 
                             q_group_state[tokens[k].mask[0]] += 1;
                             _REWIND_DO_SAVE(k)
                             q_group_state[tokens[k].mask[0]] = 0;
-                            if (!q_group_accepts_zero[tokens[k].mask[0]])
-                                q_group_stack[tokens[k].mask[0]] = 0;
+                            //if (tokens[k].count_lo == 0) // ?????? WTF
+                            //    q_group_stack[tokens[k].mask[0]] = 0;
                         }
                         else // greedy
                         {
@@ -1224,8 +1214,8 @@ static int64_t regex_match(const RegexToken * tokens, const char * text, size_t 
                             {
                                 IF_VERBOSE(puts("continuing past greedy group");)
                                 q_group_state[tokens[k].mask[0]] = 0;
-                                if (!q_group_accepts_zero[tokens[k].mask[0]])
-                                    q_group_stack[tokens[k].mask[0]] = 0;
+                                //if (!q_group_accepts_zero[tokens[k].mask[0]]) // ?????? WTF
+                                //    q_group_stack[tokens[k].mask[0]] = 0;
                                 
                                 // for captures
                                 uint16_t cap_index = q_group_cap_index[tokens[k].mask[0]];
