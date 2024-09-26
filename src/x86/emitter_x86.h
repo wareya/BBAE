@@ -22,7 +22,7 @@ extern "C"
 
 typedef ZydisEncoderOperand EncOperand;
 
-static uint8_t encops_equal(EncOperand a, EncOperand b)
+static inline uint8_t encops_equal(EncOperand a, EncOperand b)
 {
     return memcmp(&a, &b, sizeof(EncOperand)) == 0;
 }
@@ -250,7 +250,7 @@ enum InstName {
     INST_XORPS,
 };
 
-static int name_to_mnemonic(int name)
+static inline int name_to_mnemonic(int name)
 {
     switch (name)
     {
@@ -422,7 +422,7 @@ static int name_to_mnemonic(int name)
     }
 }
 
-static int reg_unsized_to_sized(enum Register reg, int size)
+static inline int reg_unsized_to_sized(enum Register reg, int size)
 {
     if (reg == REG_NONE)
         return ZYDIS_REGISTER_NONE;
@@ -450,7 +450,7 @@ static int reg_unsized_to_sized(enum Register reg, int size)
         assert(((void)"unknown register!\n", 0));
 }
 
-static EncOperand zy_reg(enum Register reg, int size)
+static inline EncOperand zy_reg(enum Register reg, int size)
 {
     EncOperand ret;
     memset(&ret, 0, sizeof(ret)); 
@@ -462,13 +462,13 @@ static EncOperand zy_reg(enum Register reg, int size)
     return ret;
 }
 #ifdef __cplusplus
-static EncOperand zy_reg(uint64_t reg, int size)
+static inline EncOperand zy_reg(uint64_t reg, int size)
 {
     return zy_reg((enum Register)reg, size);
 }
 #endif
 
-static EncOperand zy_mem_full(enum Register base_reg, enum Register index_reg, int index_scale, int64_t offset, int word_size)
+static inline EncOperand zy_mem_full(enum Register base_reg, enum Register index_reg, int index_scale, int64_t offset, int word_size)
 {
     assert(index_scale == 0 || index_scale == 1 || index_scale == 2 || index_scale == 4 || index_scale == 8);
     
@@ -485,25 +485,25 @@ static EncOperand zy_mem_full(enum Register base_reg, enum Register index_reg, i
     
     return ret;
 }
-static EncOperand zy_mem(enum Register base_reg, int64_t offset, int word_size)
+static inline EncOperand zy_mem(enum Register base_reg, int64_t offset, int word_size)
 {
     return zy_mem_full(base_reg, REG_NONE, 0, offset, word_size);
 }
 #ifdef __cplusplus
-static EncOperand zy_mem(uint64_t base_reg, int64_t offset, int word_size)
+static inline EncOperand zy_mem(uint64_t base_reg, int64_t offset, int word_size)
 {
     return zy_mem((enum Register)base_reg, offset, word_size);
 }
 #endif
 
-static EncOperand zy_mem_add_offset(EncOperand op, uint64_t offset)
+static inline EncOperand zy_mem_add_offset(EncOperand op, uint64_t offset)
 {
     assert(op.type == ZYDIS_OPERAND_TYPE_MEMORY);
     op.mem.displacement += offset;
     return op;
 }
 
-static EncOperand zy_mem_change_size(EncOperand op, uint64_t size)
+static inline EncOperand zy_mem_change_size(EncOperand op, uint64_t size)
 {
     assert(op.type == ZYDIS_OPERAND_TYPE_MEMORY);
     assert(size == 1 || size == 2 || size == 4 || size == 8);
@@ -524,7 +524,7 @@ EncOperand zy_ptr(enum Segment segment, int64_t offset, int word_size)
     return ret;
 }
 */
-static EncOperand zy_imm(uint64_t imm, uint64_t size)
+static inline EncOperand zy_imm(uint64_t imm, uint64_t size)
 {
     assert(size == 1 || size == 2 || size == 4 || size == 8);
     EncOperand ret;
@@ -576,7 +576,7 @@ const char * ZyanStatusText(ZyanStatus status)
     };
 }
 
-static void do_encode(ZydisEncoderRequest req, uint8_t * buf, size_t * len)
+static inline void do_encode(ZydisEncoderRequest req, uint8_t * buf, size_t * len)
 {
     req.machine_mode = ZYDIS_MACHINE_MODE_LONG_64;
     
@@ -598,7 +598,7 @@ static void do_encode(ZydisEncoderRequest req, uint8_t * buf, size_t * len)
     }
 }
 
-static void zy_emit_n(byte_buffer * bytes, int name, EncOperand * ops, int n)
+static inline void zy_emit_n(byte_buffer * bytes, int name, EncOperand * ops, int n)
 {
     assert(n <= 5);
     
@@ -616,34 +616,34 @@ static void zy_emit_n(byte_buffer * bytes, int name, EncOperand * ops, int n)
     bytes_push(bytes, buf, len);
 }
 
-static void zy_emit_4(byte_buffer * bytes, int name, EncOperand op1, EncOperand op2, EncOperand op3, EncOperand op4)
+static inline void zy_emit_4(byte_buffer * bytes, int name, EncOperand op1, EncOperand op2, EncOperand op3, EncOperand op4)
 {
     EncOperand ops[] = {op1, op2, op3, op4};
     zy_emit_n(bytes, name, ops, 4);
 }
-static void zy_emit_3(byte_buffer * bytes, int name, EncOperand op1, EncOperand op2, EncOperand op3)
+static inline void zy_emit_3(byte_buffer * bytes, int name, EncOperand op1, EncOperand op2, EncOperand op3)
 {
     EncOperand ops[] = {op1, op2, op3};
     zy_emit_n(bytes, name, ops, 3);
 }
-static void zy_emit_2(byte_buffer * bytes, int name, EncOperand op1, EncOperand op2)
+static inline void zy_emit_2(byte_buffer * bytes, int name, EncOperand op1, EncOperand op2)
 {
     if (name == INST_MOV && memcmp(&op1, &op2, sizeof(EncOperand)) == 0)
         return;
     EncOperand ops[] = {op1, op2};
     zy_emit_n(bytes, name, ops, 2);
 }
-static void zy_emit_1(byte_buffer * bytes, int name, EncOperand op1)
+static inline void zy_emit_1(byte_buffer * bytes, int name, EncOperand op1)
 {
     EncOperand ops[] = {op1};
     zy_emit_n(bytes, name, ops, 1);
 }
-static void zy_emit_0(byte_buffer * bytes, int name)
+static inline void zy_emit_0(byte_buffer * bytes, int name)
 {
     zy_emit_n(bytes, name, 0, 0);
 }
 
-static void zy_emit_nops(byte_buffer * bytes, int count)
+static inline void zy_emit_nops(byte_buffer * bytes, int count)
 {
     assert(count <= 15);
     uint8_t buf[16];

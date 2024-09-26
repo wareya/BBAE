@@ -16,30 +16,29 @@
 #include <algorithm>
 #include <optional>
 
-#include "re.c"
+#include "my_regex/my_regex.h"
 
-// safe wrappers around re.c
 struct Regex {
-    regex_info info;
-    Regex(regex_info r) : info(r) {}
-    ~Regex()
+    RegexToken tokens[64];
+    std::string str;
+    int16_t token_count;
+    Regex(std::string s) : str(s), token_count(0)
     {
-        free(info.re_compiled);
-        free(info.ccl_buf);
+        token_count = 64;
+        int e = regex_parse(str.data(), tokens, &token_count, 0);
+        assert(!e);
+    }
+    inline int match(const char * text, int * matchlength)
+    {
+        int ret = regex_match(tokens, text, 0, 0, 0, 0);
+        if (ret > 0)
+        {
+            *matchlength = ret;
+            return 0;
+        }
+        return -1;
     }
 };
-
-static std::shared_ptr<Regex> regex_compile(const char* pattern)
-{
-    auto r = re_compile(pattern);
-    auto ret = std::make_shared<Regex>(r);
-    return ret;
-}
-
-static int regex_match(std::shared_ptr<Regex> pattern, const char * text, int * matchlength)
-{
-    return re_matchp(pattern->info.re_compiled, text, matchlength);
-}
 
 enum MatchKind {
     MATCH_KIND_INVALID,
@@ -457,7 +456,7 @@ static auto load_grammar(const char * text) -> Grammar
                 {
                     assert(rule->text);
                     auto s = std::string("^") + *rule->text;
-                    rule->compiled_regex = regex_compile(s.data());
+                    rule->compiled_regex = std::make_shared<Regex>(s.data());
                     assert(&*rule->compiled_regex);
                 }
                 if (rule->kind == MATCH_KIND_POINT && rule->text != 0)
@@ -580,7 +579,7 @@ static std::vector<std::shared_ptr<Token>> tokenize(const Grammar & grammar, con
                 //printf("%p\n", &*token.compiled_regex);
                 
                 //printf("trying to match %s at...%s\n", token.text->data(), &text[i]);
-                int index = regex_match(token.compiled_regex, &text[i], &len);
+                int index = token.compiled_regex->match(&text[i], &len);
                 assert(index == 0 || index == -1);
                 //printf("%d %d\n", index, len);
                 if (index == 0)
@@ -634,7 +633,7 @@ struct ASTNode
     bool is_token = false;
 };
 
-static void print_AST(std::shared_ptr<ASTNode> node, size_t depth)
+static inline void print_AST(std::shared_ptr<ASTNode> node, size_t depth)
 {
     auto indent = [&](){for (size_t i = 0; i < depth; i++) printf(" ");};
     
@@ -661,7 +660,7 @@ static void print_AST(std::shared_ptr<ASTNode> node, size_t depth)
         printf("@-\n");
     }
 }
-static void print_AST(std::shared_ptr<ASTNode> node)
+static inline void print_AST(std::shared_ptr<ASTNode> node)
 {
     print_AST(node, 0);
 }

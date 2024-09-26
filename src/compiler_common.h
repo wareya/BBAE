@@ -19,13 +19,13 @@ typedef struct _ImmOpsAllowed
 } ImmOpsAllowed;
 // implemented by backend
 struct _Statement;
-static ImmOpsAllowed imm_op_rule_determiner(struct _Statement * statement);
+static inline ImmOpsAllowed imm_op_rule_determiner(struct _Statement * statement);
 
 typedef struct _SymbolEntry
 {
     const char * name;
     size_t loc;
-    uint8_t kind; // 0 = invalid; 1 = function; 2 = static data; 3 = global variable (different address space)
+    uint8_t kind; // 0 = invalid; 1 = function; 2 = static inline data; 3 = global variable (different address space)
     uint8_t visibility; // 0 = private, 1 = default (export), 2 = dllexport
 } SymbolEntry;
 
@@ -47,7 +47,7 @@ typedef struct _CompilerMetaOutput
 
 // read the next token on the current line, return 0 if none
 // thrashes any previously-returned token. make copies!
-static char * find_next_token(const char ** b)
+static inline char * find_next_token(const char ** b)
 {
     //printf("starting character... %02X\n", (uint8_t)**b);
     
@@ -89,7 +89,7 @@ static char * find_next_token(const char ** b)
 }
 // find the next token even if it's on a different line
 // thrashes any previously-returned token
-static char * find_next_token_anywhere(const char ** b)
+static inline char * find_next_token_anywhere(const char ** b)
 {
     //printf("anywhere starting character... %02X\n", (uint8_t)**b);
     
@@ -110,13 +110,13 @@ static char * find_next_token_anywhere(const char ** b)
     return find_next_token(b);
 }
 // TODO: emit a warning or error if other tokens are encountered
-static void find_end_of_line(const char ** b)
+static inline void find_end_of_line(const char ** b)
 {
     while (!is_newline(**b) && **b != 0)
         *b += 1;
 }
 
-static uint64_t size_guess_align(uint64_t s)
+static inline uint64_t size_guess_align(uint64_t s)
 {
     uint64_t ret = 1;
     while (ret < 64 && ret < s)
@@ -124,7 +124,7 @@ static uint64_t size_guess_align(uint64_t s)
     return ret;
 }
 
-static int char_value(const char c)
+static inline int char_value(const char c)
 {
     if (c >= '0' && c <= '9')
         return c - '0';
@@ -137,7 +137,7 @@ static int char_value(const char c)
 }
 
 // truncating instead of clamping (discards upper bits); does not set errno
-static uint64_t my_strtoull(const char * str, const char ** endptr)
+static inline uint64_t my_strtoull(const char * str, const char ** endptr)
 {
     uint8_t negative = 0;
     if (str[0] == '-')
@@ -168,7 +168,7 @@ static uint64_t my_strtoull(const char * str, const char ** endptr)
 }
 
 static uint64_t temp_ctr = 0;
-static char * make_temp_name(void)
+static inline char * make_temp_name(void)
 {
     temp_ctr += 1;
     //size_t len = snprintf(0, 0, "__bbae_temp_%zu", temp_ctr) + 1;
@@ -206,7 +206,7 @@ typedef struct _Type {
     AggData aggdata;
 } Type;
 
-static Type basic_type(enum BBAE_TYPE_VARIANT val)
+static inline Type basic_type(enum BBAE_TYPE_VARIANT val)
 {
     Type ret;
     memset(&ret, 0, sizeof(Type));
@@ -239,19 +239,19 @@ const char * type_to_static_string(Type type)
     return "<BROKENTYPE>";
 }
 
-static uint8_t type_is_valid(Type type)
+static inline uint8_t type_is_valid(Type type)
 {
     return type.variant >= TYPE_I8 && type.variant <= TYPE_AGG;
 }
-static uint8_t type_is_basic(Type type)
+static inline uint8_t type_is_basic(Type type)
 {
     return type.variant >= TYPE_I8 && type.variant <= TYPE_F64;
 }
-static uint8_t type_is_agg(Type type)
+static inline uint8_t type_is_agg(Type type)
 {
     return type.variant == TYPE_AGG;
 }
-static uint8_t type_is_float_only_agg(Type type)
+static inline uint8_t type_is_float_only_agg(Type type)
 {
     if (type_is_agg(type))
     {
@@ -264,20 +264,20 @@ static uint8_t type_is_float_only_agg(Type type)
     }
     return 0;
 }
-static uint8_t type_is_int(Type type)
+static inline uint8_t type_is_int(Type type)
 {
     return type.variant >= TYPE_I8 && type.variant <= TYPE_I64;
 }
-static uint8_t type_is_float(Type type)
+static inline uint8_t type_is_float(Type type)
 {
     return type.variant >= TYPE_F32 && type.variant <= TYPE_F64;
 }
-static uint8_t type_is_ptr(Type type)
+static inline uint8_t type_is_ptr(Type type)
 {
     return type.variant == TYPE_IPTR;
 }
 
-static size_t type_size(Type type)
+static inline size_t type_size(Type type)
 {
     if (type.variant == TYPE_AGG)
         return type.aggdata.size;
@@ -299,14 +299,14 @@ static size_t type_size(Type type)
         assert(0);
 }
 
-static uint8_t aggdata_same(AggData a, AggData b)
+static inline uint8_t aggdata_same(AggData a, AggData b)
 {
     if (a.align != b.align || a.packed != b.packed || a.size != b.size)
         return 0;
     return !memcmp(a.per_byte_likeness, b.per_byte_likeness, a.size);
 }
 
-static uint8_t types_same(Type a, Type b)
+static inline uint8_t types_same(Type a, Type b)
 {
     if (a.variant == TYPE_INVALID || b.variant == TYPE_INVALID)
         return 0;
@@ -362,7 +362,7 @@ typedef struct _Value {
     uint64_t temp; // temporary, used by specific algorithms as a kind of cache
 } Value;
 
-static uint8_t value_is_basic_zero_constant(Value * value)
+static inline uint8_t value_is_basic_zero_constant(Value * value)
 {
     return value->variant == VALUE_CONST && type_is_basic(value->type) && value->constant == 0;
 }
@@ -399,7 +399,7 @@ typedef struct _Statement {
     uint64_t temp; // temporary, used by specific algorithms as a kind of cache
 } Statement;
 
-static Statement * new_statement(void)
+static inline Statement * new_statement(void)
 {
     Statement * statement = (Statement *)zero_alloc(sizeof(Statement));
     statement->args = (Operand *)zero_alloc(0);
@@ -424,7 +424,7 @@ typedef struct _Block {
     uint64_t start_offset;
 } Block;
 
-static Block * new_block(void)
+static inline Block * new_block(void)
 {
     Block * block = (Block *)zero_alloc(sizeof(Block));
     block->args = (Value **)zero_alloc(0);
@@ -460,7 +460,7 @@ typedef struct _Function {
     uint8_t performs_calls; // inlining heuristic and regalloc heuristic
 } Function;
 
-static Function * new_func(void)
+static inline Function * new_func(void)
 {
     Function * func = (Function *)zero_alloc(sizeof(Function));
     func->args = (Value **)zero_alloc(0);
@@ -469,7 +469,7 @@ static Function * new_func(void)
     return func;
 }
 
-static Block * find_block(Function * func, const char * name)
+static inline Block * find_block(Function * func, const char * name)
 {
     if (name == 0)
         return 0;
@@ -519,7 +519,7 @@ typedef struct _Program {
     uint8_t construction_finished;
 } Program;
 
-static Function * find_func(Program * program, const char * name)
+static inline Function * find_func(Program * program, const char * name)
 {
     if (name == 0)
         return 0;
@@ -531,7 +531,7 @@ static Function * find_func(Program * program, const char * name)
     return 0;
 }
 
-static const char * find_static_by_value(Program * program, Type type, uint64_t value, uint8_t private_only)
+static inline const char * find_static_by_value(Program * program, Type type, uint64_t value, uint8_t private_only)
 {
     for (size_t i = 0; i < array_len(program->statics, StaticData); i++)
     {
@@ -552,7 +552,7 @@ static const char * find_static_by_value(Program * program, Type type, uint64_t 
     return 0;
 }
 
-static GlobalData add_global(Program * program, const char * name, Type type_, uint8_t is_private)
+static inline GlobalData add_global(Program * program, const char * name, Type type_, uint8_t is_private)
 {
     size_t allocated_size = type_size(type_);
     size_t align = size_guess_align(allocated_size);
@@ -571,7 +571,7 @@ static GlobalData add_global(Program * program, const char * name, Type type_, u
     return data;
 }
 
-static GlobalData find_global(Program * program, const char * name)
+static inline GlobalData find_global(Program * program, const char * name)
 {
     for (size_t i = 0; i < array_len(program->globals, GlobalData); i++)
     {
@@ -584,12 +584,12 @@ static GlobalData find_global(Program * program, const char * name)
     return ret;
 }
 
-static void add_static_i8(Program * program, const char * name, uint8_t value, uint8_t is_private)
+static inline void add_static_i8(Program * program, const char * name, uint8_t value, uint8_t is_private)
 {
     StaticData data = {name, basic_type(TYPE_I8), value, 0, 0, is_private};
     array_push(program->statics, StaticData, data);
 }
-static const char * add_static_i8_anonymous(Program * program, uint8_t value)
+static inline const char * add_static_i8_anonymous(Program * program, uint8_t value)
 {
     const char * found_name = find_static_by_value(program, basic_type(TYPE_I8), value, 1);
     if (found_name)
@@ -598,12 +598,12 @@ static const char * add_static_i8_anonymous(Program * program, uint8_t value)
     add_static_i8(program, name, value, 1);
     return name;
 }
-static void add_static_i16(Program * program, const char * name, uint16_t value, uint8_t is_private)
+static inline void add_static_i16(Program * program, const char * name, uint16_t value, uint8_t is_private)
 {
     StaticData data = {name, basic_type(TYPE_I16), value, 0, 0, is_private};
     array_push(program->statics, StaticData, data);
 }
-static const char * add_static_i16_anonymous(Program * program, uint16_t value)
+static inline const char * add_static_i16_anonymous(Program * program, uint16_t value)
 {
     const char * found_name = find_static_by_value(program, basic_type(TYPE_I16), value, 1);
     if (found_name)
@@ -612,12 +612,12 @@ static const char * add_static_i16_anonymous(Program * program, uint16_t value)
     add_static_i16(program, name, value, 1);
     return name;
 }
-static void add_static_i32(Program * program, const char * name, uint32_t value, uint8_t is_private)
+static inline void add_static_i32(Program * program, const char * name, uint32_t value, uint8_t is_private)
 {
     StaticData data = {name, basic_type(TYPE_I32), value, 0, 0, is_private};
     array_push(program->statics, StaticData, data);
 }
-static const char * add_static_i32_anonymous(Program * program, uint32_t value)
+static inline const char * add_static_i32_anonymous(Program * program, uint32_t value)
 {
     const char * found_name = find_static_by_value(program, basic_type(TYPE_I32), value, 1);
     if (found_name)
@@ -626,12 +626,12 @@ static const char * add_static_i32_anonymous(Program * program, uint32_t value)
     add_static_i32(program, name, value, 1);
     return name;
 }
-static void add_static_i64(Program * program, const char * name, uint64_t value, uint8_t is_private)
+static inline void add_static_i64(Program * program, const char * name, uint64_t value, uint8_t is_private)
 {
     StaticData data = {name, basic_type(TYPE_I64), value, 0, 0, is_private};
     array_push(program->statics, StaticData, data);
 }
-static const char * add_static_i64_anonymous(Program * program, uint64_t value)
+static inline const char * add_static_i64_anonymous(Program * program, uint64_t value)
 {
     const char * found_name = find_static_by_value(program, basic_type(TYPE_I64), value, 1);
     if (found_name)
@@ -641,7 +641,7 @@ static const char * add_static_i64_anonymous(Program * program, uint64_t value)
     return name;
 }
 
-static StaticData find_static(Program * program, const char * name)
+static inline StaticData find_static(Program * program, const char * name)
 {
     for (size_t i = 0; i < array_len(program->statics, StaticData); i++)
     {
@@ -654,7 +654,7 @@ static StaticData find_static(Program * program, const char * name)
     return ret;
 }
 
-static uint64_t parse_int_bare(const char * n)
+static inline uint64_t parse_int_bare(const char * n)
 {
     size_t len = strlen(n);
     
@@ -665,14 +665,14 @@ static uint64_t parse_int_bare(const char * n)
     return ret;
 }
 
-static uint64_t parse_int_nonbare(const char * n)
+static inline uint64_t parse_int_nonbare(const char * n)
 {
     const char * end = 0;
     uint64_t ret = (uint64_t)my_strtoull(n, &end);
     return ret;
 }
 
-static Type parse_type(const char ** b)
+static inline Type parse_type(const char ** b)
 {
     Type type;
     memset(&type, 0, sizeof(Type));
@@ -720,7 +720,7 @@ static Type parse_type(const char ** b)
     return type;
 }
 
-static Value * make_value(Type type)
+static inline Value * make_value(Type type)
 {
     Value * ret = (Value *)zero_alloc(sizeof(Value));
     ret->edges_out = (Statement **)zero_alloc(0);
@@ -728,7 +728,7 @@ static Value * make_value(Type type)
     return ret;
 }
 
-static Value * make_const_value(enum BBAE_TYPE_VARIANT variant, uint64_t data)
+static inline Value * make_const_value(enum BBAE_TYPE_VARIANT variant, uint64_t data)
 {
     Value * ret = make_value(basic_type(variant));
     ret->variant = VALUE_CONST;
@@ -736,7 +736,7 @@ static Value * make_const_value(enum BBAE_TYPE_VARIANT variant, uint64_t data)
     return ret;
 }
 
-static Value * make_stackslot_value(StackSlot * slot)
+static inline Value * make_stackslot_value(StackSlot * slot)
 {
     Value * ret = make_value(basic_type(TYPE_IPTR));
     ret->variant = VALUE_STACKADDR;
@@ -745,7 +745,7 @@ static Value * make_stackslot_value(StackSlot * slot)
 }
 
 
-static Operand new_op_rawint(uint64_t rawint)
+static inline Operand new_op_rawint(uint64_t rawint)
 {
     Operand op;
     memset(&op, 0, sizeof(Operand));
@@ -754,7 +754,7 @@ static Operand new_op_rawint(uint64_t rawint)
     return op;
 }
 
-static Operand new_op_val(Value * val)
+static inline Operand new_op_val(Value * val)
 {
     Operand op;
     memset(&op, 0, sizeof(Operand));
@@ -763,7 +763,7 @@ static Operand new_op_val(Value * val)
     return op;
 }
 
-static Operand new_op_type(Type rawtype)
+static inline Operand new_op_type(Type rawtype)
 {
     Operand op;
     memset(&op, 0, sizeof(Operand));
@@ -772,7 +772,7 @@ static Operand new_op_type(Type rawtype)
     return op;
 }
 
-static Operand new_op_text(const char * name)
+static inline Operand new_op_text(const char * name)
 {
     Operand op;
     memset(&op, 0, sizeof(Operand));
@@ -781,7 +781,7 @@ static Operand new_op_text(const char * name)
     return op;
 }
 
-static Operand new_op_separator(void)
+static inline Operand new_op_separator(void)
 {
     Operand op;
     memset(&op, 0, sizeof(Operand));
@@ -789,7 +789,7 @@ static Operand new_op_separator(void)
     return op;
 }
 
-static void add_statement_output(Statement * statement)
+static inline void add_statement_output(Statement * statement)
 {
     if (statement->output_name)
     {
@@ -889,7 +889,7 @@ static void add_statement_output(Statement * statement)
     }
 }
 
-static uint8_t values_same(Value * a, Value * b)
+static inline uint8_t values_same(Value * a, Value * b)
 {
     if (a == b)
         return 1;
@@ -910,7 +910,7 @@ static uint8_t values_same(Value * a, Value * b)
     return memcmp(a, b, sizeof(Value)) == 0;
 }
 
-static uint8_t operands_same(Operand a, Operand b)
+static inline uint8_t operands_same(Operand a, Operand b)
 {
     // different kind of operand
     if (a.variant != b.variant)
@@ -933,7 +933,7 @@ static uint8_t operands_same(Operand a, Operand b)
         assert("FIXME" && 0);
 }
 
-static void connect_statement_to_operand(Statement * statement, Operand op)
+static inline void connect_statement_to_operand(Statement * statement, Operand op)
 {
     uint8_t found = 0;
     for (size_t i = 0; i < array_len(statement->args, Operand); i++)
@@ -950,7 +950,7 @@ static void connect_statement_to_operand(Statement * statement, Operand op)
         array_push(val->edges_out, Statement *, statement);
 }
 
-static void disconnect_statement_from_operand(Statement * statement, Operand op, uint8_t once)
+static inline void disconnect_statement_from_operand(Statement * statement, Operand op, uint8_t once)
 {
     if (op.variant != OP_KIND_VALUE)
         return;
@@ -967,7 +967,7 @@ static void disconnect_statement_from_operand(Statement * statement, Operand op,
     }
 }
 
-static size_t find_separator_index(Operand * args)
+static inline size_t find_separator_index(Operand * args)
 {
     for (size_t i = 2; i < array_len(args, Operand); i++)
     {
@@ -977,7 +977,7 @@ static size_t find_separator_index(Operand * args)
     return (size_t)-1;
 }
 
-static uint8_t statement_is_terminator(Statement * a)
+static inline uint8_t statement_is_terminator(Statement * a)
 {
     if (!a)
         return 0;
@@ -989,7 +989,7 @@ static uint8_t statement_is_terminator(Statement * a)
     return 0;
 }
 
-static uint8_t statement_has_side_effects(Statement * a)
+static inline uint8_t statement_has_side_effects(Statement * a)
 {
     assert(a);
     // statements with no output always have side effects
@@ -1005,7 +1005,7 @@ static uint8_t statement_has_side_effects(Statement * a)
     return 0;
 }
 
-static uint8_t statements_same(Statement * a, Statement * b)
+static inline uint8_t statements_same(Statement * a, Statement * b)
 {
     // "same" for statements here means that they can safely be substituted for one another or combined.
     
@@ -1037,7 +1037,7 @@ static uint8_t statements_same(Statement * a, Statement * b)
     return 1;
 }
 
-static void block_replace_statement_val_args(Block * block, Value * old, Value * new_val)
+static inline void block_replace_statement_val_args(Block * block, Value * old, Value * new_val)
 {
     for (size_t j = 0; j < array_len(block->statements, Statement *); j++)
     {
@@ -1054,7 +1054,7 @@ static void block_replace_statement_val_args(Block * block, Value * old, Value *
     }
 }
 
-static void validate_links(Program * program)
+static inline void validate_links(Program * program)
 {
     for (size_t f = 0; f < array_len(program->functions, Function *); f++)
     {
@@ -1148,7 +1148,7 @@ static void validate_links(Program * program)
     }
 }
 
-static void verify_coherency(Program * program)
+static inline void verify_coherency(Program * program)
 {
     for (size_t f = 0; f < array_len(program->functions, Function *); f++)
     {

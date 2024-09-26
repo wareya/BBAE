@@ -11,7 +11,7 @@ enum BBAE_PARSER_STATE {
     PARSER_STATE_BLOCK,
 };
 
-static uint8_t check_for_redefinition(Function * func, Block * block, const char * name)
+static inline uint8_t check_for_redefinition(Function * func, Block * block, const char * name)
 {
     assert(func);
     
@@ -41,7 +41,7 @@ static uint8_t check_for_redefinition(Function * func, Block * block, const char
     return 0;
 }
 
-static void assert_no_redefinition(Function * func, Block * block, const char * name)
+static inline void assert_no_redefinition(Function * func, Block * block, const char * name)
 {
     if (check_for_redefinition(func, block, name))
     {
@@ -50,49 +50,49 @@ static void assert_no_redefinition(Function * func, Block * block, const char * 
     }
 }
 
-static Value * build_constant_f32(float f)
+static inline Value * build_constant_f32(float f)
 {
     Value * ret = make_value(basic_type(TYPE_F32));
     ret->variant = VALUE_CONST;
     memcpy(&ret->constant, &f, 4);
     return ret;
 }
-static Value * build_constant_f64(double f)
+static inline Value * build_constant_f64(double f)
 {
     Value * ret = make_value(basic_type(TYPE_F64));
     ret->variant = VALUE_CONST;
     memcpy(&ret->constant, &f, 8);
     return ret;
 }
-static Value * build_constant_i64(uint64_t n)
+static inline Value * build_constant_i64(uint64_t n)
 {
     Value * ret = make_value(basic_type(TYPE_I64));
     ret->variant = VALUE_CONST;
     ret->constant = n;
     return ret;
 }
-static Value * build_constant_iptr(uint64_t n)
+static inline Value * build_constant_iptr(uint64_t n)
 {
     Value * ret = make_value(basic_type(TYPE_IPTR));
     ret->variant = VALUE_CONST;
     ret->constant = n;
     return ret;
 }
-static Value * build_constant_i32(uint32_t n)
+static inline Value * build_constant_i32(uint32_t n)
 {
     Value * ret = make_value(basic_type(TYPE_I32));
     ret->variant = VALUE_CONST;
     ret->constant = n;
     return ret;
 }
-static Value * build_constant_i16(uint16_t n)
+static inline Value * build_constant_i16(uint16_t n)
 {
     Value * ret = make_value(basic_type(TYPE_I16));
     ret->variant = VALUE_CONST;
     ret->constant = n;
     return ret;
 }
-static Value * build_constant_i8(uint8_t n)
+static inline Value * build_constant_i8(uint8_t n)
 {
     Value * ret = make_value(basic_type(TYPE_I8));
     ret->variant = VALUE_CONST;
@@ -100,7 +100,7 @@ static Value * build_constant_i8(uint8_t n)
     return ret;
 }
 
-static Value * build_constant_zero(enum BBAE_TYPE_VARIANT variant)
+static inline Value * build_constant_zero(enum BBAE_TYPE_VARIANT variant)
 {
     if (variant == TYPE_I8)
         return build_constant_i8(0);
@@ -120,13 +120,13 @@ static Value * build_constant_zero(enum BBAE_TYPE_VARIANT variant)
         assert(((void)"error: unsupported type for zero constant", 0));
 }
 /*
-static Value * build_constant_poison(Type type)
+static inline Value * build_constant_poison(Type type)
 {
     
 }
 */
 
-static Value * parse_value(Program * program, char * token)
+static inline Value * parse_value(Program * program, char * token)
 {
     Function * func = program->current_func;
     Block * block = program->current_block;
@@ -225,21 +225,21 @@ static Value * parse_value(Program * program, char * token)
     }
 }
 
-static Operand parse_op_type(const char ** cursor)
+static inline Operand parse_op_type(const char ** cursor)
 {
     return new_op_type(parse_type(cursor));
 }
-static Operand parse_op_val(Program * program, const char ** cursor)
+static inline Operand parse_op_val(Program * program, const char ** cursor)
 {
     return new_op_val(parse_value(program, find_next_token(cursor)));
 }
-static Operand parse_op_text(const char ** cursor)
+static inline Operand parse_op_text(const char ** cursor)
 {
     const char * label_name = strcpy_z(find_next_token(cursor));
     return new_op_text(label_name);
 }
 
-static uint8_t op_is_v(const char * opname)
+static inline uint8_t op_is_v(const char * opname)
 {
     const char * ops[] = {
         "bnot", "not", "bool", "neg", "f32_to_f64", "f64_to_f32", "freeze", "ptralias_bless", "mov"
@@ -252,7 +252,7 @@ static uint8_t op_is_v(const char * opname)
     return 0;
 }
 
-static uint8_t op_is_t_v(const char * opname)
+static inline uint8_t op_is_t_v(const char * opname)
 {
     const char * ops[] = {
         "load", "trim", "qext", "zext", "sext",
@@ -268,7 +268,7 @@ static uint8_t op_is_t_v(const char * opname)
     return 0;
 }
 
-static uint8_t op_is_v_v(const char * opname)
+static inline uint8_t op_is_v_v(const char * opname)
 {
     const char * ops[] = {
         "add", "sub", "mul", "imul", "div", "idiv", "rem", "irem", "div_unsafe", "idiv_unsafe", "rem_unsafe", "irem_unsafe",
@@ -290,7 +290,7 @@ static uint8_t op_is_v_v(const char * opname)
     return 0;
 }
 
-static uint8_t op_is_v_v_v(const char * opname)
+static inline uint8_t op_is_v_v_v(const char * opname)
 {
     const char * ops[] = {
         "ternary", "inject"
@@ -303,7 +303,7 @@ static uint8_t op_is_v_v_v(const char * opname)
     return 0;
 }
 
-static Statement * parse_statement(Program * program, const char ** cursor)
+static inline Statement * parse_statement(Program * program, const char ** cursor)
 {
     Statement * ret = new_statement();
     char * token = strcpy_z(find_next_token(cursor));
@@ -492,7 +492,7 @@ static Statement * parse_statement(Program * program, const char ** cursor)
     return ret;
 }
 
-static void legalize_last_statement_operands(Block * block)
+static inline void legalize_last_statement_operands(Block * block)
 {
     size_t end = array_len(block->statements, Statement *);
     if (end == 0)
@@ -576,7 +576,7 @@ static void legalize_last_statement_operands(Block * block)
 /// @brief Add a statement to the end of a block, creating the statement's output value and linking the statement back to the block.
 /// @param block 
 /// @param statement 
-static void block_append_statement(Block * block, Statement * statement)
+static inline void block_append_statement(Block * block, Statement * statement)
 {
     add_statement_output(statement);
     //add_statement(program, statement);
@@ -587,7 +587,7 @@ static void block_append_statement(Block * block, Statement * statement)
     legalize_last_statement_operands(block);
 }
 
-static Statement * parse_and_add_statement(Program * program, const char ** cursor)
+static inline Statement * parse_and_add_statement(Program * program, const char ** cursor)
 {
     Statement * statement = parse_statement(program, cursor);
     block_append_statement(program->current_block, statement);
@@ -599,7 +599,7 @@ static Statement * parse_and_add_statement(Program * program, const char ** curs
 /// @param name 
 /// @param type 
 /// @return
-static Value * add_funcarg(Function * func, const char * name, Type type)
+static inline Value * add_funcarg(Function * func, const char * name, Type type)
 {
     if (!name)
         name = make_temp_name();
@@ -623,7 +623,7 @@ static Value * add_funcarg(Function * func, const char * name, Type type)
 /// @param name 
 /// @param type 
 /// @return 
-static Value * add_blockarg(Program * program, const char * name, Type type)
+static inline Value * add_blockarg(Program * program, const char * name, Type type)
 {
     if (!name)
         name = make_temp_name();
@@ -645,7 +645,7 @@ static Value * add_blockarg(Program * program, const char * name, Type type)
 /// @param name Name of stack slot.
 /// @param size Size in bytes of stack slot.
 /// @return 
-static Value * add_stack_slot(Function * func, const char * name, uint64_t size)
+static inline Value * add_stack_slot(Function * func, const char * name, uint64_t size)
 {
     if (!name)
         name = make_temp_name();
@@ -661,7 +661,7 @@ static Value * add_stack_slot(Function * func, const char * name, uint64_t size)
 /// @brief  Creates a block in the current function and switches to it. If name is null, generates one.
 /// @param program 
 /// @param name 
-static Block * create_block(Program * program, const char * name)
+static inline Block * create_block(Program * program, const char * name)
 {
     if (!name)
         name = make_temp_name();
@@ -676,7 +676,7 @@ static Block * create_block(Program * program, const char * name)
 /// @param name 
 /// @param return_type 
 /// @return 
-static Function * create_function(Program * program, const char * name, Type return_type)
+static inline Function * create_function(Program * program, const char * name, Type return_type)
 {
     if (!name)
         name = make_temp_name();
@@ -692,7 +692,7 @@ static Function * create_function(Program * program, const char * name, Type ret
 /// @brief  Initializes a statement object with the given operation or instruction name.
 /// @param statement_name 
 /// @return 
-static Statement * init_statement(const char * statement_name)
+static inline Statement * init_statement(const char * statement_name)
 {
     Statement * ret = new_statement();
     ret->statement_name = statement_name;
@@ -702,7 +702,7 @@ static Statement * init_statement(const char * statement_name)
 /// @brief Add a value as an operand/argument to the given statement.
 /// @param statement
 /// @param val 
-static void statement_add_type_op(Statement * statement, Type type_)
+static inline void statement_add_type_op(Statement * statement, Type type_)
 {
     array_push(statement->args, Operand, new_op_type(type_));
 }
@@ -710,7 +710,7 @@ static void statement_add_type_op(Statement * statement, Type type_)
 /// @brief Add a value as an operand/argument to the given statement.
 /// @param statement
 /// @param val 
-static void statement_add_value_op(Statement * statement, Value * val)
+static inline void statement_add_value_op(Statement * statement, Value * val)
 {
     array_push(statement->args, Operand, new_op_val(val));
 }
@@ -718,7 +718,7 @@ static void statement_add_value_op(Statement * statement, Value * val)
 /// @brief Add a string (label or symbol name, but not variable name) as an operand/argument to the given statement.
 /// @param statement
 /// @param val 
-static void statement_add_text_op(Statement * statement, const char * text)
+static inline void statement_add_text_op(Statement * statement, const char * text)
 {
     array_push(statement->args, Operand, new_op_text(strcpy_z(text)));
 }
@@ -726,7 +726,7 @@ static void statement_add_text_op(Statement * statement, const char * text)
 /// @brief Creates a program with no functions, globals, or statics in it.
 /// @param  
 /// @return 
-static Program * create_empty_program(void)
+static inline Program * create_empty_program(void)
 {
     Program * program = (Program *)zero_alloc(sizeof(Program));
     program->functions = (Function **)zero_alloc(0);
@@ -736,7 +736,7 @@ static Program * create_empty_program(void)
     return program;
 }
 
-static Program * parse_file(const char * cursor)
+static inline Program * parse_file(const char * cursor)
 {
     Program * program = create_empty_program();
     
@@ -875,7 +875,7 @@ static Program * parse_file(const char * cursor)
 }
 
 // split blocks if they have any conditional jumps
-static void split_blocks(Program * program)
+static inline void split_blocks(Program * program)
 {
     // edges aren't connected yet, so we don't have to repair them
     for (size_t f = 0; f < array_len(program->functions, Function *); f++)
@@ -1001,7 +1001,7 @@ static void split_blocks(Program * program)
     }
 }
 
-static void block_edges_disconnect(Program * program)
+static inline void block_edges_disconnect(Program * program)
 {
     for (size_t f = 0; f < array_len(program->functions, Function *); f++)
     {
@@ -1015,7 +1015,7 @@ static void block_edges_disconnect(Program * program)
     }
 }
 
-static void block_edges_connect(Program * program)
+static inline void block_edges_connect(Program * program)
 {
     for (size_t f = 0; f < array_len(program->functions, Function *); f++)
     {
@@ -1058,7 +1058,7 @@ static void block_edges_connect(Program * program)
     }
 }
 
-static void block_statements_connect(Program * program)
+static inline void block_statements_connect(Program * program)
 {
     for (size_t f = 0; f < array_len(program->functions, Function *); f++)
     {
@@ -1077,7 +1077,7 @@ static void block_statements_connect(Program * program)
     }
 }
 
-static void program_finish_construction(Program * program)
+static inline void program_finish_construction(Program * program)
 {
     split_blocks(program);
     block_statements_connect(program);

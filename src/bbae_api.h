@@ -10,14 +10,14 @@
 // TODO (long term): support other platforms (e.g. arm, risc-v, llvm)
 #include "x86/bbae_emission_x86.h"
 
-static Program * parse(const char * buffer)
+static inline Program * parse(const char * buffer)
 {
     Program * program = parse_file(buffer);
     program_finish_construction(program);
     return program;
 }
 
-static void do_optimization(Program * program)
+static inline void do_optimization(Program * program)
 {
     if (!program->construction_finished)
         program_finish_construction(program);
@@ -46,7 +46,7 @@ static void do_optimization(Program * program)
 #endif
 }
 
-static byte_buffer * do_lowering(Program * program, SymbolEntry ** symbollist)
+static inline byte_buffer * do_lowering(Program * program, SymbolEntry ** symbollist)
 {
     if (!program->construction_finished)
         program_finish_construction(program);

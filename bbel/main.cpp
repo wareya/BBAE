@@ -42,7 +42,13 @@ int main(int argc, char ** argv)
         return 0;
     }
     
-    //for (auto n : tokens) printf("%s\n", n->text->data());
+    for (auto n : tokens)
+    {
+        if (n->from_regex)
+            printf("`%s` (via %s)\n", n->text->data(), n->from_regex->str.data());
+        else
+            printf("`%s`\n", n->text->data());
+    }
     
     auto asdf = parse_as(grammar, tokens, "program");
     

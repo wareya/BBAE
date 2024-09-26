@@ -63,7 +63,7 @@
 /// Perform all supported optimizations to all the functions in the given program.
 ///
 /// byte_buffer * do_lowering(Program * program, SymbolEntry ** symbollist)
-/// Lower the program to machine code and produce a symbol list (for function addresses, static data addresses, and global variable addresses). See `buffers.h` for the API for the byte_buffer class.
+/// Lower the program to machine code and produce a symbol list (for function addresses, static inline data addresses, and global variable addresses). See `buffers.h` for the API for the byte_buffer class.
 ///
 ///
 /// Typical usage first creates a program.
@@ -74,7 +74,7 @@
 
 /// Initializes a statement object with the given operation name and gives it an output.
 // (contains a giant list of operation names, so is defined at the bottom)
-static Statement * init_statement_auto_output(const char * statement_name);
+static inline Statement * init_statement_auto_output(const char * statement_name);
 
 /// Null if the statement is an instruction instead of an operation.
 Value * statement_get_output(Statement * statement)
@@ -85,13 +85,13 @@ Block * function_get_entry_block(Function * func)
 {
     return func->entry_block;
 }
-static Statement * block_get_last_statement(Block * block)
+static inline Statement * block_get_last_statement(Block * block)
 {
     if (array_len(block->statements, Statement *) == 0)
         return 0;
     return block->statements[array_len(block->statements, Statement *) - 1];
 }
-static uint8_t block_is_terminated(Block * block)
+static inline uint8_t block_is_terminated(Block * block)
 {
     return statement_is_terminator(block_get_last_statement(block));
 }
@@ -130,7 +130,7 @@ Statement * build_statement_0val(Block * block, const char * statement_name)
     return ret;
 }
 
-static Statement * build_store(Block * block, Value * a, Value * b)
+static inline Statement * build_store(Block * block, Value * a, Value * b)
 {
     Statement * ret = init_statement_auto_output("store");
     statement_add_value_op(ret, a);
@@ -138,7 +138,7 @@ static Statement * build_store(Block * block, Value * a, Value * b)
     block_append_statement(block, ret);
     return ret;
 }
-static Statement * build_load(Block * block, Type a, Value * b)
+static inline Statement * build_load(Block * block, Type a, Value * b)
 {
     Statement * ret = init_statement_auto_output("load");
     statement_add_type_op(ret, a);
@@ -147,146 +147,146 @@ static Statement * build_load(Block * block, Type a, Value * b)
     return ret;
 }
 
-static Statement * build_return_void(Block * block)
+static inline Statement * build_return_void(Block * block)
 {
     return build_statement_0val(block, "return");
 }
-static Statement * build_return_1val(Block * block, Value * a)
+static inline Statement * build_return_1val(Block * block, Value * a)
 {
     return build_statement_1val(block, "return", a);
 }
 
 
 
-static Statement * build_add(Block * block, Value * a, Value * b)
+static inline Statement * build_add(Block * block, Value * a, Value * b)
 {
     return build_statement_2val(block, "add", a, b);
 }
-static Statement * build_sub(Block * block, Value * a, Value * b)
+static inline Statement * build_sub(Block * block, Value * a, Value * b)
 {
     return build_statement_2val(block, "sub", a, b);
 }
-static Statement * build_mul(Block * block, Value * a, Value * b)
+static inline Statement * build_mul(Block * block, Value * a, Value * b)
 {
     return build_statement_2val(block, "mul", a, b);
 }
-static Statement * build_imul(Block * block, Value * a, Value * b)
+static inline Statement * build_imul(Block * block, Value * a, Value * b)
 {
     return build_statement_2val(block, "imul", a, b);
 }
 
 /// @brief Unsafe variants of arithmetic functions avoid generating unspecified or undefined or trap values. See BBAE docs for more info.
-static Statement * build_div(Block * block, Value * a, Value * b, uint8_t is_unsafe)
+static inline Statement * build_div(Block * block, Value * a, Value * b, uint8_t is_unsafe)
 {
     return build_statement_2val(block, !is_unsafe ? "div" : "div_unsafe", a, b);
 }
-static Statement * build_idiv(Block * block, Value * a, Value * b, uint8_t is_unsafe)
+static inline Statement * build_idiv(Block * block, Value * a, Value * b, uint8_t is_unsafe)
 {
     return build_statement_2val(block, !is_unsafe ? "idiv" : "idiv_unsafe", a, b);
 }
-static Statement * build_rem(Block * block, Value * a, Value * b, uint8_t is_unsafe)
+static inline Statement * build_rem(Block * block, Value * a, Value * b, uint8_t is_unsafe)
 {
     return build_statement_2val(block, !is_unsafe ? "rem" : "rem_unsafe", a, b);
 }
-static Statement * build_irem(Block * block, Value * a, Value * b, uint8_t is_unsafe)
+static inline Statement * build_irem(Block * block, Value * a, Value * b, uint8_t is_unsafe)
 {
     return build_statement_2val(block, !is_unsafe ? "irem" : "irem_unsafe", a, b);
 }
 
-static Statement * build_shl(Block * block, Value * a, Value * b, uint8_t is_unsafe)
+static inline Statement * build_shl(Block * block, Value * a, Value * b, uint8_t is_unsafe)
 {
     return build_statement_2val(block, !is_unsafe ? "shl" : "shl_unsafe", a, b);
 }
-static Statement * build_shr(Block * block, Value * a, Value * b, uint8_t is_unsafe)
+static inline Statement * build_shr(Block * block, Value * a, Value * b, uint8_t is_unsafe)
 {
     return build_statement_2val(block, !is_unsafe ? "shr" : "shr_unsafe", a, b);
 }
-static Statement * build_sar(Block * block, Value * a, Value * b, uint8_t is_unsafe)
+static inline Statement * build_sar(Block * block, Value * a, Value * b, uint8_t is_unsafe)
 {
     return build_statement_2val(block, !is_unsafe ? "sar" : "sar_unsafe", a, b);
 }
 
-static Statement * build_and(Block * block, Value * a)
+static inline Statement * build_and(Block * block, Value * a)
 {
     return build_statement_1val(block, "and", a);
 }
-static Statement * build_or(Block * block, Value * a)
+static inline Statement * build_or(Block * block, Value * a)
 {
     return build_statement_1val(block, "or", a);
 }
-static Statement * build_xor(Block * block, Value * a)
+static inline Statement * build_xor(Block * block, Value * a)
 {
     return build_statement_1val(block, "xor", a);
 }
-static Statement * build_bitnot(Block * block, Value * a)
+static inline Statement * build_bitnot(Block * block, Value * a)
 {
     return build_statement_1val(block, "bitnot", a);
 }
 
-static Statement * build_not(Block * block, Value * a)
+static inline Statement * build_not(Block * block, Value * a)
 {
     return build_statement_1val(block, "not", a);
 }
-static Statement * build_bool(Block * block, Value * a)
+static inline Statement * build_bool(Block * block, Value * a)
 {
     return build_statement_1val(block, "bool", a);
 }
-static Statement * build_neg(Block * block, Value * a)
+static inline Statement * build_neg(Block * block, Value * a)
 {
     return build_statement_1val(block, "neg", a);
 }
 
-static Statement * build_trim(Block * block, Value * a)
+static inline Statement * build_trim(Block * block, Value * a)
 {
     return build_statement_1val(block, "trim", a);
 }
-static Statement * build_qext(Block * block, Value * a)
+static inline Statement * build_qext(Block * block, Value * a)
 {
     return build_statement_1val(block, "qext", a);
 }
-static Statement * build_zext(Block * block, Value * a)
+static inline Statement * build_zext(Block * block, Value * a)
 {
     return build_statement_1val(block, "zext", a);
 }
-static Statement * build_sext(Block * block, Value * a)
+static inline Statement * build_sext(Block * block, Value * a)
 {
     return build_statement_1val(block, "sext", a);
 }
 
 
-static Statement * build_fadd(Block * block, Value * a, Value * b)
+static inline Statement * build_fadd(Block * block, Value * a, Value * b)
 {
     return build_statement_2val(block, "fadd", a, b);
 }
-static Statement * build_fsub(Block * block, Value * a, Value * b)
+static inline Statement * build_fsub(Block * block, Value * a, Value * b)
 {
     return build_statement_2val(block, "fsub", a, b);
 }
-static Statement * build_fmul(Block * block, Value * a, Value * b)
+static inline Statement * build_fmul(Block * block, Value * a, Value * b)
 {
     return build_statement_2val(block, "fmul", a, b);
 }
-static Statement * build_fdiv(Block * block, Value * a, Value * b)
+static inline Statement * build_fdiv(Block * block, Value * a, Value * b)
 {
     return build_statement_2val(block, "fdiv", a, b);
 }
 /*
-static Statement * build_fsqrt(Block * block, Value * a)
+static inline Statement * build_fsqrt(Block * block, Value * a)
 {
     return build_statement_1val(block, "fsqrt", a);
 }
 */
 
 
-static Statement * build_fneg(Block * block, Value * a)
+static inline Statement * build_fneg(Block * block, Value * a)
 {
     return build_statement_1val(block, "fneg", a);
 }
-static Statement * build_fbool(Block * block, Value * a)
+static inline Statement * build_fbool(Block * block, Value * a)
 {
     return build_statement_1val(block, "fbool", a);
 }
-static Statement * build_fisnan(Block * block, Value * a)
+static inline Statement * build_fisnan(Block * block, Value * a)
 {
     return build_statement_1val(block, "fisnan", a);
 }
@@ -300,7 +300,7 @@ enum CmpComparison {
     CMP_L,
 };
 
-static Statement * build_ucmp(Block * block, Value * a, Value * b, enum CmpComparison cmp)
+static inline Statement * build_ucmp(Block * block, Value * a, Value * b, enum CmpComparison cmp)
 {
     assert(a && b);
     assert(types_same(a->type, b->type));
@@ -314,7 +314,7 @@ static Statement * build_ucmp(Block * block, Value * a, Value * b, enum CmpCompa
         (assert(((void)"invalid kind-of-comparison input to comparison builder", 0)), "");
     return build_statement_2val(block, s, a, b);
 }
-static Statement * build_icmp(Block * block, Value * a, Value * b, enum CmpComparison cmp)
+static inline Statement * build_icmp(Block * block, Value * a, Value * b, enum CmpComparison cmp)
 {
     assert(a && b);
     assert(types_same(a->type, b->type));
@@ -328,7 +328,7 @@ static Statement * build_icmp(Block * block, Value * a, Value * b, enum CmpCompa
         (assert(((void)"invalid kind-of-comparison input to comparison builder", 0)), "");
     return build_statement_2val(block, s, a, b);
 }
-static Statement * build_fcmp(Block * block, Value * a, Value * b, enum CmpComparison cmp)
+static inline Statement * build_fcmp(Block * block, Value * a, Value * b, enum CmpComparison cmp)
 {
     assert(a && b);
     assert(types_same(a->type, b->type));
@@ -343,7 +343,7 @@ static Statement * build_fcmp(Block * block, Value * a, Value * b, enum CmpCompa
     return build_statement_2val(block, s, a, b);
 }
 
-static Statement * init_statement_auto_output(const char * statement_name)
+static inline Statement * init_statement_auto_output(const char * statement_name)
 {
     if (strcmp(statement_name, "add") == 0 ||
         strcmp(statement_name, "sub") == 0 ||

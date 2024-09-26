@@ -1,7 +1,26 @@
 #ifndef INCLUDE_REMIMU
 
 /************
-    REMIMU: SINGLE HEADER C REGEX LIBRARY
+ 
+    REMIMU: SINGLE HEADER C/C++ REGEX LIBRARY
+
+    Compatible with C99 and C++11 and later standards. Uses backtracking and relatively standard regex syntax.
+
+    #include "my_regex.h"
+
+FUNCTIONS
+
+    static inline int regex_parse(const char * pattern, RegexToken * tokens, int16_t * token_count, int32_t flags)
+    static inline int64_t regex_match(const RegexToken * tokens, const char * text, size_t start_i, uint16_t cap_slots, int64_t * cap_pos, int64_t * cap_span)
+    static inline void print_regex_tokens(RegexToken * tokens)
+
+PERFORMANCE
+
+    On simple cases, Remimu is as fast as PCRE2, sometimes slightly faster. Regex parsing/compilation is also much faster (around 4x to 10x), so single-shot regexes are often faster than PCRE2.
+
+    HOWEVER: Remimu is a pure backtracking engine, and has `O(2^x)` complexity on regexes with catastrophic backtracking. Beware!
+
+    Remimu uses length-checked fixed memory buffers with no recursion, so memory usage is statically known.
 
 FEATURES
 
@@ -16,10 +35,10 @@ FEATURES
     - - \d, \s, \w, \D, \S, \W (digit, space, and word character classes)
     - - \b, \B word boundary and non-word-boundary anchors (not fully supported in zero-size quantified groups, but even then, usually supported)
     - - Escaped literal characters: {}[]-()|^$*+?:./\
-    - - - Escapes work in character classes, except for '$'
+    - - - Escapes work in character classes, except for 'b'
     - Character classes, including disjoint ranges, proper handling of bare [ and trailing -, etc
     - - Dot (.) matches all characters, including newlines, unless REMIMU_FLAG_DOT_NO_NEWLINES is passed as a flag to regex_parse
-    - - Dot (.) only matches at most one byte at a time, so when REMIMU_FLAG_DOT_NO_NEWLINES is not used, matching \r\n requires two dots
+    - - Dot (.) only matches at most one byte at a time, so matching \r\n requires two dots (and not using REMIMU_FLAG_DOT_NO_NEWLINES)
     - Anchors (^ and $)
     - - Same support caveats as \b, \B apply
     - Basic quantifiers (*, +, ?)
@@ -43,13 +62,8 @@ NOT SUPPORTED
     - Most other weird flavor-specific regex stuff
     - Capture of or inside of possessive-quantified groups (still take up a capture slot, but no data is returned)
 
-FUNCTIONS
-    
-    static int regex_parse(const char * pattern, RegexToken * tokens, int16_t * token_count, int32_t flags)
-    static int64_t regex_match(const RegexToken * tokens, const char * text, uint16_t cap_slots, int64_t * cap_pos, int64_t * cap_span)
-    static void print_regex_tokens(RegexToken * tokens)
-
 USAGE
+
     // minimal:
     
     RegexToken tokens[1024];
@@ -57,7 +71,7 @@ USAGE
     int e = regex_parse("[0-9]+\\.[0-9]+", tokens, &token_count, 0);
     assert(!e);
     
-    int64_t match_len = regex_match(tokens, "23.53) ", 0, 0, 0);
+    int64_t match_len = regex_match(tokens, "23.53) ", 0, 0, 0, 0);
     printf("########### return: %zd\n", match_len);
     
     // with captures:
@@ -66,20 +80,24 @@ USAGE
     int16_t token_count = sizeof(tokens)/sizeof(tokens[0]);
     int e = regex_parse("((a)|(b))++", tokens, &token_count, 0);
     assert(!e);
-
+    
     int64_t cap_pos[5];
     int64_t cap_span[5];
     memset(cap_pos, 0xFF, sizeof(cap_pos));
     memset(cap_span, 0xFF, sizeof(cap_span));
-
-    int64_t matchlen = regex_match(tokens, "aaaaaabbbabaqa", 5, cap_pos, cap_span);
+    
+    int64_t matchlen = regex_match(tokens, "aaaaaabbbabaqa", 0, 5, cap_pos, cap_span);
     printf("Match length: %zd\n", matchlen);
     for (int i = 0; i < 5; i++)
         printf("Capture %d: %zd plus %zd\n", i, cap_pos[i], cap_span[i]);
-
+    
     // for debugging
     print_regex_tokens(tokens);
-    
+
+LICENSE
+
+    Creative Commons Zero, public domain.
+
 */
 
 #include <stdint.h>
@@ -124,7 +142,7 @@ typedef struct _RegexToken {
 /// Flags: Not yet used.
 /// SAFETY: Pattern must be null-terminated.
 /// SAFETY: tokens buffer must have at least the input token_count number of RegexToken objects. They are allowed to be uninitialized.
-static int regex_parse(const char * pattern, RegexToken * tokens, int16_t * token_count, int32_t flags)
+static inline int regex_parse(const char * pattern, RegexToken * tokens, int16_t * token_count, int32_t flags)
 {
     int64_t tokens_len = *token_count;
     uint64_t pattern_len = strlen(pattern);
@@ -786,7 +804,7 @@ typedef struct _RegexMatcherState {
 // SAFETY: The text variable must be null-terminated, and start_i must be the index of a character within the string or its null terminator.
 // SAFETY: Tokens array must be terminated by a REMIMU_KIND_END token (done by default by regex_parse).
 // SAFETY: Partial capture data may be written even if the match fails.
-static int64_t regex_match(const RegexToken * tokens, const char * text, size_t start_i, uint16_t cap_slots, int64_t * cap_pos, int64_t * cap_span)
+static inline int64_t regex_match(const RegexToken * tokens, const char * text, size_t start_i, uint16_t cap_slots, int64_t * cap_pos, int64_t * cap_span)
 {
     (void)text;
     
@@ -1353,7 +1371,7 @@ static int64_t regex_match(const RegexToken * tokens, const char * text, size_t 
     return i;
 }
 
-static void print_regex_tokens(RegexToken * tokens)
+static inline void print_regex_tokens(RegexToken * tokens)
 {
     const char * kind_to_str[] = {
         "NORMAL",

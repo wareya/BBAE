@@ -20,8 +20,11 @@ funccall: @notokens
 expr_tail_0:
 funccall (expr_tail_0)?
 
-binexp_base:
+base_unexp:
 simple_expr (expr_tail_0)?
+
+base_binexp:
+("-")? base_unexp
 
 binexp_0: @left_recursive
 binexp_1 ("&&"|"||") binexp_0
@@ -36,8 +39,8 @@ binexp_3 ("+"|"-"|"&"|"|"|"^") binexp_0
 binexp_3
 
 binexp_3: @left_recursive
-binexp_base ("*"|"+*"|"/"|"+/"|"%"|"+%"|"<<"|">>"|"+>>") binexp_0
-binexp_base
+base_binexp ("*"|"+*"|"/"|"+/"|"%"|"+%"|"<<"|">>"|"+>>") binexp_0
+base_binexp
 
 expr:
 binexp_0
@@ -62,7 +65,7 @@ assign: @notokens
 name "=" expr ";"
 
 statement:
-assign | vardec | defer | if | while | funccall | return
+defer | if | while | vardec | assign | funccall | return
 
 block: @notokens
 "{" statement* "}"

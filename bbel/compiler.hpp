@@ -13,6 +13,8 @@
 #include "../src/bbae_builder.h"
 #include "../src/buffers.h"
 
+#include "grammar.hpp"
+
 struct VarData
 {
     Type type;
@@ -146,6 +148,14 @@ void compile(CompilerState & state, std::shared_ptr<ASTNode> ast)
         
         state.stack.push_back(build_constant_i64(val));
     }
+    else if (*ast->text == "float")
+    {
+        std::shared_ptr<std::string> text = ast->children[0]->text;
+        
+        double val = std::stold(*text);
+        
+        state.stack.push_back(build_constant_f64(val));
+    }
     else if (*ast->text == "vardec")
     {
         assert(ast->children.size() == 2 || ast->children.size() == 3);
@@ -218,6 +228,25 @@ void compile(CompilerState & state, std::shared_ptr<ASTNode> ast)
             assert(0);
         
         state.current_block = create_block(state.program, 0);
+    }
+    else if (*ast->text == "base_binexp")
+    {
+        if (ast->children.size() == 1)
+            compile(state, ast->children[0]);
+        else if (ast->children.size() == 2)
+        {
+            compile(state, ast->children[1]);
+            assert(((void)"TODO", 0));
+        }
+        else
+            assert(0);
+    }
+    else if (*ast->text == "base_unexp")
+    {
+        if (ast->children.size() == 1)
+            compile(state, ast->children[0]);
+        else
+            assert(((void)"TODO", 0));
     }
     else if (ast->text->starts_with("binexp_"))
     {

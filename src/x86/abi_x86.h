@@ -79,7 +79,7 @@ static uint8_t abi = ABI_SYSV;
 static size_t abi_i64s_used = 0;
 static size_t abi_f64s_used = 0;
 static size_t abi_stack_used = 0;
-static void abi_reset_state(void)
+static inline void abi_reset_state(void)
 {
     abi_i64s_used = 0;
     abi_f64s_used = 0;
@@ -117,7 +117,7 @@ static void abi_reset_state(void)
 // Later stack-spill arguments always have higher offsets, e.g. the first may be +48, second may be +56, etc.
 // This is true both on sysv and windows.
 //
-static int64_t abi_get_next_arg_basic(uint8_t word_is_float)
+static inline int64_t abi_get_next_arg_basic(uint8_t word_is_float)
 {
     if (abi == ABI_WIN)
     {
@@ -182,7 +182,7 @@ void abi_get_next_args_struct(uint8_t * eightwords_info, uint64_t * out, size_t 
 }
 */
 
-static int64_t abi_get_min_stack_size(void)
+static inline int64_t abi_get_min_stack_size(void)
 {
     if (abi == ABI_WIN)
         return 40;
@@ -190,7 +190,7 @@ static int64_t abi_get_min_stack_size(void)
         return 8;
 }
 
-static uint64_t abi_get_clobber_mask(void)
+static inline uint64_t abi_get_clobber_mask(void)
 {
     uint64_t clobber = 0;
     if (abi == ABI_WIN)
@@ -213,7 +213,7 @@ static uint64_t abi_get_clobber_mask(void)
 }
 
 // Values with indexes corresponding to callee-saved registers are multiplied by 2.
-static void abi_get_callee_saved_regs(uint8_t * registers, size_t max_count)
+static inline void abi_get_callee_saved_regs(uint8_t * registers, size_t max_count)
 {
     uint64_t clobber = abi_get_clobber_mask();
     for (size_t i = 0; i < 32 && i < max_count; i++)
@@ -223,7 +223,7 @@ static void abi_get_callee_saved_regs(uint8_t * registers, size_t max_count)
     }
 }
 
-static uint8_t abi_reg_is_callee_saved(uint64_t reg)
+static inline uint8_t abi_reg_is_callee_saved(uint64_t reg)
 {
     assert(reg < 32);
     uint64_t clobber = abi_get_clobber_mask();
