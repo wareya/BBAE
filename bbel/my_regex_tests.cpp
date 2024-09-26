@@ -243,7 +243,9 @@ void testify(void)
         
         "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22",
         //"1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25",
+        //"1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25   P",
         //"1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26",
+        //"1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26   P",
         //"1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27",
         //"1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28",
         //"1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28",
@@ -292,7 +294,7 @@ void testify(void)
         bool has_possessive = false;
         for (int32_t n = 0; n < token_count; n++)
         {
-            if (tokens[n].mode & RXTOK_MODE_POSSESSIVE)
+            if (tokens[n].mode & MYRE_MODE_POSSESSIVE)
             {
                 has_possessive = true;
                 break;
@@ -306,8 +308,9 @@ void testify(void)
         
         int errorcode;
         PCRE2_SIZE erroroffset;
-        pcre2_code * re = pcre2_compile(PCRE2_SPTR8(regex), PCRE2_ZERO_TERMINATED, PCRE2_ANCHORED | PCRE2_NO_UTF_CHECK,
-                                        &errorcode, &erroroffset, NULL);
+        pcre2_code * re = pcre2_compile(PCRE2_SPTR8(regex), PCRE2_ZERO_TERMINATED,
+            PCRE2_ANCHORED | PCRE2_NO_UTF_CHECK | PCRE2_DOTALL | PCRE2_NO_AUTO_POSSESS | PCRE2_NO_DOTSTAR_ANCHOR | PCRE2_NO_START_OPTIMIZE,
+            &errorcode, &erroroffset, NULL);
         
         for (size_t j = 0; j < sizeof(texts) / sizeof(texts[0]); j++)
         {
