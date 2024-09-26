@@ -294,7 +294,7 @@ void testify(void)
         bool has_possessive = false;
         for (int32_t n = 0; n < token_count; n++)
         {
-            if (tokens[n].mode & MYRE_MODE_POSSESSIVE)
+            if (tokens[n].mode & REMIMU_MODE_POSSESSIVE)
             {
                 has_possessive = true;
                 break;
