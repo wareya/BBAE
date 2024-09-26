@@ -15,6 +15,7 @@
 void testify(void)
 {
     static const char * regexes[] = {
+        "",
         "(b|a|as|q)*X",
         
         "(a?)+?a{10}",
@@ -263,6 +264,7 @@ void testify(void)
             }
         }
         
+        printf("token count: %d\n", token_count);
         print_regex_tokens(tokens);
         
         std::string regex_str = regex;
@@ -313,7 +315,7 @@ void testify(void)
             memset(cap_pos, 0xFF, sizeof(cap_pos));
             memset(cap_span, 0xFF, sizeof(cap_span));
             
-            int64_t match_len = regex_match(tokens, text, 16, cap_pos, cap_span);
+            int64_t match_len = regex_match(tokens, text, 0, 16, cap_pos, cap_span);
             t = std::chrono::duration_cast<std::chrono::microseconds>(clock::now() - start).count() / 1000000.0;
             
             assert(match_len != -3);
@@ -372,7 +374,7 @@ void testify(void)
     memset(cap_span, 0xFF, sizeof(cap_span));
     //int64_t matchlen = regex_match(tokens, "a,b,easbe_1:aaa,_,:a", 5, cap_pos, cap_span);
     //int64_t matchlen = regex_match(tokens, "aabqaaaaba", 5, cap_pos, cap_span);
-    int64_t matchlen = regex_match(tokens, "aaaaaabbbabaqa", 5, cap_pos, cap_span);
+    int64_t matchlen = regex_match(tokens, "aaaaaabbbabaqa", 0, 5, cap_pos, cap_span);
     printf("Match length: %zd\n", matchlen);
     for (int i = 0; i < 5; i++)
         printf("Capture %d: %zd plus %zd\n", i, cap_pos[i], cap_span[i]);

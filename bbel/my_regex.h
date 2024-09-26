@@ -11,14 +11,15 @@ FEATURES
     - Statically known memory usage (no heap allocation or recursion)
     - Groups with or without capture, and with or without quantifiers
     - Supported escapes:
-    - - 2-digit hex: \x00~\xFF (or lowercase, or mixed)
-    - - \r, \n, \t, \v, \f
-    - - \d, \s, \w, \D, \S, \W
-    - - \b, \B (not fully supported in zero-size quantified groups, but even then, usually supported)
+    - - 2-digit hex: e.g. \x00, \xFF, or lowercase, or mixed case
+    - - \r, \n, \t, \v, \f (whitespace characters)
+    - - \d, \s, \w, \D, \S, \W (digit, space, and word character classes)
+    - - \b, \B word boundary and non-word-boundary anchors (not fully supported in zero-size quantified groups, but even then, usually supported)
     - - Escaped literal characters: {}[]-()|^$*+?:./\
     - - - Escapes work in character classes, except for '$'
     - Character classes, including disjoint ranges, proper handling of bare [ and trailing -, etc
-    - - . matches all characters, including newlines
+    - - Dot (.) matches all characters, including newlines, unless RXTOK_FLAG_DOT_NO_NEWLINES is passed as a flag to regex_parse
+    - - Dot (.) only matches at most one byte at a time, so when RXTOK_FLAG_DOT_NO_NEWLINES is not used, matching \r\n requires two dots
     - Anchors (^ and $)
     - - Same support caveats as \b, \B apply
     - Basic quantifiers (*, +, ?)
@@ -33,6 +34,8 @@ FEATURES
 
 NOT SUPPORTED
 
+    - Strings with non-terminal null characters
+    - Unicode, unicode character classes, etc
     - Exact POSIX regex semantics (posix-style greediness etc)
     - Backreferences
     - Lookbehind
@@ -85,7 +88,7 @@ USAGE
 #include <string.h>
 #include <assert.h>
 
-static const int RXTOK_FLAG_DOT_NEWLINES = 1;
+static const int RXTOK_FLAG_DOT_NO_NEWLINES = 1;
 
 static const uint8_t RXTOK_KIND_NORMAL      = 0;
 static const uint8_t RXTOK_KIND_OPEN        = 1;
@@ -125,14 +128,21 @@ static int regex_parse(const char * pattern, RegexToken * tokens, int16_t * toke
 {
     int64_t tokens_len = *token_count;
     uint64_t pattern_len = strlen(pattern);
+    if (token_count == 0)
+        return -2;
+    
+    RegexToken token;
+    #define _REGEX_CLEAR_TOKEN(TOKEN) { memset(&(TOKEN), 0, sizeof(RegexToken)); token.count_lo = 1; token.count_hi = 2; }
+    _REGEX_CLEAR_TOKEN(token);
+    
     if (pattern_len == 0)
     {
-        *token_count = 0;
+        token.kind = RXTOK_KIND_END;
+        tokens[0] = token;
+        *token_count = 1;
         return 0;
     }
     
-    if (token_count == 0)
-        return -2;
     
     // 0: normal
     // 1: just saw a backslash
@@ -156,11 +166,6 @@ static int regex_parse(const char * pattern, RegexToken * tokens, int16_t * toke
     
     int char_class_mem = -1;
     
-    RegexToken token;
-    
-    #define _REGEX_CLEAR_TOKEN(TOKEN) { memset(&(TOKEN), 0, sizeof(RegexToken)); token.count_lo = 1; token.count_hi = 2; }
-    
-    _REGEX_CLEAR_TOKEN(token);
     
     #define _REGEX_DO_INVERT() { \
         for (int n = 0; n < 16; n++) \
@@ -485,7 +490,7 @@ static int regex_parse(const char * pattern, RegexToken * tokens, int16_t * toke
                 {
                     //puts("setting ALL of mask...");
                     _REGEX_SET_MASK_ALL();
-                    if (!(flags & RXTOK_FLAG_DOT_NEWLINES))
+                    if (flags & RXTOK_FLAG_DOT_NO_NEWLINES)
                     {
                         token.mask[1] ^= 0x04; // \n
                         token.mask[1] ^= 0x20; // \r
@@ -788,10 +793,10 @@ typedef struct _RegexMatcherState {
 // Returns -2 if the matcher ran out of memory or the regex is too complex.
 // Returns -3 if the regex is somehow invalid.
 // The first cap_slots capture positions and spans (lengths) will be written to cap_pos and cap_span. If zero, will not be written to.
-// SAFETY: The text variable must be null-terminated.
+// SAFETY: The text variable must be null-terminated, and start_i must be the index of a character within the string or its null terminator.
 // SAFETY: Tokens array must be terminated by a RXTOK_KIND_END token (done by default by regex_parse).
 // SAFETY: Partial capture data may be written even if the match fails.
-static int64_t regex_match(const RegexToken * tokens, const char * text, uint16_t cap_slots, int64_t * cap_pos, int64_t * cap_span)
+static int64_t regex_match(const RegexToken * tokens, const char * text, size_t start_i, uint16_t cap_slots, int64_t * cap_pos, int64_t * cap_span)
 {
     (void)text;
     
@@ -854,7 +859,7 @@ static int64_t regex_match(const RegexToken * tokens, const char * text, uint16_
     RegexMatcherState rewind_stack[stack_size_max];
     uint16_t stack_n = 0;
     
-    uint64_t i = 0;
+    uint64_t i = start_i;
     
     uint64_t range_min = 0;
     uint64_t range_max = 0;
