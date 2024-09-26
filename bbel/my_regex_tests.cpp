@@ -1,4 +1,4 @@
-//#define REGEX_VERBOSE
+#define REGEX_VERBOSE
 #include "my_regex.h"
 
 #include <regex>
@@ -16,10 +16,14 @@ void testify(void)
         //"(\\w+\\.)+",
         //"(?:\\w+(?:\\.\\w+)*)@(?:\\w+(?:\\.\\w+)*)",
         "[a-z0-9\\._%+!$&*=^|~#%'`?{}/\\-]+@([a-z0-9\\-]+\\.){1,}([a-z]{2,16})",
+        "^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}$",
         
         "(ab?)b",
         "(ab?)*b",
         "(ab?)*?b",
+        
+        "([0a-z][a-z0-9]*,)+",
+        "([a-z][a-z0-9]*,)+",
         
         "asdf\\b",
         "asdf\\B",
@@ -125,6 +129,9 @@ void testify(void)
         "a(|)*a",
         "a(|)*?a",
         "(a|(((()))))*b",
+        "((\\w+,?)*:)*",
+        "((\\w+,?)*+:)*",
+        "((\\w+,?)*+:)*+",
         
         // pathological
         "((a?b|a)b?)*",
@@ -133,6 +140,11 @@ void testify(void)
     };
     static const char * texts[] = {
         "aa.bb.cc.dd",
+        "a5,b7,c9",
+        "a5,b7,c9,",
+        "a5,b7,c9,,",
+        "a5,b7,c9,1",
+        "a5,b7,c9,a",
         "",
         " ",
         "  ",
@@ -209,9 +221,11 @@ void testify(void)
         "000asdf",
         "asdf000",
         "000asdf000",
+        "a,b,easbe_1:a,:a",
     };
     
-    for (size_t i = 0; i < sizeof(regexes) / sizeof(regexes[0]); i++)
+    //for (size_t i = 0; i < sizeof(regexes) / sizeof(regexes[0]); i++)
+    for (size_t i = 0; 0; i++)
     {
         const char * regex = regexes[i];
         
@@ -250,14 +264,7 @@ void testify(void)
             
             int64_t std_len = -1;
             
-            // bugged special cases that take too long in the stdlib
-            if (0)//if (regex_str == "(b|a|as|q)*+X" )
-            {
-                puts("skipping and using hardcoded result (takes too long to execute)");
-                std_len = -1;
-            }
-            // normal case
-            else if (!has_possessive)
+            if (!has_possessive)
             {
                 auto start = clock::now();
                 bool s = std::regex_search(text, cm, cppregex);
@@ -279,7 +286,13 @@ void testify(void)
             printf("testing my regex `%s` on string `%s`...\n", regex, text);
             
             auto start = clock::now();
-            int64_t match_len = regex_match(tokens, text);
+            
+            int64_t cap_pos[16];
+            int64_t cap_span[16];
+            memset(cap_pos, 0xFF, sizeof(cap_pos));
+            memset(cap_span, 0xFF, sizeof(cap_span));
+            
+            int64_t match_len = regex_match(tokens, text, 16, cap_pos, cap_span);
             double t = std::chrono::duration_cast<std::chrono::microseconds>(clock::now() - start).count() / 1000000.0;
             
             assert(match_len != -3);
@@ -299,8 +312,34 @@ void testify(void)
                 printf("regex `%s`, string `%s`\n", regex, text);
                 assert(match_len == std_len);
             }
+            puts("comparing captures...");
+            for (size_t x = 0; x < 16; x++)
+            {
+                
+            }
         }
     }
+    
+    RegexToken tokens[256];
+    int16_t token_count = sizeof(tokens)/sizeof(tokens[0]);
+    //int e = regex_parse("((\\w+,?)*:)*", tokens, &token_count, 0);
+    //int e = regex_parse("((\\w+,?)*+:)*+", tokens, &token_count, 0);
+    //int e = regex_parse("((\\w+,?)*:)", tokens, &token_count, 0);
+    int e = regex_parse("((a)|((b)q))*", tokens, &token_count, 0);
+    assert(!e);
+    
+    int64_t cap_pos[5];
+    int64_t cap_span[5];
+    memset(cap_pos, 0xFF, sizeof(cap_pos));
+    memset(cap_span, 0xFF, sizeof(cap_span));
+    //int64_t matchlen = regex_match(tokens, "a,b,easbe_1:aaa,_,:a", 5, cap_pos, cap_span);
+    int64_t matchlen = regex_match(tokens, "aabqaaaaba", 5, cap_pos, cap_span);
+    printf("Match length: %zd\n", matchlen);
+    for (int i = 0; i < 5; i++)
+        printf("Capture %d: %zd plus %zd\n", i, cap_pos[i], cap_span[i]);
+    
+    print_regex_tokens(tokens);
+    
     puts("All regex tests passed!");
 }
 

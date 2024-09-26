@@ -688,11 +688,14 @@ typedef struct _RegexMatcherState {
 
 // Returns match length if text starts with a regex match.
 // Returns -1 if the text doesn't start with a regex match.
-// Returns -2 if the matcher ran out of memory.
+// Returns -2 if the matcher ran out of memory or the regex is too complex.
 // Returns -3 if the regex is somehow invalid.
+// The first cap_slots capture positions and spans (lengths) will be written to cap_pos and cap_span. If zero, will not be written to.
 // SAFETY: The text variable must be null-terminated.
 // SAFETY: Tokens array must be terminated by a RXTOK_KIND_END token (done by default by regex_parse).
-static int64_t regex_match(const RegexToken * tokens, const char * text)
+// SAFETY: Partial capture data may be written even if the match fails.
+// SAFETY: Unmatched captures might or might not be uninitialized on return.
+static int64_t regex_match(const RegexToken * tokens, const char * text, uint16_t cap_slots, int64_t * cap_pos, int64_t * cap_span)
 {
     (void)text;
     
@@ -710,16 +713,29 @@ static int64_t regex_match(const RegexToken * tokens, const char * text)
     const uint16_t stack_size_max = 1024;
 #endif
     const uint16_t aux_stats_size = 1024;
-    
-    uint64_t tokens_len = 0;
-    uint32_t k = 0;
+    if (cap_slots > aux_stats_size)
+        cap_slots = aux_stats_size;
     
     // quantified group state
     uint8_t q_group_accepts_zero[aux_stats_size];
     uint32_t q_group_state[aux_stats_size]; // number of repetitions
     uint32_t q_group_stack[aux_stats_size]; // location of most recent corresponding ) on stack. 0 means nowhere
+    
+    uint16_t q_group_cap_index[aux_stats_size];
+    memset(q_group_cap_index, 0xFF, sizeof(q_group_cap_index));
+    
+    uint64_t tokens_len = 0;
+    uint32_t k = 0;
+    uint16_t caps = 0;
+    
     while (tokens[k].kind != RXTOK_KIND_END)
     {
+        if (tokens[k].kind == RXTOK_KIND_OPEN && caps < cap_slots)
+        {
+            q_group_cap_index[tokens[k].mask[0]] = caps;
+            q_group_cap_index[tokens[k + tokens[k].pair_offset].mask[0]] = caps;
+            caps += 1;
+        }
         k += 1;
         if (tokens[k].kind == RXTOK_KIND_CLOSE || tokens[k].kind == RXTOK_KIND_OPEN || tokens[k].kind == RXTOK_KIND_NCOPEN)
         {
@@ -866,8 +882,8 @@ static int64_t regex_match(const RegexToken * tokens, const char * text)
                 if (!just_rewinded)
                 {
                     IF_VERBOSE(printf("hit OPEN. i is %zd, depth is %d\n", i, stack_n);)
-                    // need this to be able to detect and reject zero-size matches
-                    //q_group_state[tokens[k].mask[0]] = i;
+                    // need this to reach captures in some cases
+                    q_group_state[tokens[k].mask[0]] = i;
                     
                     // if we're lazy and the min length is 0, we need to try the non-group case first
                     if ((tokens[k].mode & RXTOK_MODE_LAZY) && (tokens[k].count_lo == 0 || q_group_accepts_zero[tokens[k + tokens[k].pair_offset].mask[0]]))
@@ -904,22 +920,6 @@ static int64_t regex_match(const RegexToken * tokens, const char * text)
                             k += tokens[k-1].pair_offset - 1;
                         else if (tokens[k-1].kind == RXTOK_KIND_OPEN || tokens[k-1].kind == RXTOK_KIND_NCOPEN)
                             k += tokens[k-1].mask[15] - 1;
-                        /*
-                        //IF_VERBOSE(printf("after start kind: %d\n", tokens[k+1].kind);)
-                        int32_t pb = 0;
-                        while (tokens[k].kind != RXTOK_KIND_END)
-                        {
-                            if (pb == 0 && (tokens[k].kind == RXTOK_KIND_CLOSE || tokens[k].kind == RXTOK_KIND_OR))
-                                break;
-                            if (tokens[k].kind == RXTOK_KIND_OPEN || tokens[k].kind == RXTOK_KIND_NCOPEN)
-                                pb += 1;
-                            else if (tokens[k].kind == RXTOK_KIND_CLOSE)
-                                pb -= 1;
-                            IF_VERBOSE(printf("....%d += 1 (%d)\n", k, pb);)
-                            
-                            k += 1;
-                        }
-                        */
                         
                         IF_VERBOSE(printf("kamakama %d %d\n", k, tokens[k].kind);)
                         
@@ -930,14 +930,11 @@ static int64_t regex_match(const RegexToken * tokens, const char * text)
                         if (tokens[k].kind == RXTOK_KIND_CLOSE)
                         {
                             IF_VERBOSE(puts("!!~!~!~~~~!!~~!~   hit CLOSE. rewinding");)
-                            /*
-                            _REWIND_OR_ABORT()
-                            continue;
-                            */
                             // do nothing and continue on if we don't need this group
                             if (tokens[k].count_lo == 0 || q_group_accepts_zero[tokens[k].mask[0]])
                             {
                                 IF_VERBOSE(puts("continuing because we don't need this group");)
+                                
                                 q_group_state[tokens[k].mask[0]] = 0;
                                 continue;
                             }
@@ -963,7 +960,18 @@ static int64_t regex_match(const RegexToken * tokens, const char * text)
             }
             else if (tokens[k].kind == RXTOK_KIND_CLOSE)
             {
-                if (tokens[k].count_lo != 1 || tokens[k].count_hi != 2)
+                if (tokens[k].count_lo == 1 && tokens[k].count_hi == 2)
+                {
+                    IF_VERBOSE(puts("basic CLOSE.");)
+                    uint16_t cap_index = q_group_cap_index[tokens[k].mask[0]];
+                    if (cap_index != 0xFFFF)
+                    {
+                        IF_VERBOSE(printf("has cap index %d. compare... %zd %zd\n", cap_index, i, cap_pos[cap_index]);)
+                        cap_pos[cap_index] = q_group_state[tokens[k + tokens[k].pair_offset].mask[0]];
+                        cap_span[cap_index] = i - cap_pos[cap_index];
+                    }
+                }
+                else
                 {
                     IF_VERBOSE(puts("closer test.....");)
                     if (!just_rewinded)
@@ -1001,7 +1009,8 @@ static int64_t regex_match(const RegexToken * tokens, const char * text)
                         // fallback case to detect zero-length matches when we backtracked into the inside of this group
                         // after an attempted parse of a second copy of itself
                         uint8_t force_zero = 0;
-                        if ((tokens[k].mode & RXTOK_MODE_LAZY) && prev != 0 && (uint32_t)rewind_stack[prev].i > (uint32_t)i)
+                        if ((tokens[k].mode & RXTOK_MODE_LAZY)
+                            && prev != 0 && (uint32_t)rewind_stack[prev].i > (uint32_t)i)
                         {
                             // find matching open paren
                             size_t n = stack_n - 1;
@@ -1055,6 +1064,13 @@ static int64_t regex_match(const RegexToken * tokens, const char * text)
                                     stack_n -= 1;
                                 if (stack_n == 0)
                                     return -1;
+                                
+                                uint16_t cap_index = q_group_cap_index[tokens[k].mask[0]];
+                                if (cap_index != 0xFFFF)
+                                {
+                                    cap_pos[cap_index] = rewind_stack[stack_n].i;
+                                    cap_span[cap_index] = i - rewind_stack[stack_n].i;
+                                }
                             }
                             // continue to next match if sane
                             if ((uint32_t)q_group_state[tokens[k + tokens[k].pair_offset].mask[0]] < (uint32_t)i)
@@ -1111,7 +1127,6 @@ static int64_t regex_match(const RegexToken * tokens, const char * text)
             }
             else if (tokens[k].kind == RXTOK_KIND_NORMAL)
             {
-                //puts("a");
                 if (!just_rewinded)
                 {
                     uint64_t n = 0;
@@ -1210,10 +1225,29 @@ static int64_t regex_match(const RegexToken * tokens, const char * text)
         //printf("k... %d\n", k);
     }
     
+    if (caps != 0)
+    {
+        for (size_t n = 0; n < stack_n; n++)
+        {
+            RegexMatcherState s = rewind_stack[n];
+            if (tokens[s.k].kind == RXTOK_KIND_OPEN || tokens[s.k].kind == RXTOK_KIND_CLOSE)
+            {
+                uint16_t cap_index = q_group_cap_index[tokens[s.k].mask[0]];
+                if (cap_index == 0xFFFF)
+                    continue;
+                if (tokens[s.k].kind == RXTOK_KIND_OPEN)
+                    cap_pos[cap_index] = s.i;
+                else
+                    cap_span[cap_index] = s.i - cap_pos[cap_index];
+            }
+        }
+    }
+    
     #undef _REWIND_DO_SAVE
     #undef _REWIND_OR_ABORT
     #undef _REGEX_CHECK_IS_W
     #undef _P_TEXT_HIGHLIGHTED
+    #undef IF_VERBOSE
     
     return i;
 }
