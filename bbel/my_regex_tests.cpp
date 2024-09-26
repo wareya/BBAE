@@ -27,6 +27,15 @@ void testify(void)
         "(b|a|as|q)*?X",
         "(b|a|as|q)+X",
         
+        "((a)|(b))+",
+        "((a)|(b))++",
+        "((a)|(b))+?",
+        "((a)|(b))*",
+        "((a)|(b))*+",
+        "((a)|(b))*?",
+        "((a)|((b)q))*",
+        "((a)|((b)q))*+",
+        
         "(|a?)+?a{10}",
         "(a?)*a{10}",
         "(a?)*?a{10}",
@@ -277,6 +286,8 @@ void testify(void)
         "uh-uh",
         "words, yeah",
         "mistaken bogus regex",
+        
+        "aaaaaabbbabaqa",
     };
     
     
