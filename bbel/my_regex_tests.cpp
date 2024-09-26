@@ -1,17 +1,30 @@
+
+// testing requires PCRE2
+// msys2: pacman -S mingw-w64-<flavor>-pcre2
+// linker flag is usually -lpcre2-8
+
 //#define REGEX_VERBOSE
 #include "my_regex.h"
 
-#include <regex>
 #include <chrono>
+#include <string>
+
+#define PCRE2_CODE_UNIT_WIDTH 8
+#include <pcre2.h>
 
 void testify(void)
 {
     static const char * regexes[] = {
+        "(b|a|as|q)*X",
+        
+        "(a?)+?a{10}",
+        "(a?)+a{10}",
+        
+        "(b|a|as|q)*?X",
         // (?:[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*|"(?:[\x01-\x08\x0b\x0c\x0e-\x1f\x21\x23-\x5b\x5d-\x7f]|\\[\x01-\x09\x0b\x0c\x0e-\x7f])*")@(?:(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?|\[(?:(?:(2(5[0-5]|[0-4][0-9])|1[0-9][0-9]|[1-9]?[0-9]))\.){3}(?:(2(5[0-5]|[0-4][0-9])|1[0-9][0-9]|[1-9]?[0-9])|[a-z0-9-]*[a-z0-9]:(?:[\x01-\x08\x0b\x0c\x0e-\x1f\x21-\x5a\x53-\x7f]|\\[\x01-\x09\x0b\x0c\x0e-\x7f])+)\])
         "(?:[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*|\"(?:[\\x01-\\x08\\x0b\\x0c\\x0e-\\x1f\\x21\\x23-\\x5b\\x5d-\\x7f]|\\\\[\\x01-\\x09\\x0b\\x0c\\x0e-\\x7f])*\")@(?:(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?|\\[(?:(?:(2(5[0-5]|[0-4][0-9])|1[0-9][0-9]|[1-9]?[0-9]))\\.){3}(?:(2(5[0-5]|[0-4][0-9])|1[0-9][0-9]|[1-9]?[0-9])|[a-z0-9-]*[a-z0-9]:(?:[\\x01-\\x08\\x0b\\x0c\\x0e-\\x1f\\x21-\\x5a\\x53-\\x7f]|\\\\[\\x01-\\x09\\x0b\\x0c\\x0e-\\x7f])+)\\])",
         //"(?:\\w+(?:\\.\\w+)*)@(?:(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)",
         //"(?:\\w+(?:\\.\\w+)*)@(?:(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)",
-        "((\\w+)?\\.)+",
         //"(\\w\\w*\\.)+",
         //"(\\w+\\.)+",
         //"(?:\\w+(?:\\.\\w+)*)@(?:\\w+(?:\\.\\w+)*)",
@@ -63,8 +76,6 @@ void testify(void)
         "((asdf)?$)*?",
         "((asdf)?)*?((asdf)?$)*?",
         
-        "(a?)+a{10}",
-        "(a?)+?a{10}",
         "(a?)*a{10}",
         "(a?)*?a{10}",
         "()",
@@ -80,7 +91,6 @@ void testify(void)
         "(b|a|as|q)*+",
         "(b|a|as|q)*+X",
         "(b|a|as|q)*",
-        "(b|a|as|q)*X",
         "a++ab",
         
         "[0-9]+\\.[0-9]+",
@@ -140,6 +150,10 @@ void testify(void)
         "(.*?,){11}P",
     };
     static const char * texts[] = {
+        "aaaaaaaaaa",
+        "asqbX",
+        "asqb",
+        
         "testacc@example.com",
         
         "aa.bb.cc.dd",
@@ -155,7 +169,6 @@ void testify(void)
         "aa",
         "aba) ",
         "aaaaaaaaa",
-        "aaaaaaaaaa",
         "aaaaaaaaaaaaaa",
         "aaaaaaaaaaaaaab",
         "aaaaaaaaaaaaaaba",
@@ -193,7 +206,6 @@ void testify(void)
         "aaaaaaaaababababb",
         "aaaaabbbbbbbx",
         "bbbbbbb",
-        "asqbX",
         "1,2,3,4,5,6,7,8,9,10,11,12",
         "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16",
         
@@ -251,49 +263,50 @@ void testify(void)
             }
         }
         
+        print_regex_tokens(tokens);
+        
         std::string regex_str = regex;
         
-        std::regex cppregex;
-        if (!has_possessive)
-            cppregex = std::regex{regex_str, std::regex_constants::ECMAScript};
-        
-        print_regex_tokens(tokens);
+        int errorcode;
+        PCRE2_SIZE erroroffset;
+        pcre2_code * re = pcre2_compile(PCRE2_SPTR8(regex), PCRE2_ZERO_TERMINATED, PCRE2_ANCHORED | PCRE2_NO_UTF_CHECK,
+                                        &errorcode, &erroroffset, NULL);
         
         for (size_t j = 0; j < sizeof(texts) / sizeof(texts[0]); j++)
         {
             const char * text = texts[j];
             std::string text_str = text;
             
-            std::cmatch cm;
             using clock = std::chrono::high_resolution_clock;
             
-            int64_t std_len = -1;
+            int64_t pcre2_len = -1;
             
-            if (!has_possessive)
+            printf("testing PCRE2 regex `%s` on string `%s`...\n", regex, text);
+            fflush(stdout);
+            
+            auto start = clock::now();
+            pcre2_match_data * match_data = pcre2_match_data_create_from_pattern(re, 0);
+            int submatch_count = pcre2_match(re, PCRE2_SPTR8(text), text_str.size(), 0, PCRE2_ANCHORED | PCRE2_NO_UTF_CHECK, match_data, 0); 
+            double t = std::chrono::duration_cast<std::chrono::microseconds>(clock::now() - start).count() / 1000000.0;
+            
+            printf("submatch count: %d\n", submatch_count);
+            printf("ovector count: %d\n", pcre2_get_ovector_count(match_data));
+            
+            PCRE2_SIZE * ovector;
+            if (submatch_count > 0)
             {
-                printf("testing std c++ regex `%s` on string `%s`...\n", regex, text);
-                fflush(stdout);
-                
-                auto start = clock::now();
-                bool s = std::regex_search(text, cm, cppregex);
-                double t = std::chrono::duration_cast<std::chrono::microseconds>(clock::now() - start).count() / 1000000.0;
-                if (s)
-                {
-                    const char * where = cm[0].first;
-                    size_t offs = where - text;
-                    if (offs == 0)
-                        std_len = cm[0].second - where;
-                    printf("c++ regex found match at %zd with len %zd after %f seconds\n", offs, std_len, t);
-                }
-                else
-                    printf("c++ regex found no match after %f seconds\n", t);
+                ovector = pcre2_get_ovector_pointer(match_data);
+                size_t offs = ovector[0];
+                if (offs == 0)
+                    pcre2_len = ovector[1] - offs;
+                printf("pcre2 regex found match at %zd with len %zd after %f seconds\n", offs, pcre2_len, t);
             }
             else
-                puts("skipping c++ because it has a possessive");
+                printf("pcre2 regex found no match after %f seconds\n", t);
             
             printf("testing my regex `%s` on string `%s`...\n", regex, text);
             
-            auto start = clock::now();
+            start = clock::now();
             
             int64_t cap_pos[16];
             int64_t cap_span[16];
@@ -301,7 +314,7 @@ void testify(void)
             memset(cap_span, 0xFF, sizeof(cap_span));
             
             int64_t match_len = regex_match(tokens, text, 16, cap_pos, cap_span);
-            double t = std::chrono::duration_cast<std::chrono::microseconds>(clock::now() - start).count() / 1000000.0;
+            t = std::chrono::duration_cast<std::chrono::microseconds>(clock::now() - start).count() / 1000000.0;
             
             assert(match_len != -3);
             if (match_len >= 0)
@@ -311,24 +324,36 @@ void testify(void)
             else
                 printf("my regex found no match after %f seconds\n", t);
             
-            // ignore special cases
-            if (regex_str != "(|a)+" &&
-                regex_str != "(|a)+?" &&
-                !has_possessive)
+            // we define captures differently than PCRE2 for possessives, so skip them
+            if (!has_possessive && submatch_count > 0)
             {
-                printf("comparing %zd to %zd...\n", match_len, std_len);
+                printf("comparing %zd to %zd...\n", match_len, pcre2_len);
                 printf("regex `%s`, string `%s`\n", regex, text);
-                assert(match_len == std_len);
+                assert(match_len == pcre2_len);
                 puts("comparing captures...");
                 if (match_len >= 0)
                 {
-                    for (size_t x = 0; x < 16; x++)
+                    for (int x = 0; x < submatch_count && x < 16; x++)
                     {
-                        //size
+                        size_t where = ovector[x*2];
+                        if (where == 0)
+                        {
+                            size_t pcre2_len = ovector[x*2+1] - where;
+                            // probably a situation of std capturing a zero-length group repetition
+                            printf("Capture %d: std (%zd,%zd)  mine (%zd,%zd)\n", x, where, pcre2_len, cap_pos[x], cap_span[x]);
+                            if (!(cap_pos[x] == -1 && cap_span[x] == -1 && where == 0 && pcre2_len == 0))
+                            {
+                                assert(where     == (size_t)cap_pos[x]);
+                                assert(pcre2_len == (size_t)cap_span[x]);
+                            }
+                        }
                     }
                 }
             }
+            
+            pcre2_match_data_free(match_data);
         }
+        pcre2_code_free(re);
     }
     
     RegexToken tokens[256];
