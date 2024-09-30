@@ -518,7 +518,7 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
                     EncOperand op1 = get_basic_encoperand(op1_op.value);
                     if (op1_op.value->variant == VALUE_STACKADDR)
                     {
-                        op1.mem.size = 8;
+                        op1 = zy_mem_change_size(op1, 8);
                         zy_emit_2(code, INST_LEA, op0, op1);
                     }
                     else

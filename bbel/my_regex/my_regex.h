@@ -10,15 +10,33 @@
 
 FUNCTIONS
 
-    static inline int regex_parse(const char * pattern, RegexToken * tokens, int16_t * token_count, int32_t flags)
-    static inline int64_t regex_match(const RegexToken * tokens, const char * text, size_t start_i, uint16_t cap_slots, int64_t * cap_pos, int64_t * cap_span)
-    static inline void print_regex_tokens(RegexToken * tokens)
+    // Returns 0 on success, or -1 on invalid or unsupported regex, or -2 on not enough tokens given to parse regex.
+    static inline int regex_parse(
+        const char * pattern,       // Regex pattern to parse.
+        RegexToken * tokens,        // Output buffer of token_count regex tokens.
+        int16_t * token_count,      // Maximum allowed number of tokens to write
+        int32_t flags               // Optional bitflags.
+    )
+    
+    // Returns match length, or -1 on no match, or -2 on out of memory, or -3 if the regex is invalid.
+    static inline int64_t regex_match(
+        const RegexToken * tokens,  // Parsed regex to match against text.
+        const char * text,          // Text to match against tokens.
+        size_t start_i,             // index value to match at.
+        uint16_t cap_slots,         // Number of allowed capture info output slots.
+        int64_t * cap_pos,          // Capture position info output buffer.
+        int64_t * cap_span          // Capture length info output buffer.
+    ) 
+    
+    static inline void print_regex_tokens(
+        RegexToken * tokens     // Regex tokens to spew to stdout, for debugging.
+    )
 
 PERFORMANCE
 
-    On simple cases, Remimu is as fast as PCRE2, sometimes slightly faster. Regex parsing/compilation is also much faster (around 4x to 10x), so single-shot regexes are often faster than PCRE2.
+    On simple cases, Remimu's match speed is similar to PCRE2. Regex parsing/compilation is also much faster (around 4x to 10x), so single-shot regexes are often faster than PCRE2.
 
-    HOWEVER: Remimu is a pure backtracking engine, and has `O(2^x)` complexity on regexes with catastrophic backtracking. Beware!
+    HOWEVER: Remimu is a pure backtracking engine, and has `O(2^x)` complexity on regexes with catastrophic backtracking. It can be much, much, MUCH slower than PCRE2. Beware!
 
     Remimu uses length-checked fixed memory buffers with no recursion, so memory usage is statically known.
 
@@ -26,7 +44,7 @@ FEATURES
 
     - Lowest-common-denominator common regex syntax
     - Based on backtracking (slow in the worst case, but fast in the best case)
-    - 8-bit only, not unicode
+    - 8-bit only, no utf-16 or utf-32
     - Statically known memory usage (no heap allocation or recursion)
     - Groups with or without capture, and with or without quantifiers
     - Supported escapes:
@@ -54,7 +72,7 @@ FEATURES
 NOT SUPPORTED
 
     - Strings with non-terminal null characters
-    - Unicode, unicode character classes, etc
+    - Unicode character classes (matching single utf-8 characters works regardless)
     - Exact POSIX regex semantics (posix-style greediness etc)
     - Backreferences
     - Lookbehind/Lookahead

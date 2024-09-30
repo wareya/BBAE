@@ -9,6 +9,7 @@
 #include "memory.h"
 #include "bbae_api_jit.h"
 
+/*
 void print_asm(uint8_t * code, size_t len)
 {
     //FILE * logfile = 0;
@@ -29,6 +30,7 @@ void print_asm(uint8_t * code, size_t len)
         runtime_address += instruction.info.length;
     }
 }
+*/
 
 void print_double(double f)
 {
@@ -83,7 +85,7 @@ int main(int argc, char ** argv)
         printf("%02X ", jitinfo.jit_code[i]);
     puts("");
     
-    print_asm(jitinfo.jit_code, jitinfo.raw_code->len);
+    //print_asm(jitinfo.jit_code, jitinfo.raw_code->len);
 #endif
     
     // suppress non-posix-compliant gcc function pointer casting warning

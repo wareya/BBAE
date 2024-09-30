@@ -32,7 +32,7 @@ static inline uint8_t * alloc_data_loc(void * alloc)
     return ((uint8_t *)alloc) + ALLOC_PREFIX_SIZE;
 }
 
-static inline uint8_t * alloc_list = 0;
+static uint8_t * alloc_list = 0;
 static inline void * zero_alloc(size_t n)
 {
     n += ALLOC_PREFIX_SIZE;
