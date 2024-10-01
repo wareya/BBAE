@@ -69,6 +69,13 @@ Type parse_type(std::shared_ptr<ASTNode> ast)
         assert(((void)"Invalid type!", 0));
 }
 
+bool std_starts_with(const std::string & a, const std::string & b)
+{
+    if (a.size() < b.size())
+        return false;
+    return strncmp(a.data(), b.data(), b.size()) == 0;
+}
+
 void compile(CompilerState & state, std::shared_ptr<ASTNode> ast)
 {
     auto add_arg_prefix = [](std::shared_ptr<std::string> str) -> std::shared_ptr<std::string>
@@ -248,7 +255,7 @@ void compile(CompilerState & state, std::shared_ptr<ASTNode> ast)
         else
             assert(((void)"TODO", 0));
     }
-    else if (ast->text->starts_with("binexp_"))
+    else if (std_starts_with(*ast->text, std::string("binexp_")))
     {
         assert(ast->children.size() == 1 || ast->children.size() == 3);
         if (ast->children.size() == 1)

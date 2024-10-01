@@ -39,7 +39,7 @@ static EncOperand get_basic_encoperand_mem(Value * value, uint8_t want_ptr)
     {
         assert(type_is_valid(value->type));
         assert(((void)"TODO", type_size(value->type) <= 8));
-        return zy_imm(value->constant, type_size(value->type));
+        return enc_imm(value->constant, type_size(value->type));
     }
     else if (value->variant == VALUE_SSA || value->variant == VALUE_ARG)
     {
@@ -47,15 +47,15 @@ static EncOperand get_basic_encoperand_mem(Value * value, uint8_t want_ptr)
         if (want_ptr)
         {
             assert(type_is_ptr(value->type));
-            return zy_mem(value->regalloc, 0, type_size(value->type));
+            return enc_mem(value->regalloc, 0, type_size(value->type));
         }
         else
-            return zy_reg(value->regalloc, type_size(value->type));
+            return enc_reg(value->regalloc, type_size(value->type));
     }
     else if (value->variant == VALUE_STACKADDR)
     {
         //assert(want_ptr);
-        return zy_mem(REG_RBP, -value->slotinfo->offset, value->slotinfo->size);
+        return enc_mem(REG_RBP, -value->slotinfo->offset, value->slotinfo->size);
     }
     else
     {
@@ -85,19 +85,19 @@ uint8_t reg_shuffle_needed(Value ** block_args, Operand * args, size_t count)
 void reg_shuffle_single(byte_buffer * code, int64_t * in2out, uint8_t * in2out_color, size_t in)
 {
     int64_t out = in2out[in];
-    EncOperand reg_scratch_int = zy_reg(REG_R11, 8);
-    EncOperand reg_scratch_float = zy_reg(REG_XMM5, 8);
+    EncOperand reg_scratch_int = enc_reg(REG_R11, 8);
+    EncOperand reg_scratch_float = enc_reg(REG_XMM5, 8);
     
-    EncOperand reg_out = zy_reg(out, 8);
-    EncOperand reg_in = zy_reg(in, 8);
+    EncOperand reg_out = enc_reg(out, 8);
+    EncOperand reg_in = enc_reg(in, 8);
     
     if (in2out[out] < 0) // not a typo
     {
         //puts("a");
         if (in <= REG_R15)
-            zy_emit_2(code, INST_MOV, reg_out, reg_in);
+            enc_emit_2(code, INST_MOV, reg_out, reg_in);
         else
-            zy_emit_2(code, INST_MOVAPS, reg_out, reg_in);
+            enc_emit_2(code, INST_MOVAPS, reg_out, reg_in);
         in2out[in] = -1;
     }
     else
@@ -108,13 +108,13 @@ void reg_shuffle_single(byte_buffer * code, int64_t * in2out, uint8_t * in2out_c
             //puts("b");
             if (out <= REG_R15)
             {
-                zy_emit_2(code, INST_MOV, reg_scratch_int, reg_out);
-                zy_emit_2(code, INST_MOV, reg_out, reg_in);
+                enc_emit_2(code, INST_MOV, reg_scratch_int, reg_out);
+                enc_emit_2(code, INST_MOV, reg_out, reg_in);
             }
             else
             {
-                zy_emit_2(code, INST_MOVAPS, reg_scratch_float, reg_out);
-                zy_emit_2(code, INST_MOVAPS, reg_out, reg_in);
+                enc_emit_2(code, INST_MOVAPS, reg_scratch_float, reg_out);
+                enc_emit_2(code, INST_MOVAPS, reg_out, reg_in);
             }
             
             in2out[in] = -1;
@@ -129,17 +129,17 @@ void reg_shuffle_single(byte_buffer * code, int64_t * in2out, uint8_t * in2out_c
             {
                 //puts("d");
                 if (in <= REG_R15)
-                    zy_emit_2(code, INST_MOV, reg_out, reg_scratch_int);
+                    enc_emit_2(code, INST_MOV, reg_out, reg_scratch_int);
                 else
-                    zy_emit_2(code, INST_MOVAPS, reg_out, reg_scratch_float);
+                    enc_emit_2(code, INST_MOVAPS, reg_out, reg_scratch_float);
             }
             else
             {
                 //puts("e");
                 if (in <= REG_R15)
-                    zy_emit_2(code, INST_MOV, reg_out, reg_in);
+                    enc_emit_2(code, INST_MOV, reg_out, reg_in);
                 else
-                    zy_emit_2(code, INST_MOVAPS, reg_out, reg_in);
+                    enc_emit_2(code, INST_MOVAPS, reg_out, reg_in);
             }
             in2out[in] = -1;
         }
@@ -244,7 +244,7 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
         Function * func = program->functions[f];
         
         if (code->len % 16)
-            zy_emit_nops(code, 16 - (code->len % 16));
+            enc_emit_nops(code, 16 - (code->len % 16));
         
         SymbolEntry func_symbol;
         memset(&func_symbol, 0, sizeof(SymbolEntry));
@@ -262,23 +262,23 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
         while (func->stack_height & 16)
             func->stack_height += 1;
         
-        EncOperand rbp = zy_reg(REG_RBP, 8);
-        EncOperand rsp = zy_reg(REG_RSP, 8);
-        zy_emit_1(code, INST_PUSH, rbp);
-        zy_emit_2(code, INST_MOV, rbp, rsp);
+        EncOperand rbp = enc_reg(REG_RBP, 8);
+        EncOperand rsp = enc_reg(REG_RSP, 8);
+        enc_emit_1(code, INST_PUSH, rbp);
+        enc_emit_2(code, INST_MOV, rbp, rsp);
         
         if (func->stack_height)
         {
-            EncOperand height = zy_imm(func->stack_height, 4);
-            zy_emit_2(code, INST_SUB, rsp, height);
+            EncOperand height = enc_imm(func->stack_height, 4);
+            enc_emit_2(code, INST_SUB, rsp, height);
             
             size_t n = 0;
             for (size_t i = 0; i < sizeof(func->written_registers); i++)
             {
                 if (func->written_registers[i] == 2 && i != REG_RBP && i != REG_RSP)
                 {
-                    EncOperand mem = zy_mem(REG_RSP, n * 8, 8);
-                    zy_emit_2(code, i >= REG_XMM0 ? INST_MOVQ : INST_MOV, mem, zy_reg(i, 8));
+                    EncOperand mem = enc_mem(REG_RSP, n * 8, 8);
+                    enc_emit_2(code, i >= REG_XMM0 ? INST_MOVQ : INST_MOV, mem, enc_reg(i, 8));
                     n += 1;
                 }
             }
@@ -308,15 +308,15 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
                         EncOperand op2 = get_basic_encoperand(op.value);
                         if (op.value->type.variant == TYPE_F64 || op.value->type.variant == TYPE_F64)
                         {
-                            EncOperand op1 = zy_reg(REG_XMM0, type_size(op.value->type));
+                            EncOperand op1 = enc_reg(REG_XMM0, type_size(op.value->type));
                             if (!encops_equal(op1, op2))
-                                zy_emit_2(code, INST_MOVQ, op1, op2);
+                                enc_emit_2(code, INST_MOVQ, op1, op2);
                         }
                         else
                         {
-                            EncOperand op1 = zy_reg(REG_RAX, type_size(op.value->type));
+                            EncOperand op1 = enc_reg(REG_RAX, type_size(op.value->type));
                             if (!encops_equal(op1, op2))
-                                zy_emit_2(code, INST_MOV, op1, op2);
+                                enc_emit_2(code, INST_MOV, op1, op2);
                         }
                     }
                     
@@ -325,14 +325,14 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
                     {
                         if (func->written_registers[i] == 2 && i != REG_RBP && i != REG_RSP)
                         {
-                            EncOperand mem = zy_mem(REG_RSP, n * 8, 8);
-                            zy_emit_2(code, i >= REG_XMM0 ? INST_MOVQ : INST_MOV, zy_reg(i, 8), mem);
+                            EncOperand mem = enc_mem(REG_RSP, n * 8, 8);
+                            enc_emit_2(code, i >= REG_XMM0 ? INST_MOVQ : INST_MOV, enc_reg(i, 8), mem);
                             n += 1;
                         }
                     }
                     
-                    zy_emit_0(code, INST_LEAVE);
-                    zy_emit_0(code, INST_RET);
+                    enc_emit_0(code, INST_LEAVE);
+                    enc_emit_0(code, INST_RET);
                 }
                 else if (strcmp(statement->statement_name, "div") == 0 ||
                          strcmp(statement->statement_name, "idiv") == 0 ||
@@ -351,7 +351,7 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
                     EncOperand op2 = get_basic_encoperand(op2_op.value);
                     
                     if (type_size(statement->output->type) != 1)
-                        zy_emit_2(code, INST_XOR, zy_reg(REG_RDX, 4), zy_reg(REG_RDX, 4));
+                        enc_emit_2(code, INST_XOR, enc_reg(REG_RDX, 4), enc_reg(REG_RDX, 4));
                     
                     uint64_t forced_output = REG_RAX;
                     if (type_size(statement->output->type) != 1 && 
@@ -364,21 +364,21 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
                     if (op1_op.value->regalloc != REG_RAX)
                     {
                         EncOperand op1 = get_basic_encoperand(op1_op.value);
-                        zy_emit_2(code, INST_MOV, zy_reg(REG_RAX, type_size(op1_op.value->type)), op1);
+                        enc_emit_2(code, INST_MOV, enc_reg(REG_RAX, type_size(op1_op.value->type)), op1);
                     }
                     
                     if (strcmp(statement->statement_name, "div") == 0)
-                        zy_emit_1(code, INST_DIV, op2);
+                        enc_emit_1(code, INST_DIV, op2);
                     else if (strcmp(statement->statement_name, "idiv") == 0)
-                        zy_emit_1(code, INST_IDIV, op2);
+                        enc_emit_1(code, INST_IDIV, op2);
                     else if (strcmp(statement->statement_name, "rem") == 0)
                     {
-                        zy_emit_1(code, INST_DIV, op2);
-                        //zy_emit_2(code, INST_SHR
+                        enc_emit_1(code, INST_DIV, op2);
+                        //enc_emit_2(code, INST_SHR
                     }
                     else if (strcmp(statement->statement_name, "irem") == 0)
                     {
-                        zy_emit_1(code, INST_IDIV, op2);
+                        enc_emit_1(code, INST_IDIV, op2);
                     }
                     else
                         assert(((void)"FIXME handle more operations 1", 0));
@@ -438,71 +438,71 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
                         if (op2_op.value->variant != VALUE_CONST && op2_op.value->regalloc != REG_RCX)
                         {
                             shift_mov_performed = 1;
-                            zy_emit_2(code, INST_MOV, zy_reg(REG_RCX, type_size(op2_op.value->type)), op2);
+                            enc_emit_2(code, INST_MOV, enc_reg(REG_RCX, type_size(op2_op.value->type)), op2);
                         }
                     }
                     
                     if (!encops_equal(op0, op1))
                     {
                         if (statement->output->type.variant == TYPE_F64 || statement->output->type.variant == TYPE_F32)
-                            zy_emit_2(code, INST_MOVAPS, op0, op1);
+                            enc_emit_2(code, INST_MOVAPS, op0, op1);
                         else
-                            zy_emit_2(code, INST_MOV, op0, op1);
+                            enc_emit_2(code, INST_MOV, op0, op1);
                     }
                     
                     if (strcmp(statement->statement_name, "add") == 0)
-                        zy_emit_2(code, INST_ADD, op0, op2);
+                        enc_emit_2(code, INST_ADD, op0, op2);
                     else if (strcmp(statement->statement_name, "sub") == 0)
-                        zy_emit_2(code, INST_SUB, op0, op2);
+                        enc_emit_2(code, INST_SUB, op0, op2);
                     else if (strcmp(statement->statement_name, "mul") == 0)
-                        zy_emit_2(code, INST_IMUL, op0, op2);
+                        enc_emit_2(code, INST_IMUL, op0, op2);
                     else if (strcmp(statement->statement_name, "imul") == 0)
-                        zy_emit_2(code, INST_IMUL, op0, op2);
+                        enc_emit_2(code, INST_IMUL, op0, op2);
                     else if (strcmp(statement->statement_name, "shl") == 0)
                     {
                         if (shift_mov_performed)
-                            zy_emit_2(code, INST_SHL, op0, zy_reg(REG_RCX, 1));
+                            enc_emit_2(code, INST_SHL, op0, enc_reg(REG_RCX, 1));
                         else
-                            zy_emit_2(code, INST_SHL, op0, op2);
+                            enc_emit_2(code, INST_SHL, op0, op2);
                     }
                     else if (strcmp(statement->statement_name, "shr") == 0)
                     {
                         if (shift_mov_performed)
-                            zy_emit_2(code, INST_SHR, op0, zy_reg(REG_RCX, 1));
+                            enc_emit_2(code, INST_SHR, op0, enc_reg(REG_RCX, 1));
                         else
-                            zy_emit_2(code, INST_SHR, op0, op2);
+                            enc_emit_2(code, INST_SHR, op0, op2);
                     }
                     else if (strcmp(statement->statement_name, "sar") == 0)
                     {
                         if (shift_mov_performed)
-                            zy_emit_2(code, INST_SAR, op0, zy_reg(REG_RCX, 1));
+                            enc_emit_2(code, INST_SAR, op0, enc_reg(REG_RCX, 1));
                         else
-                            zy_emit_2(code, INST_SAR, op0, op2);
+                            enc_emit_2(code, INST_SAR, op0, op2);
                     }
                     else if (strcmp(statement->statement_name, "and") == 0)
-                        zy_emit_2(code, INST_AND, op0, op2);
+                        enc_emit_2(code, INST_AND, op0, op2);
                     else if (strcmp(statement->statement_name, "or") == 0)
-                        zy_emit_2(code, INST_OR, op0, op2);
+                        enc_emit_2(code, INST_OR, op0, op2);
                     else if (strcmp(statement->statement_name, "xor") == 0)
-                        zy_emit_2(code, INST_XOR, op0, op2);
+                        enc_emit_2(code, INST_XOR, op0, op2);
                     else if (strcmp(statement->statement_name, "fadd") == 0 && statement->output->type.variant == TYPE_F32)
-                        zy_emit_2(code, INST_ADDSS, op0, op2);
+                        enc_emit_2(code, INST_ADDSS, op0, op2);
                     else if (strcmp(statement->statement_name, "fadd") == 0 && statement->output->type.variant == TYPE_F64)
-                        zy_emit_2(code, INST_ADDSD, op0, op2);
+                        enc_emit_2(code, INST_ADDSD, op0, op2);
                     else if (strcmp(statement->statement_name, "fsub") == 0 && statement->output->type.variant == TYPE_F32)
-                        zy_emit_2(code, INST_SUBSS, op0, op2);
+                        enc_emit_2(code, INST_SUBSS, op0, op2);
                     else if (strcmp(statement->statement_name, "fsub") == 0 && statement->output->type.variant == TYPE_F64)
-                        zy_emit_2(code, INST_SUBSD, op0, op2);
+                        enc_emit_2(code, INST_SUBSD, op0, op2);
                     else if (strcmp(statement->statement_name, "fmul") == 0 && statement->output->type.variant == TYPE_F32)
-                        zy_emit_2(code, INST_MULSS, op0, op2);
+                        enc_emit_2(code, INST_MULSS, op0, op2);
                     else if (strcmp(statement->statement_name, "fmul") == 0 && statement->output->type.variant == TYPE_F64)
-                        zy_emit_2(code, INST_MULSD, op0, op2);
+                        enc_emit_2(code, INST_MULSD, op0, op2);
                     else if (strcmp(statement->statement_name, "fdiv") == 0 && statement->output->type.variant == TYPE_F32)
-                        zy_emit_2(code, INST_DIVSS, op0, op2);
+                        enc_emit_2(code, INST_DIVSS, op0, op2);
                     else if (strcmp(statement->statement_name, "fdiv") == 0 && statement->output->type.variant == TYPE_F64)
-                        zy_emit_2(code, INST_DIVSD, op0, op2);
+                        enc_emit_2(code, INST_DIVSD, op0, op2);
                     else if (strcmp(statement->statement_name, "fxor") == 0)
-                        zy_emit_2(code, INST_XORPS, op0, op2);
+                        enc_emit_2(code, INST_XORPS, op0, op2);
                     else
                         assert(((void)"TODO", 0));
                 }
@@ -518,8 +518,8 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
                     EncOperand op1 = get_basic_encoperand(op1_op.value);
                     if (op1_op.value->variant == VALUE_STACKADDR)
                     {
-                        op1 = zy_mem_change_size(op1, 8);
-                        zy_emit_2(code, INST_LEA, op0, op1);
+                        op1 = enc_mem_change_size(op1, 8);
+                        enc_emit_2(code, INST_LEA, op0, op1);
                     }
                     else
                     {
@@ -527,9 +527,9 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
                         {
                             const char * name = add_static_i64_anonymous(program, op1_op.value->constant);
                             
-                            EncOperand op_dummy = zy_mem(REG_RIP, 0x7FFFFFFF, 8);
+                            EncOperand op_dummy = enc_mem(REG_RIP, 0x7FFFFFFF, 8);
                             
-                            zy_emit_2(code, INST_MOVSD, op0, op_dummy);
+                            enc_emit_2(code, INST_MOVSD, op0, op_dummy);
                             add_static_relocation(code->len - 4, name, 4);
                         }
                         else
@@ -538,17 +538,17 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
                                 statement->output->type.variant == TYPE_F32 || op1_op.value->type.variant == TYPE_F32)
                             {
                                 if (value_is_basic_zero_constant(op1_op.value))
-                                    zy_emit_2(code, INST_XORPS, op0, op0);
+                                    enc_emit_2(code, INST_XORPS, op0, op0);
                                 else
                                 {
                                     if (!op1_op.value->regalloced || !statement->output->regalloced || statement->output->regalloc != op1_op.value->regalloc)
-                                        zy_emit_2(code, INST_MOVAPS, op0, op1);
+                                        enc_emit_2(code, INST_MOVAPS, op0, op1);
                                 }
                             }
                             else
                             {
                                 if (!op1_op.value->regalloced || !statement->output->regalloced || statement->output->regalloc != op1_op.value->regalloc)
-                                    zy_emit_2(code, INST_MOV, op0, op1);
+                                    enc_emit_2(code, INST_MOV, op0, op1);
                             }
                         }
                     }
@@ -576,19 +576,19 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
                         EncOperand op_lo = get_basic_encoperand(lo);
                         EncOperand op_hi = get_basic_encoperand(hi);
                         
-                        EncOperand addr_lower = zy_mem_change_size(op1, 4);
-                        EncOperand addr_higher = zy_mem_add_offset(addr_lower, 4);
-                        zy_emit_2(code, INST_MOV, addr_lower, op_lo);
-                        zy_emit_2(code, INST_MOV, addr_higher, op_hi);
+                        EncOperand addr_lower = enc_mem_change_size(op1, 4);
+                        EncOperand addr_higher = enc_mem_add_offset(addr_lower, 4);
+                        enc_emit_2(code, INST_MOV, addr_lower, op_lo);
+                        enc_emit_2(code, INST_MOV, addr_higher, op_hi);
                     }
                     else
                     {
                         if (op2_op.value->type.variant == TYPE_F64)
-                            zy_emit_2(code, INST_MOVQ, op1, op2);
+                            enc_emit_2(code, INST_MOVQ, op1, op2);
                         else if (op2_op.value->type.variant == TYPE_F32)
-                            zy_emit_2(code, INST_MOVD, op1, op2);
+                            enc_emit_2(code, INST_MOVD, op1, op2);
                         else
-                            zy_emit_2(code, INST_MOV, op1, op2);
+                            enc_emit_2(code, INST_MOV, op1, op2);
                     }
                 }
                 else if (strcmp(statement->statement_name, "load") == 0)
@@ -605,11 +605,11 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
                     EncOperand op1 = get_basic_encoperand_mem(op1_op.value, 1);
                     
                     if (statement->output->type.variant == TYPE_F64)
-                        zy_emit_2(code, INST_MOVQ, op0, op1);
+                        enc_emit_2(code, INST_MOVQ, op0, op1);
                     else if (statement->output->type.variant == TYPE_F32)
-                        zy_emit_2(code, INST_MOVD, op0, op1);
+                        enc_emit_2(code, INST_MOVD, op0, op1);
                     else
-                        zy_emit_2(code, INST_MOV, op0, op1);
+                        enc_emit_2(code, INST_MOV, op0, op1);
                 }
                 else if (strcmp(statement->statement_name, "goto") == 0)
                 {
@@ -629,7 +629,7 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
                     
                     if (strcmp(target_op.text, next_block->name) != 0)
                     {
-                        zy_emit_1(code, INST_JMP, op_dummy);
+                        enc_emit_1(code, INST_JMP, op_dummy);
                         add_label_relocation(code->len - 4, target_op.text, 4);
                     }
                 }
@@ -667,9 +667,10 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
                     }
                     else
                     {
-                        zy_emit_2(code, INST_TEST, op1, op1);
+                        enc_emit_2(code, INST_TEST, op1, op1);
                     }
                     
+                    //Value * dummy = make_const_value(TYPE_I32, 0x7FFFFFFF);
                     Value * dummy = make_const_value(TYPE_I32, 0x7FFFFFFF);
                     EncOperand op_dummy = get_basic_encoperand(dummy);
                     
@@ -692,12 +693,12 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
                     
                     if (if_shuffle_needed && else_shuffle_needed)
                     {
-                        zy_emit_1(code, jcc_yin, op_dummy);
+                        enc_emit_1(code, jcc_yin, op_dummy);
                         size_t jump_over_loc = code->len;
                         
                         reg_shuffle_block_args(code, if_target_block->args, if_s_args, iba_len);
                         
-                        zy_emit_1(code, INST_JMP, op_dummy);
+                        enc_emit_1(code, INST_JMP, op_dummy);
                         add_label_relocation(code->len - 4, target_op.text, 4);
                         
                         size_t jump_over_target = code->len;
@@ -708,51 +709,51 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
                         
                         if (strcmp(target_op2.text, next_block->name) != 0)
                         {
-                            zy_emit_1(code, INST_JMP, op_dummy);
+                            enc_emit_1(code, INST_JMP, op_dummy);
                             add_label_relocation(code->len - 4, target_op2.text, 4);
                         }
                     }
                     else if (else_shuffle_needed)
                     {
-                        zy_emit_1(code, jcc_yang, op_dummy);
+                        enc_emit_1(code, jcc_yang, op_dummy);
                         add_label_relocation(code->len - 4, target_op.text, 4);
                         
                         reg_shuffle_block_args(code, else_target_block->args, else_s_args, eba_len);
                         
                         if (strcmp(target_op2.text, next_block->name) != 0)
                         {
-                            zy_emit_1(code, INST_JMP, op_dummy);
+                            enc_emit_1(code, INST_JMP, op_dummy);
                             add_label_relocation(code->len - 4, target_op2.text, 4);
                         }
                     }
                     else if (if_shuffle_needed)
                     {
-                        zy_emit_1(code, jcc_yin, op_dummy);
+                        enc_emit_1(code, jcc_yin, op_dummy);
                         add_label_relocation(code->len - 4, target_op2.text, 4);
                         
                         reg_shuffle_block_args(code, if_target_block->args, if_s_args, iba_len);
                         
                         if (strcmp(target_op.text, next_block->name) != 0)
                         {
-                            zy_emit_1(code, INST_JMP, op_dummy);
+                            enc_emit_1(code, INST_JMP, op_dummy);
                             add_label_relocation(code->len - 4, target_op.text, 4);
                         }
                     }
                     else if (strcmp(target_op2.text, next_block->name) == 0)
                     {
-                        zy_emit_1(code, jcc_yang, op_dummy);
+                        enc_emit_1(code, jcc_yang, op_dummy);
                         add_label_relocation(code->len - 4, target_op.text, 4);
                     }
                     else if (strcmp(target_op.text, next_block->name) == 0)
                     {
-                        zy_emit_1(code, jcc_yin, op_dummy);
+                        enc_emit_1(code, jcc_yin, op_dummy);
                         add_label_relocation(code->len - 4, target_op2.text, 4);
                     }
                     else
                     {
-                        zy_emit_1(code, jcc_yin, op_dummy);
+                        enc_emit_1(code, jcc_yin, op_dummy);
                         add_label_relocation(code->len - 4, target_op2.text, 4);
-                        zy_emit_1(code, INST_JMP, op_dummy);
+                        enc_emit_1(code, INST_JMP, op_dummy);
                         add_label_relocation(code->len - 4, target_op.text, 4);
                     }
                 }
@@ -768,14 +769,14 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
                     
                     EncOperand op1 = get_basic_encoperand(op1_op.value);
                     EncOperand op2 = get_basic_encoperand(op2_op.value);
-                    zy_emit_2(code, INST_CMP, op1, op2);
+                    enc_emit_2(code, INST_CMP, op1, op2);
                     
                     EncOperand op0 = get_basic_encoperand(statement->output);
                     
                     if (!next_statement || strcmp(next_statement->statement_name, "if") != 0)
                     {
                         if ((strcmp(statement->statement_name, "cmp_g") == 0))
-                            zy_emit_1(code, INST_SETNBE, op0);
+                            enc_emit_1(code, INST_SETNBE, op0);
                         else
                             assert(((void)"TODO", 0));
                     }
@@ -797,9 +798,9 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
                     EncOperand op0 = get_basic_encoperand(statement->output);
                     
                     if (op1_op.rawtype.variant == TYPE_F64)
-                        zy_emit_2(code, INST_CVTSI2SD, op0, op2);
+                        enc_emit_2(code, INST_CVTSI2SD, op0, op2);
                     else if (op1_op.rawtype.variant == TYPE_F32)
-                        zy_emit_2(code, INST_CVTSI2SS, op0, op2);
+                        enc_emit_2(code, INST_CVTSI2SS, op0, op2);
                     else
                         assert(((void)"TODO", 0));
                 }
@@ -816,11 +817,11 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
                     EncOperand op0 = get_basic_encoperand(statement->output);
                     
                     if (type_is_intreg(statement->output->type) && type_is_intreg(op2_op.value->type))
-                        zy_emit_2(code, INST_MOV, op0, op2);
+                        enc_emit_2(code, INST_MOV, op0, op2);
                     else if (!type_is_intreg(statement->output->type) && !type_is_intreg(op2_op.value->type))
-                        zy_emit_2(code, INST_MOVAPS, op0, op2);
+                        enc_emit_2(code, INST_MOVAPS, op0, op2);
                     else
-                        zy_emit_2(code, INST_MOVQ, op0, op2);
+                        enc_emit_2(code, INST_MOVQ, op0, op2);
                 }
                 else if (strcmp(statement->statement_name, "symbol_lookup_unsized") == 0 ||
                          strcmp(statement->statement_name, "symbol_lookup") == 0)
@@ -835,9 +836,9 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
                     
                     const char * symbol = op1_op.text;
                     
-                    EncOperand op_dummy = zy_mem(REG_RIP, 0x7FFFFFFF, 8);
+                    EncOperand op_dummy = enc_mem(REG_RIP, 0x7FFFFFFF, 8);
                     
-                    zy_emit_2(code, INST_LEA, op0, op_dummy);
+                    enc_emit_2(code, INST_LEA, op0, op_dummy);
                     add_symbol_relocation(code->len - 4, symbol, 4);
                 }
                 else if (strcmp(statement->statement_name, "call_eval") == 0 ||
@@ -854,19 +855,19 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
                     
                     reg_shuffle_call(code, statement);
                     
-                    zy_emit_1(code, INST_CALL, target);
+                    enc_emit_1(code, INST_CALL, target);
                     
                     Value * value = statement->output;
                     if (type_is_intreg(value->type))
-                        zy_emit_2(code, INST_MOV, op0, zy_reg(REG_RAX, type_size(value->type)));
+                        enc_emit_2(code, INST_MOV, op0, enc_reg(REG_RAX, type_size(value->type)));
                     else
-                        zy_emit_2(code, INST_MOVQ, op0, zy_reg(REG_XMM0, 8));
+                        enc_emit_2(code, INST_MOVQ, op0, enc_reg(REG_XMM0, 8));
                     
                     func->performs_calls = 1;
                 }
                 else if (strcmp(statement->statement_name, "breakpoint") == 0)
                 {
-                    zy_emit_0(code, INST_INT3);
+                    enc_emit_0(code, INST_INT3);
                 }
                 else
                 {

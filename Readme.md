@@ -2,6 +2,10 @@
 
 BBAE (Basic Block Analysis Enabler) is a WIP low-level compiler backend language, both a spec and a basic implementation. It sits between programming languages and the hardware, with a format that's easier to optimize than high-level code. The reference implementation is a C99/C++17 program and/or header set (can be used as either).
 
+Licensed under the Apache License v2.0.
+
+Uses [fadec](https://github.com/aengelke/fadec/), which is licensed under the ["New" BSD License](https://github.com/aengelke/fadec/blob/master/LICENSE).
+
 ## Design philosophy
 
 BBAE is heavily inspired by LLVM, but aims to be much simpler and more intuitive. For example, it uses "block arguments" instead of "phi nodes". It also avoids symbols in its textual syntax, has a simpler type system, allows slightly more types of blocks, and aims to have as few features as is necessary rather than trying to support every single edge case. It's also intended to be relatively easy to reimplement, and specification-defined, rather than being stuck with the canonical implementation forever.
