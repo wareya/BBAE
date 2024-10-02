@@ -44,23 +44,25 @@ int main(int argc, char ** argv)
     }
     if (tokens.back()->text == 0)
     {
-        print_tokenization_error(tokens, std::string(text2.data(), text2.size()));
+        print_tokenization_error(tokens, String(text2.data()));
+        puts("failed to tokenize");
         return 0;
     }
     
     for (auto n : tokens)
     {
         if (n->from_regex)
-            printf("`%s` (via %s)\n", n->text->data(), n->from_regex->str.data());
+            printf("> %s (via %s)\n", n->text->data(), n->from_regex->str.data());
         else
-            printf("`%s`\n", n->text->data());
+            printf("> %s\n", n->text->data());
     }
     
     auto asdf = parse_as(grammar, tokens, "program");
     
     if (!asdf)
     {
-        print_parse_error(tokens, std::string(text2.data(), text2.size()));
+        print_parse_error(tokens, String(text2.data()));
+        puts("failed to parse");
         return 0;
     }
     

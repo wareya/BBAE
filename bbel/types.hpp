@@ -7,6 +7,13 @@
 
 #include <cstdio>
 
+template<typename T1, typename T2>
+class Twople {
+    T1 _1;
+    T2 _2;
+    Twople(T1 a, T2 b) : _1(a), _2(b) { }
+};
+
 template<typename T>
 class Vec {
 private:
@@ -18,33 +25,48 @@ public:
     size_t capacity() const noexcept { return mcapacity; }
     T * data() noexcept { return (T*)mbuffer; }
     const T * data() const noexcept { return (T*)mbuffer; }
-    T * begin() const noexcept { return (T*)mbuffer; }
-    T * end() const noexcept { return ((T*)mbuffer) + mlength; }
+    T * begin() noexcept { return (T*)mbuffer; }
+    T * end() noexcept { return ((T*)mbuffer) + mlength; }
+    const T * begin() const noexcept { return (T*)mbuffer; }
+    const T * end() const noexcept { return ((T*)mbuffer) + mlength; }
     
-    T & front() const { if (mlength == 0) throw; return ((T*)mbuffer)[0]; }
-    T & back() const { if (mlength == 0) throw; return ((T*)mbuffer)[mlength - 1]; }
+    T & front() { if (mlength == 0) throw; return ((T*)mbuffer)[0]; }
+    T & back() { if (mlength == 0) throw; return ((T*)mbuffer)[mlength - 1]; }
+    const T & front() const { if (mlength == 0) throw; return ((T*)mbuffer)[0]; }
+    const T & back() const { if (mlength == 0) throw; return ((T*)mbuffer)[mlength - 1]; }
     
     const T & operator[](size_t pos) const noexcept { return ((T*)mbuffer)[pos]; }
     T & operator[](size_t pos) noexcept { return ((T*)mbuffer)[pos]; }
     
+    constexpr bool operator==(const Vec<T> & other) const
+    {
+        if (other.mlength != mlength)
+            return false;
+        for (size_t i = 0; i < mlength; i++)
+        {
+            if (!((*this)[i] == other[i]))
+                return false;
+        }
+        return true;
+    }
     // Constructors
     
     // Blank
     
-    Vec() noexcept { }
+    constexpr Vec() noexcept { }
     
     // With capacity hint
     
-    explicit Vec(size_t count)
+    constexpr explicit Vec(size_t count)
     {
         apply_cap_hint(count);
     }
     
     // Filled with default
     
-    Vec(size_t count, T default_val)
+    constexpr Vec(size_t count, T default_val)
     {
-        *this = Vec(count);
+        apply_cap_hint(count);
         mlength = count;
         
         for (size_t i = 0; i < mlength; i++)
@@ -53,12 +75,12 @@ public:
     
     // Copy
     
-    Vec(const Vec & other)
+    constexpr Vec(const Vec & other)
     {
         apply_cap_hint(other.capacity());
         copy_into(*this, other);
     }
-    Vec(Vec && other)
+    constexpr Vec(Vec && other) noexcept
     {
         mlength = other.mlength;
         mcapacity = other.mcapacity;
@@ -68,18 +90,17 @@ public:
         other.mbuffer = nullptr;
     }
     template<class Iterator>
-    Vec(Iterator first, Iterator past_end)
+    constexpr Vec(Iterator first, Iterator past_end)
     {
-        *this = Vec();
         while (first != past_end)
         {
             push_back(*first);
             first++;
         }
     }
-    Vec(std::initializer_list<T> initializer)
+    constexpr Vec(std::initializer_list<T> initializer)
     {
-        *this = Vec(initializer.size());
+        apply_cap_hint(initializer.size());
         auto first = initializer.begin();
         auto last = initializer.end();
         while (first != last)
@@ -101,7 +122,7 @@ public:
     
     // Copy
     
-    Vec & operator=(const Vec & other)
+    constexpr Vec & operator=(const Vec & other)
     {
         if (this == &other)
             return *this;
@@ -111,10 +132,30 @@ public:
         
         return *this;
     }
+    constexpr Vec & operator=(Vec && other) noexcept
+    {
+        if (this == &other)
+            return *this;
+        
+        mlength = other.mlength;
+        mcapacity = other.mcapacity;
+        mbuffer = other.mbuffer;
+        other.mlength = 0;
+        other.mcapacity = 0;
+        other.mbuffer = nullptr;
+        
+        return *this;
+    }
     
     // API
     
-    void push_back(T item)
+    constexpr void reserve(size_t new_cap)
+    {
+        if (new_cap > mlength)
+            do_realloc(new_cap);
+    }
+    
+    constexpr void push_back(T item)
     {
         if (mlength >= mcapacity)
         {
@@ -124,7 +165,7 @@ public:
         ::new((void*)(((T*)mbuffer) + mlength)) T(std::move(item));
         mlength += 1;
     }
-    T pop_back()
+    constexpr T pop_back()
     {
         if (mlength == 0)
             throw;
@@ -137,7 +178,7 @@ public:
         
         return ret;
     }
-    T erase_at(size_t i)
+    constexpr T erase_at(size_t i)
     {
         if (i >= mlength)
             throw;
@@ -154,12 +195,12 @@ public:
         
         return ret;
     }
-    void erase(const T * which)
+    constexpr void erase(const T * which)
     {
         size_t i = which - (T*)mbuffer;
         erase_at(i);
     }
-    void erase(T * which)
+    constexpr void erase(T * which)
     {
         size_t i = which - (T*)mbuffer;
         erase_at(i);
@@ -211,20 +252,139 @@ private:
 
 class String {
 private:
-    Vec<char> bytes;
+    // if bytes.size() is not zero, is long string with bytes.size() - 1 number of non-null chars and 1 null terminator
+    Vec<char> bytes = {};
+    // if bytes.size() is 0, is shortstr with shortstr_len chars
+    // (max shortstr len is 6, because seventh char must be null terminator)
+    char shortstr[7] = {0, 0, 0, 0, 0, 0, 0};
+    unsigned char shortstr_len = 0;
 public:
-    char & operator[](size_t pos) noexcept { return bytes[pos]; }
-    const char & operator[](size_t pos) const noexcept { return bytes[pos]; }
-    char * data() noexcept { return bytes.data(); }
-    const char * data() const noexcept { return bytes.data(); }
+    char & operator[](size_t pos) noexcept { return bytes.size() ? bytes[pos] : shortstr[pos]; }
+    const char & operator[](size_t pos) const noexcept { return bytes.size() ? bytes[pos] : shortstr[pos]; }
+    char * data() noexcept { return bytes.size() ? bytes.data() : shortstr; }
+    const char * data() const noexcept { return bytes.size() ? bytes.data() : shortstr; }
+    char * c_str() noexcept { return data(); }
+    const char * c_str() const noexcept { return data(); }
     
-    String() : bytes() { }
-    String(const char * data) : bytes()
+    size_t size() const noexcept { return bytes.size() ? bytes.size() - 1 : shortstr_len; }
+    size_t length() const noexcept { return size(); }
+    size_t capacity() const noexcept { return bytes.size() ? bytes.capacity() - 1 : 6; }
+    char * begin() noexcept { return bytes.size() ? bytes.begin() : shortstr; }
+    char * end() noexcept { return bytes.size() ? bytes.end() : (shortstr + shortstr_len); }
+    const char * begin() const noexcept { return bytes.size() ? bytes.begin() : shortstr; }
+    const char * end() const noexcept { return bytes.size() ? bytes.end() : (shortstr + shortstr_len); }
+    
+    char & front() { return bytes.size() ? bytes.front() : shortstr[0]; }
+    char & back() { return bytes.size() ? bytes.back() : shortstr[shortstr_len]; }
+    const char & front() const { return bytes.size() ? bytes.front() : shortstr[0]; }
+    const char & back() const { return bytes.size() ? bytes.back() : shortstr[shortstr_len]; }
+    
+    constexpr bool operator==(const String & other) const&
+    {
+        if (other.size() != size())
+            return false;
+        
+        for (size_t i = 0; i < size(); i++)
+        {
+            if (!((*this)[i] == other[i]))
+                return false;
+        }
+        return true;
+    }
+    
+    String & operator+=(const String & other) &
+    {
+        if (bytes.size() > 0)
+        {
+            bytes.pop_back();
+            for (size_t i = 0; i < other.size(); i++)
+                bytes.push_back(other[i]);
+            bytes.push_back(0);
+        }
+        else if (size() + other.size() < 7)
+        {
+            for (size_t i = 0; i < other.size(); i++)
+                shortstr[shortstr_len++] = other[i];
+        }
+        else
+        {
+            for (size_t i = 0; i < shortstr_len; i++)
+                bytes.push_back(shortstr[i]);
+            for (size_t i = 0; i < other.size(); i++)
+                bytes.push_back(other[i]);
+            bytes.push_back(0);
+        }
+        
+        return *this;
+    }
+    
+    String & operator+=(char c) &
+    {
+        char chars[2];
+        chars[0] = c;
+        chars[1] = 0;
+        return *this += String(chars);
+    }
+    
+    String operator+(const String & other) const&
+    {
+        String ret;
+        ret += *this;
+        ret += other;
+        return ret;
+    }
+    
+    String substr(size_t pos, size_t len) const&
+    {
+        if (ptrdiff_t(pos) < 0)
+            pos += size();
+        if (ptrdiff_t(pos) < 0 || pos >= size())
+            return String();
+        len = len < size() - pos ? len : size() - pos;
+        String ret;
+        for (size_t i = 0; i < len; i++)
+            ret += (*this)[pos + i];
+        return ret;
+    }
+    
+    String() noexcept { }
+    String(const String & other)
+    {
+        bytes = other.bytes;
+        memcpy(shortstr, other.shortstr, 7);
+        shortstr_len = other.shortstr_len;
+    }
+    String(const char * data)
     {
         size_t len = 0;
         while (data[len++] != 0);
-        const char * end = data + len;
-        bytes = Vec<char>(data, end);
+        if (len <= 7) // includes null terminator
+        {
+            shortstr_len = len - 1;
+            memmove(shortstr, data, shortstr_len);
+        }
+        else
+        {
+            const char * end = data + len;
+            bytes = Vec<char>(data, end);
+        }
+    }
+};
+
+template <>
+struct std::hash<String>
+{
+    size_t operator()(const String & string) const
+    {
+        const char * dat = string.data();
+        const size_t len = string.size();
+        size_t hashval = 0;
+        for (size_t i = 0; i < len; i++)
+        {
+            hashval ^= hash<char>()(dat[i]);
+            hashval *= 0xf491;
+        }
+        return hashval;
     }
 };
 
