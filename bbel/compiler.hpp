@@ -4,7 +4,6 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#include <vector>
 #include <unordered_map>
 #include <memory>
 #include <string>
@@ -12,6 +11,8 @@
 
 #include "../src/bbae_builder.h"
 #include "../src/buffers.h"
+
+#include "types.hpp"
 
 #include "grammar.hpp"
 
@@ -32,8 +33,8 @@ struct CompilerState
     Block * current_block = 0;
     byte_buffer * buffer = 0;
     
-    std::vector<std::unordered_map<std::string, VarData>> vars = {{}};
-    std::vector<Value *> stack;
+    Vec<std::unordered_map<std::string, VarData>> vars = {{}};
+    Vec<Value *> stack;
     
     VarData add_var(std::shared_ptr<std::string> name, Type type, Value * backend_var)
     {

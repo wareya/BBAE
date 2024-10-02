@@ -20,6 +20,7 @@ extern "C"
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
+#pragma GCC diagnostic ignored "-Wc++20-extensions"
 #ifdef __clang__
 #pragma GCC diagnostic ignored "-Wc99-designator"
 #endif

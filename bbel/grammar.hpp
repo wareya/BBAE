@@ -8,13 +8,14 @@
 #include <utility>
 
 #include <string>
-#include <string_view>
-#include <vector>
+//#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <memory>
 #include <algorithm>
 #include <optional>
+
+#include "types.hpp"
 
 #include "my_regex/my_regex.h"
 
@@ -66,12 +67,12 @@ struct MatchingRule {
 };
 
 struct GrammarForm {
-    std::vector<std::shared_ptr<MatchingRule>> rules;
+    Vec<std::shared_ptr<MatchingRule>> rules;
 };
 
 struct GrammarPoint {
     std::shared_ptr<std::string> name = 0;
-    std::vector<GrammarForm> forms;
+    Vec<GrammarForm> forms;
     bool left_recursive = false;
     bool no_tokens = false;
     GrammarPoint()
@@ -104,7 +105,7 @@ static std::shared_ptr<MatchingRule> new_rule_text(std::string text)
 struct Grammar
 {
     std::unordered_map<std::string, std::shared_ptr<GrammarPoint>> points;
-    std::vector<std::shared_ptr<MatchingRule>> tokens;
+    Vec<std::shared_ptr<MatchingRule>> tokens;
     ~Grammar()
     {
         // kill inter-point references to prevent reference cycle memory leaks
@@ -158,7 +159,7 @@ static auto load_grammar(const char * text) -> Grammar
     
     std::unordered_map<std::string, std::shared_ptr<GrammarPoint>> ret;
     std::unordered_set<std::shared_ptr<GrammarPoint>> all_points;
-    std::vector<std::shared_ptr<MatchingRule>> tokens;
+    Vec<std::shared_ptr<MatchingRule>> tokens;
     
     enum Mode {
         MODE_NAME,
@@ -247,7 +248,7 @@ static auto load_grammar(const char * text) -> Grammar
         else if (mode == MODE_FORMS)
         {
             //printf("form in... %s\n", current_point->name->data());
-            std::vector<std::shared_ptr<GrammarPoint>> point_stack;
+            Vec<std::shared_ptr<GrammarPoint>> point_stack;
             
             while (!line_is_empty())
             {
@@ -488,10 +489,10 @@ struct Token {
 
 // On success, the token stream is returned.
 // On failure, the tokenization process is returned, with an additional token with null text and regex at the end.
-static std::vector<std::shared_ptr<Token>> tokenize(const Grammar & grammar, const char * _text)
+static Vec<std::shared_ptr<Token>> tokenize(const Grammar & grammar, const char * _text)
 {
-    const std::vector<std::shared_ptr<MatchingRule>> & tokens = grammar.tokens;
-    std::vector<std::shared_ptr<Token>> ret;
+    const Vec<std::shared_ptr<MatchingRule>> & tokens = grammar.tokens;
+    Vec<std::shared_ptr<Token>> ret;
     
     std::string text = _text;
     
@@ -625,7 +626,7 @@ static std::vector<std::shared_ptr<Token>> tokenize(const Grammar & grammar, con
 
 struct ASTNode
 {
-    std::vector<std::shared_ptr<ASTNode>> children;
+    Vec<std::shared_ptr<ASTNode>> children;
     size_t start_row = 1;
     size_t start_column = 1;
     size_t token_count = 0;
@@ -686,7 +687,7 @@ struct std::hash<ParseRecord>
     std::size_t operator()(const ParseRecord & obj) const noexcept
     {
         size_t a = std::hash<size_t>{}(obj.token_index);
-        size_t b = std::hash<std::string_view>{}(*obj.node_name);
+        size_t b = std::hash<std::string>{}(*obj.node_name);
         
         size_t x = a * 0x1061346952391 + b;
         return x;
@@ -704,7 +705,7 @@ static void clear_parser_global_state()
     parse_misses.clear();
 }
 
-static auto parse_with(const std::vector<std::shared_ptr<Token>> & tokens, size_t starting_token_index, std::shared_ptr<GrammarPoint> node_type, size_t depth) -> std::optional<std::shared_ptr<ASTNode>>
+static auto parse_with(const Vec<std::shared_ptr<Token>> & tokens, size_t starting_token_index, std::shared_ptr<GrammarPoint> node_type, size_t depth) -> std::optional<std::shared_ptr<ASTNode>>
 {
     const bool PARSER_DO_DEBUG_PRINT = false;
     
@@ -725,10 +726,10 @@ static auto parse_with(const std::vector<std::shared_ptr<Token>> & tokens, size_
     // try to find a form that matches
     for (auto & _form : node_type->forms)
     {
-        //std::vector<std::pair<size_t, std::vector<ASTNode>>> backtrack_states;
+        //Vec<std::pair<size_t, Vec<ASTNode>>> backtrack_states;
         
-        std::vector<std::vector<std::shared_ptr<ASTNode>>> progress_scopes;
-        std::vector<std::shared_ptr<ASTNode>> progress;
+        Vec<Vec<std::shared_ptr<ASTNode>>> progress_scopes;
+        Vec<std::shared_ptr<ASTNode>> progress;
         
         size_t token_index = starting_token_index;
         
@@ -904,7 +905,7 @@ static auto parse_with(const std::vector<std::shared_ptr<Token>> & tokens, size_
     return {};
 }
 
-static auto parse_as(Grammar & grammar, const std::vector<std::shared_ptr<Token>> & tokens, const char * as_node_type) -> std::optional<std::shared_ptr<ASTNode>>
+static auto parse_as(Grammar & grammar, const Vec<std::shared_ptr<Token>> & tokens, const char * as_node_type) -> std::optional<std::shared_ptr<ASTNode>>
 {
     furthest = 0;
     
@@ -917,7 +918,7 @@ static auto parse_as(Grammar & grammar, const std::vector<std::shared_ptr<Token>
     return ret;
 }
 
-static void print_tokenization_error(const std::vector<std::shared_ptr<Token>> & tokens, std::string_view & text)
+static void print_tokenization_error(const Vec<std::shared_ptr<Token>> & tokens, const std::string & text)
 {
     printf("Tokenization failed. Parsing cannot continue.\n");
     
@@ -944,7 +945,7 @@ static void print_tokenization_error(const std::vector<std::shared_ptr<Token>> &
     puts("The grammar does not recognize the pointed-to text as valid, not even on a single-chunk level.");
 }
 
-static void print_parse_error(const std::vector<std::shared_ptr<Token>> & tokens, std::string_view & text)
+static void print_parse_error(const Vec<std::shared_ptr<Token>> & tokens, const std::string & text)
 {
     printf("Parse failed. Expected one of:\n");
     for (auto & str : furthest_maybes)

@@ -7,6 +7,8 @@
 #include <iterator>
 #include <fstream>
 
+#include "types.hpp"
+
 #include "grammar.hpp"
 #include "compiler.hpp"
 #include "../src/bbae_api_jit.h"
@@ -16,12 +18,17 @@ int main(int argc, char ** argv)
     (void)argc;
     (void)argv;
     
-    std::ifstream f("grammar.txt", std::ios::binary);
-    std::vector<char> text((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+    auto f = fopen("grammar.txt", "rb");
+    Vec<char> text;
+    int c;
+    while ((c = fgetc(f)) >= 0)
+        text.push_back(c);
     text.push_back(0);
     
-    std::ifstream f2("test.bbel", std::ios::binary);
-    std::vector<char> text2((std::istreambuf_iterator<char>(f2)), std::istreambuf_iterator<char>());
+    auto f2 = fopen("test.bbel", "rb");
+    Vec<char> text2;
+    while ((c = fgetc(f2)) >= 0)
+        text2.push_back(c);
     text2.push_back(0);
     
     auto grammar = load_grammar(text.data());
@@ -37,8 +44,7 @@ int main(int argc, char ** argv)
     }
     if (tokens.back()->text == 0)
     {
-        auto s = std::string_view(text2.data(), text2.size());
-        print_tokenization_error(tokens, s);
+        print_tokenization_error(tokens, std::string(text2.data(), text2.size()));
         return 0;
     }
     
@@ -54,8 +60,7 @@ int main(int argc, char ** argv)
     
     if (!asdf)
     {
-        auto s = std::string_view(text2.data(), text2.size());
-        print_parse_error(tokens, s);
+        print_parse_error(tokens, std::string(text2.data(), text2.size()));
         return 0;
     }
     
