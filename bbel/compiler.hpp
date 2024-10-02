@@ -6,7 +6,6 @@
 
 #include <unordered_map>
 #include <memory>
-#include <optional>
 
 #include "../src/bbae_builder.h"
 #include "../src/buffers.h"
@@ -42,7 +41,7 @@ struct CompilerState
         vars.back().insert({*name, var});
         return var;
     }
-    std::optional<VarData> get_var(std::shared_ptr<String> name)
+    Option<VarData> get_var(std::shared_ptr<String> name)
     {
         if (vars.size() == 0)
             return {};

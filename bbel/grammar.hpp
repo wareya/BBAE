@@ -11,7 +11,6 @@
 #include <unordered_set>
 #include <memory>
 #include <algorithm>
-#include <optional>
 
 #include "types.hpp"
 
@@ -704,7 +703,7 @@ static void clear_parser_global_state()
     parse_misses.clear();
 }
 
-static auto parse_with(const Vec<std::shared_ptr<Token>> & tokens, size_t starting_token_index, std::shared_ptr<GrammarPoint> node_type, size_t depth) -> std::optional<std::shared_ptr<ASTNode>>
+static auto parse_with(const Vec<std::shared_ptr<Token>> & tokens, size_t starting_token_index, std::shared_ptr<GrammarPoint> node_type, size_t depth) -> Option<std::shared_ptr<ASTNode>>
 {
     const bool PARSER_DO_DEBUG_PRINT = false;
     
@@ -904,7 +903,7 @@ static auto parse_with(const Vec<std::shared_ptr<Token>> & tokens, size_t starti
     return {};
 }
 
-static auto parse_as(Grammar & grammar, const Vec<std::shared_ptr<Token>> & tokens, const char * as_node_type) -> std::optional<std::shared_ptr<ASTNode>>
+static auto parse_as(Grammar & grammar, const Vec<std::shared_ptr<Token>> & tokens, const char * as_node_type) -> Option<std::shared_ptr<ASTNode>>
 {
     furthest = 0;
     

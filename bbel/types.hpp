@@ -7,10 +7,59 @@
 
 #include <cstdio>
 
+template<typename T>
+class alignas(T) Option {
+    char data[sizeof(T)];
+    bool isok = false;
+    
+public:
+    constexpr explicit operator bool() const noexcept { return isok; }
+    constexpr const T & operator*() const noexcept { return *(T*)data; }
+    constexpr T & operator*() noexcept { return *(T*)data; }
+    constexpr const T * operator->() const noexcept { return (T*)data; }
+    constexpr T * operator->() noexcept { return (T*)data; }
+    Option & operator=(Option &&) = default;
+    
+    constexpr Option() noexcept { }
+    
+    constexpr Option(T && item)
+    {
+        ::new((void*)(T*)data) T(std::move(item));
+        isok = true;
+    }
+    
+    constexpr Option(const T & item)
+    {
+        ::new((void*)(T*)data) T(item);
+        isok = true;
+    }
+    
+    constexpr Option(Option && other)
+    {
+        if (other.isok)
+            ::new((void*)(T*)data) T(std::move(*(T*)other.data));
+        isok = other.isok;
+    }
+    
+    constexpr Option(const Option & other)
+    {
+        if (other.isok)
+            ::new((void*)(T*)data) T(*(T*)other.data);
+        isok = other.isok;
+    }
+    
+    ~Option()
+    {
+        if (isok)
+            ((T*)data)->~T();
+    }
+};
+
 template<typename T1, typename T2>
 class Twople {
     T1 _1;
     T2 _2;
+public:
     Twople(T1 a, T2 b) : _1(a), _2(b) { }
 };
 
