@@ -6,6 +6,11 @@
 #include <initializer_list>
 
 #include <cstdio>
+#include <new>
+
+//#include <functional> // hash
+
+//void asdf() { std::vector<float> asdf; }
 
 template<typename T>
 class alignas(T) Option {
@@ -55,12 +60,18 @@ public:
     }
 };
 
-template<typename T1, typename T2>
-class Twople {
+template<typename T0, typename T1>
+struct Pair {
+    T0 _0;
     T1 _1;
-    T2 _2;
-public:
-    Twople(T1 a, T2 b) : _1(a), _2(b) { }
+    Pair(const T0 & a, const T1 & b) : _0(a), _1(b) { }
+    Pair(T0 && a, T1 && b) : _0(std::move(a)), _1(std::move(b)) { }
+    Pair(const T0 & a, T1 && b) : _0(a), _1(std::move(b)) { }
+    Pair(T0 && a, const T1 & b) : _0(std::move(a)), _1(b) { }
+    Pair & operator==(const Pair & other) const
+    {
+        return _0 == other._0 && _1 == other._1;
+    }
 };
 
 template<typename T>
@@ -299,6 +310,83 @@ private:
     }
 };
 
+
+template<typename TK, typename TV>
+struct ListMap {
+    Vec<Pair<TK, TV>> list;
+    
+    TV & operator[](const TK & key)
+    {
+        for (size_t i = 0; i < list.size(); i++)
+        {
+            if (list[i]._0 == key)
+                return list[i]._1;
+        }
+        list.push_back({key, {}});
+        return list.back()._1;
+    }
+    size_t count(const TK & key)
+    {
+        for (size_t i = 0; i < list.size(); i++)
+        {
+            if (list[i]._0 == key)
+                return 1;
+        }
+        return 0;
+    }
+    void clear() { list = {}; }
+    
+    void insert(TK && key, TV && val)
+    {
+        list.push_back({key, val});
+    }
+    void insert(const TK & key, TV && val)
+    {
+        list.push_back({key, val});
+    }
+    void insert(TK && key, const TV & val)
+    {
+        list.push_back({key, val});
+    }
+    void insert(const TK & key, const TV & val)
+    {
+        list.push_back({key, val});
+    }
+    
+    Pair<TK, TV> * begin() noexcept { return list.begin(); }
+    Pair<TK, TV> * end() noexcept { return list.end(); }
+    const Pair<TK, TV> * begin() const noexcept { return list.begin(); }
+    const Pair<TK, TV> * end() const noexcept { return list.end(); }
+};
+
+template<typename T>
+struct ListSet {
+    Vec<T> list;
+    size_t count(const T & key)
+    {
+        for (size_t i = 0; i < list.size(); i++)
+        {
+            if (list[i] == key)
+                return 1;
+        }
+        return 0;
+    }
+    void insert(T && key)
+    {
+        list.push_back(key);
+    }
+    void insert(const T & key)
+    {
+        list.push_back(key);
+    }
+    void clear() { list = {}; }
+    
+    T * begin() noexcept { return list.begin(); }
+    T * end() noexcept { return list.end(); }
+    const T * begin() const noexcept { return list.begin(); }
+    const T * end() const noexcept { return list.end(); }
+};
+
 class String {
 private:
     // if bytes.size() is not zero, is long string with bytes.size() - 1 number of non-null chars and 1 null terminator
@@ -328,7 +416,7 @@ public:
     const char & front() const { return bytes.size() ? bytes.front() : shortstr[0]; }
     const char & back() const { return bytes.size() ? bytes.back() : shortstr[shortstr_len]; }
     
-    constexpr bool operator==(const String & other) const&
+    bool operator==(const String & other) const&
     {
         if (other.size() != size())
             return false;
@@ -420,6 +508,7 @@ public:
     }
 };
 
+/*
 template <>
 struct std::hash<String>
 {
@@ -436,5 +525,6 @@ struct std::hash<String>
         return hashval;
     }
 };
+*/
 
 #endif // _INCLUDE_BXX_TYPES

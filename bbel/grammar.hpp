@@ -7,10 +7,9 @@
 
 #include <utility>
 
-#include <unordered_map>
-#include <unordered_set>
-#include <memory>
 #include <algorithm>
+
+#include <memory>
 
 #include "types.hpp"
 
@@ -101,7 +100,7 @@ static std::shared_ptr<MatchingRule> new_rule_text(String text)
 
 struct Grammar
 {
-    std::unordered_map<String, std::shared_ptr<GrammarPoint>> points;
+    ListMap<String, std::shared_ptr<GrammarPoint>> points;
     Vec<std::shared_ptr<MatchingRule>> tokens;
     ~Grammar()
     {
@@ -154,8 +153,8 @@ static auto load_grammar(const char * text) -> Grammar
 {
     assert(text);
     
-    std::unordered_map<String, std::shared_ptr<GrammarPoint>> ret;
-    std::unordered_set<std::shared_ptr<GrammarPoint>> all_points;
+    ListMap<String, std::shared_ptr<GrammarPoint>> ret;
+    ListSet<std::shared_ptr<GrammarPoint>> all_points;
     Vec<std::shared_ptr<MatchingRule>> tokens;
     
     enum Mode {
@@ -210,7 +209,7 @@ static auto load_grammar(const char * text) -> Grammar
         {
             if (current_point->name)
             {
-                ret.insert({*current_point->name, current_point});
+                ret.insert(*current_point->name, current_point);
                 all_points.insert(current_point);
                 current_point = std::make_shared<GrammarPoint>();
             }
@@ -404,7 +403,7 @@ static auto load_grammar(const char * text) -> Grammar
     
     if (current_point->name)
     {
-        ret.insert({*current_point->name, current_point});
+        ret.insert(*current_point->name, current_point);
         all_points.insert(current_point);
     }
     
@@ -679,6 +678,7 @@ struct ParseRecord
     }
 };
 
+/*
 template<>
 struct std::hash<ParseRecord>
 {
@@ -691,11 +691,12 @@ struct std::hash<ParseRecord>
         return x;
     }
 };
+*/
 
-static std::unordered_map<ParseRecord, std::shared_ptr<ASTNode>> parse_hits;
-static std::unordered_set<ParseRecord> parse_misses;
+static ListMap<ParseRecord, std::shared_ptr<ASTNode>> parse_hits;
+static ListSet<ParseRecord> parse_misses;
 static size_t furthest = 0;
-static std::unordered_set<std::shared_ptr<String>> furthest_maybes;
+static ListSet<std::shared_ptr<String>> furthest_maybes;
 
 static void clear_parser_global_state()
 {
@@ -890,7 +891,7 @@ static auto parse_with(const Vec<std::shared_ptr<Token>> & tokens, size_t starti
             auto ret_wrapped = std::make_shared<ASTNode>(ret);
             
             if (node_type->name)
-                parse_hits.insert({base_key, ret_wrapped});
+                parse_hits.insert(base_key, ret_wrapped);
             
             return {ret_wrapped};
         }

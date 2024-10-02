@@ -4,7 +4,6 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#include <unordered_map>
 #include <memory>
 
 #include "../src/bbae_builder.h"
@@ -31,14 +30,14 @@ struct CompilerState
     Block * current_block = 0;
     byte_buffer * buffer = 0;
     
-    Vec<std::unordered_map<String, VarData>> vars = {{}};
+    Vec<ListMap<String, VarData>> vars = {{}};
     Vec<Value *> stack;
     
     VarData add_var(std::shared_ptr<String> name, Type type, Value * backend_var)
     {
         assert(vars.size() > 0);
         auto var = VarData{type, name, backend_var, vars.size() == 2, vars.size() == 1, vars.size() - 1};
-        vars.back().insert({*name, var});
+        vars.back().insert(*name, var);
         return var;
     }
     Option<VarData> get_var(std::shared_ptr<String> name)
@@ -148,9 +147,9 @@ void compile(CompilerState & state, std::shared_ptr<ASTNode> ast)
         
         uint64_t val;
         if ((*text)[0] == '-')
-            val = std::stoll(text->data());
+            val = strtol(text->data(), 0, 10);
         else
-            val = std::stoull(text->data());
+            val = strtoll(text->data(), 0, 10);
         
         state.stack.push_back(build_constant_i64(val));
     }
@@ -158,7 +157,7 @@ void compile(CompilerState & state, std::shared_ptr<ASTNode> ast)
     {
         std::shared_ptr<String> text = ast->children[0]->text;
         
-        double val = std::stold(text->data());
+        double val = strtod(text->data(), 0);
         
         state.stack.push_back(build_constant_f64(val));
     }
