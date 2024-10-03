@@ -1047,7 +1047,8 @@ def encode_table(entries, args):
         alt_table += enc_opcs[1:]
 
     mnem_tab = "".join(f"#define {m} {v:#x}\n" for m, v in mnem_map.items())
-    alt_tab = "".join(f"[{i}] = {v:#x},\n" for i, v in enumerate(alt_table))
+    alt_tab = "".join(f"/*[{i}] = */{v:#x},\n" for i, v in enumerate(alt_table))
+    #alt_tab = "".join(f"[{i}] = {v:#x},\n" for i, v in enumerate(alt_table))
     return mnem_tab, alt_tab
 
 def unique(it):

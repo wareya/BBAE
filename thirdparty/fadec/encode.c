@@ -130,7 +130,7 @@ enc_opc(uint8_t** restrict buf, uint64_t opc, uint64_t epfx)
         if (epfx & (EPFX_REXR4|EPFX_REXX4|EPFX_REXB4|(0x10<<EPFX_VVVV_IDX))) return -1;
         bool vex3 = opc & (OPC_REXW|0x20000) || epfx & (EPFX_REXX|EPFX_REXB);
         unsigned pp = opc >> 20 & 3;
-        *(*buf)++ = 0xc4 | !vex3;
+        *(*buf)++ = 0xc4 | (uint8_t)!vex3;
         unsigned b2 = pp | (opc & 0x800000 ? 0x4 : 0);
         if (vex3) {
             unsigned b1 = opc >> 16 & 3;
@@ -322,38 +322,38 @@ struct EncodingInfo {
 };
 
 const struct EncodingInfo encoding_infos[ENC_MAX] = {
-    [ENC_NP]      = { 0 },
-    [ENC_M]       = { .modrm = 0x0^3 },
-    [ENC_R]       = { .modreg = 0x0^3 },
-    [ENC_M1]      = { .modrm = 0x0^3, .immidx = 1, .immctl = 1 },
-    [ENC_MI]      = { .modrm = 0x0^3, .immidx = 1, .immctl = 4 },
-    [ENC_MC]      = { .modrm = 0x0^3, .zregidx = 0x1^3, .zregval = 1 },
-    [ENC_MR]      = { .modrm = 0x0^3, .modreg = 0x1^3 },
-    [ENC_RM]      = { .modrm = 0x1^3, .modreg = 0x0^3 },
-    [ENC_RMA]     = { .modrm = 0x1^3, .modreg = 0x0^3, .zregidx = 0x2^3, .zregval = 0 },
-    [ENC_MRI]     = { .modrm = 0x0^3, .modreg = 0x1^3, .immidx = 2,  .immctl = 4 },
-    [ENC_RMI]     = { .modrm = 0x1^3, .modreg = 0x0^3, .immidx = 2,  .immctl = 4 },
-    [ENC_MRC]     = { .modrm = 0x0^3, .modreg = 0x1^3, .zregidx = 0x2^3, .zregval = 1 },
-    [ENC_AM]      = { .modrm = 0x1^3, .zregidx = 0x0^3, .zregval = 0 },
-    [ENC_MA]      = { .modrm = 0x0^3, .zregidx = 0x1^3, .zregval = 0 },
-    [ENC_I]       = { .immidx = 0, .immctl = 4 },
-    [ENC_IA]      = { .immidx = 1, .immctl = 4, .zregidx = 0x0^3, .zregval = 0 },
-    [ENC_O]       = { .modreg = 0x0^3 },
-    [ENC_OI]      = { .modreg = 0x0^3, .immidx = 1, .immctl = 4 },
-    [ENC_OA]      = { .modreg = 0x0^3, .zregidx = 0x1^3, .zregval = 0 },
-    [ENC_S]       = { 0 },
-    [ENC_A]       = { .zregidx = 0x0^3, .zregval = 0 },
-    [ENC_D]       = { .immidx = 0, .immctl = 6 },
-    [ENC_FD]      = { .immidx = 1, .immctl = 2, .zregidx = 0x0^3, .zregval = 0 },
-    [ENC_TD]      = { .immidx = 0, .immctl = 2, .zregidx = 0x1^3, .zregval = 0 },
-    [ENC_RVM]     = { .modrm = 0x2^3, .modreg = 0x0^3, .vexreg = 0x1^3 },
-    [ENC_RVMI]    = { .modrm = 0x2^3, .modreg = 0x0^3, .vexreg = 0x1^3, .immidx = 3, .immctl = 4 },
-    [ENC_RVMR]    = { .modrm = 0x2^3, .modreg = 0x0^3, .vexreg = 0x1^3, .immidx = 3, .immctl = 3 },
-    [ENC_RMV]     = { .modrm = 0x1^3, .modreg = 0x0^3, .vexreg = 0x2^3 },
-    [ENC_VM]      = { .modrm = 0x1^3, .vexreg = 0x0^3 },
-    [ENC_VMI]     = { .modrm = 0x1^3, .vexreg = 0x0^3, .immidx = 2, .immctl = 4 },
-    [ENC_MVR]     = { .modrm = 0x0^3, .modreg = 0x2^3, .vexreg = 0x1^3 },
-    [ENC_MRV]     = { .modrm = 0x0^3, .modreg = 0x1^3, .vexreg = 0x2^3 },
+    /*[ENC_NP]      = */ { 0 },
+    /*[ENC_M]       = */ { .modrm = 0x0^3 },
+    /*[ENC_R]       = */ { .modreg = 0x0^3 },
+    /*[ENC_M1]      = */ { .modrm = 0x0^3, .immidx = 1, .immctl = 1 },
+    /*[ENC_MI]      = */ { .modrm = 0x0^3, .immidx = 1, .immctl = 4 },
+    /*[ENC_MC]      = */ { .modrm = 0x0^3, .zregidx = 0x1^3, .zregval = 1 },
+    /*[ENC_MR]      = */ { .modrm = 0x0^3, .modreg = 0x1^3 },
+    /*[ENC_RM]      = */ { .modrm = 0x1^3, .modreg = 0x0^3 },
+    /*[ENC_RMA]     = */ { .modrm = 0x1^3, .modreg = 0x0^3, .zregidx = 0x2^3, .zregval = 0 },
+    /*[ENC_MRI]     = */ { .modrm = 0x0^3, .modreg = 0x1^3, .immidx = 2,  .immctl = 4 },
+    /*[ENC_RMI]     = */ { .modrm = 0x1^3, .modreg = 0x0^3, .immidx = 2,  .immctl = 4 },
+    /*[ENC_MRC]     = */ { .modrm = 0x0^3, .modreg = 0x1^3, .zregidx = 0x2^3, .zregval = 1 },
+    /*[ENC_AM]      = */ { .modrm = 0x1^3, .zregidx = 0x0^3, .zregval = 0 },
+    /*[ENC_MA]      = */ { .modrm = 0x0^3, .zregidx = 0x1^3, .zregval = 0 },
+    /*[ENC_I]       = */ { .immidx = 0, .immctl = 4 },
+    /*[ENC_IA]      = */ { .immidx = 1, .immctl = 4, .zregidx = 0x0^3, .zregval = 0 },
+    /*[ENC_O]       = */ { .modreg = 0x0^3 },
+    /*[ENC_OI]      = */ { .modreg = 0x0^3, .immidx = 1, .immctl = 4 },
+    /*[ENC_OA]      = */ { .modreg = 0x0^3, .zregidx = 0x1^3, .zregval = 0 },
+    /*[ENC_S]       = */ { 0 },
+    /*[ENC_A]       = */ { .zregidx = 0x0^3, .zregval = 0 },
+    /*[ENC_D]       = */ { .immidx = 0, .immctl = 6 },
+    /*[ENC_FD]      = */ { .immidx = 1, .immctl = 2, .zregidx = 0x0^3, .zregval = 0 },
+    /*[ENC_TD]      = */ { .immidx = 0, .immctl = 2, .zregidx = 0x1^3, .zregval = 0 },
+    /*[ENC_RVM]     = */ { .modrm = 0x2^3, .modreg = 0x0^3, .vexreg = 0x1^3 },
+    /*[ENC_RVMI]    = */ { .modrm = 0x2^3, .modreg = 0x0^3, .vexreg = 0x1^3, .immidx = 3, .immctl = 4 },
+    /*[ENC_RVMR]    = */ { .modrm = 0x2^3, .modreg = 0x0^3, .vexreg = 0x1^3, .immidx = 3, .immctl = 3 },
+    /*[ENC_RMV]     = */ { .modrm = 0x1^3, .modreg = 0x0^3, .vexreg = 0x2^3 },
+    /*[ENC_VM]      = */ { .modrm = 0x1^3, .vexreg = 0x0^3 },
+    /*[ENC_VMI]     = */ { .modrm = 0x1^3, .vexreg = 0x0^3, .immidx = 2, .immctl = 4 },
+    /*[ENC_MVR]     = */ { .modrm = 0x0^3, .modreg = 0x2^3, .vexreg = 0x1^3 },
+    /*[ENC_MRV]     = */ { .modrm = 0x0^3, .modreg = 0x1^3, .vexreg = 0x2^3 },
 };
 
 static const uint64_t alt_tab[] = {

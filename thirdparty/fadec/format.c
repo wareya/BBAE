@@ -25,8 +25,12 @@ struct FdStr {
     const char* s;
     unsigned sz;
 };
-
+#ifdef __cplusplus
+typedef struct FdStr SFdStr;
+#define fd_stre(s) (SFdStr { (s "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"), sizeof (s)-1 })
+#else
 #define fd_stre(s) ((struct FdStr) { (s "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"), sizeof (s)-1 })
+#endif
 
 static char*
 fd_strpcat(char* restrict dst, struct FdStr src) {
@@ -134,17 +138,17 @@ fd_strpcatreg(char* restrict dst, size_t rt, size_t ri, unsigned size) {
         "\5xmm28\0 \5xmm29\0 \5xmm30\0 \5xmm31\0 ";
 
     static const uint16_t nametabidx[] = {
-        [FD_RT_VEC] = 4 * 17*8 + 8 * 8 + 0,
-        [FD_RT_GPL] = 0 * 17*8 + 0 * 8 + 0,
-        [FD_RT_GPH] = 0 * 17*8 + 8 * 8 + 5,
-        [FD_RT_SEG] = 1 * 17*8 + 8 * 8 + 5,
-        [FD_RT_FPU] = 4 * 17*8 + 0 * 8 + 0,
-        [FD_RT_MMX] = 2 * 17*8 + 0 * 8 + 4,
-        [FD_RT_TMM] = 1 * 17*8 + 0 * 8 + 3,
-        [FD_RT_MASK]= 2 * 17*8 + 8 * 8 + 5,
-        [FD_RT_BND] = 0 * 17*8 + 0 * 8 + 3,
-        [FD_RT_CR]  = 3 * 17*8 + 0 * 8 + 4,
-        [FD_RT_DR]  = 3 * 17*8 + 9 * 8 + 4,
+        /*[FD_RT_VEC]  = */4 * 17*8 + 8 * 8 + 0,
+        /*[FD_RT_GPL]  = */0 * 17*8 + 0 * 8 + 0,
+        /*[FD_RT_GPH]  = */0 * 17*8 + 8 * 8 + 5,
+        /*[FD_RT_SEG]  = */1 * 17*8 + 8 * 8 + 5,
+        /*[FD_RT_FPU]  = */4 * 17*8 + 0 * 8 + 0,
+        /*[FD_RT_MMX]  = */2 * 17*8 + 0 * 8 + 4,
+        /*[FD_RT_TMM]  = */1 * 17*8 + 0 * 8 + 3,
+        /*[FD_RT_MASK] = */2 * 17*8 + 8 * 8 + 5,
+        /*[FD_RT_BND]  = */0 * 17*8 + 0 * 8 + 3,
+        /*[FD_RT_CR]   = */3 * 17*8 + 0 * 8 + 4,
+        /*[FD_RT_DR]   = */3 * 17*8 + 9 * 8 + 4,
     };
 
     unsigned idx = rt == FD_RT_GPL ? size * 17*8 : nametabidx[rt];
@@ -422,7 +426,12 @@ fd_format_impl(char buf[DECLARE_RESTRICTED_ARRAY_SIZE(128)], const FdInstr* inst
                 "\12fword ptr      "  // far ptr; dword + 2
                 "\12tbyte ptr      "; // far ptr/FPU; qword + 2
             const char* ptrsize = ptrsizes + 16 * (size + 1);
+
+#ifdef __cplusplus
+            buf = fd_strpcat(buf, SFdStr { ptrsize+1, (unsigned int)*ptrsize });
+#else
             buf = fd_strpcat(buf, (struct FdStr) { ptrsize+1, (unsigned int)*ptrsize });
+#endif
 
             unsigned seg = FD_SEGMENT(instr);
             if (seg != FD_REG_NONE) {
@@ -462,7 +471,11 @@ fd_format_impl(char buf[DECLARE_RESTRICTED_ARRAY_SIZE(128)], const FdInstr* inst
                 unsigned bcstszidx = FD_OP_SIZELG(instr, i) - FD_OP_BCSTSZLG(instr, i) - 1;
                 const char* bcstsizes = "\6{1to2} \6{1to4} \6{1to8} \7{1to16}\7{1to32}         ";
                 const char* bcstsize = bcstsizes + bcstszidx * 8;
+#ifdef __cplusplus
+                buf = fd_strpcat(buf, SFdStr { bcstsize+1, (unsigned int)*bcstsize });
+#else
                 buf = fd_strpcat(buf, (struct FdStr) { bcstsize+1, (unsigned int)*bcstsize });
+#endif
             }
         } else if (op_type == FD_OT_IMM || op_type == FD_OT_OFF) {
             uint64_t immediate = FD_OP_IMM(instr, i);
