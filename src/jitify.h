@@ -15,10 +15,14 @@
 static void * VirtualAllocNearProcess(size_t * len)
 {
     size_t check_size = 1 << 16;
+#ifndef _MSC_VER
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
+#endif
     size_t start_at = (size_t)(void *)VirtualAllocNearProcess;
+#ifndef _MSC_VER
 #pragma GCC diagnostic pop
+#endif
     start_at = (start_at >> 16) << 16;
     size_t start_at_2 = start_at;
     *len = ((*len + (1 << 16) - 1) >> 16) << 16;

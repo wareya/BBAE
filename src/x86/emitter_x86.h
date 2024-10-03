@@ -14,10 +14,11 @@ extern "C"
 
 #define enc_imm fadec_enc_imm
 
-#ifdef __cplusplus
+#if (defined __cplusplus) || (defined _MSC_VER)
 #define restrict __restrict
 #endif
 
+#ifndef _MSC_VER
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
 #ifdef __cplusplus
@@ -27,11 +28,16 @@ extern "C"
 #pragma GCC diagnostic ignored "-Wc99-designator"
 #endif
 #pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#endif // _MSC_VER
+
 #include "../../thirdparty/fadec/fadec-enc.h"
 #include "../../thirdparty/fadec/encode.c"
-#pragma GCC diagnostic pop
 
-#ifdef __cplusplus
+#ifndef _MSC_VER
+#pragma GCC diagnostic pop
+#endif // _MSC_VER
+
+#if (defined __cplusplus) || (defined _MSC_VER)
 #undef restrict
 #endif
 
@@ -597,7 +603,9 @@ static inline uint64_t name_to_inst(int name, EncOperand * ops, int n)
         case INST_MFENCE    : return FE_MFENCE;
         case INST_SFENCE    : return FE_SFENCE;
         
-        default: assert(((void)"unknown instruction!", 0));
+        default:
+            assert(((void)"unknown instruction!", 0));
+            return 0;
     }
     
     #undef _BBAE_SSELIKE_BIT
@@ -783,9 +791,7 @@ static inline void enc_emit_n(byte_buffer * bytes, int name, EncOperand * ops, i
     
     int failed = 0;
     
-    if (n == 5)
-        failed = fe_enc64(&cur, inst, ops[0].op, ops[1].op, ops[2].op, ops[3].op, ops[4].op);
-    else if (n == 4)
+    if (n == 4)
         failed = fe_enc64(&cur, inst, ops[0].op, ops[1].op, ops[2].op, ops[3].op);
     else if (n == 3)
         failed = fe_enc64(&cur, inst, ops[0].op, ops[1].op, ops[2].op);

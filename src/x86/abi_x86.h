@@ -132,7 +132,7 @@ static inline int64_t abi_get_next_arg_basic(uint8_t word_is_float)
         else if (used == 3)
             return (!word_is_float) ? _ABI_R9  : _ABI_XMM3;
         else // used >= 4
-            return -(48 + (used - 4) * 8);
+            return -(48 + ((ptrdiff_t)used - 4) * 8);
     }
     else
     {
@@ -145,7 +145,7 @@ static inline int64_t abi_get_next_arg_basic(uint8_t word_is_float)
             
             size_t offset = 16 + abi_stack_used;
             abi_stack_used += 8;
-            return -offset;
+            return -(ptrdiff_t)offset;
         }
         else
         {
@@ -168,7 +168,7 @@ static inline int64_t abi_get_next_arg_basic(uint8_t word_is_float)
             
             size_t offset = 16 + abi_stack_used;
             abi_stack_used += 8;
-            return -offset;
+            return -(ptrdiff_t)offset;
         }
     }
 }

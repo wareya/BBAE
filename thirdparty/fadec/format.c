@@ -447,7 +447,7 @@ fd_format_impl(char buf[DECLARE_RESTRICTED_ARRAY_SIZE(128)], const FdInstr* inst
             if (disp && (has_base || has_idx)) {
                 *buf++ = (int64_t) disp < 0 ? '-' : '+';
                 if ((int64_t) disp < 0)
-                    disp = -disp;
+                    disp = -(int64_t)disp;
             }
             if (FD_ADDRSIZELG(instr) == 1)
                 disp &= 0xffff;

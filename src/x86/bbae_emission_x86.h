@@ -61,6 +61,7 @@ static EncOperand get_basic_encoperand_mem(Value * value, uint8_t want_ptr)
     {
         printf("culprit: %d\n", value->variant);
         assert(((void)"TODO", 0));
+        return enc_reg(0, 0); // silence broken MSVC warning
     }
 }
 

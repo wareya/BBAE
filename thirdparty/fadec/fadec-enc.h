@@ -58,7 +58,14 @@ typedef int64_t FeOp;
 #include "prebuilt/fadec-encode-public.inc"
 
 /** Do not use. **/
-#define fe_enc64_1(buf, mnem, op0, op1, op2, op3, ...) fe_enc64_impl(buf, mnem, op0, op1, op2, op3)
+#define fe_enc_1(a)                fe_enc64_impl(a, 0, 0, 0, 0, 0)
+#define fe_enc_2(a, b)             fe_enc64_impl(a, b, 0, 0, 0, 0)
+#define fe_enc_3(a, b, c)          fe_enc64_impl(a, b, c, 0, 0, 0)
+#define fe_enc_4(a, b, c, d)       fe_enc64_impl(a, b, c, d, 0, 0)
+#define fe_enc_5(a, b, c, d, e)    fe_enc64_impl(a, b, c, d, e, 0)
+#define fe_enc_6(a, b, c, d, e, f) fe_enc64_impl(a, b, c, d, e, f)
+#define fe_mexpand(x) x
+#define fe_get_macro(_1, _2, _3, _4, _5, _6, NAME, ...) NAME
 /** Encode a single instruction for 64-bit mode.
  * \param buf Pointer to the buffer for instruction bytes, must have a size of
  *        15 bytes. The pointer is advanced by the number of bytes used for
@@ -71,7 +78,7 @@ typedef int64_t FeOp;
  *        buf and the size of the encoded instruction are subtracted internally.
  * \return Zero for success or a negative value in case of an error.
  **/
-#define fe_enc64(buf, ...) fe_enc64_1(buf, __VA_ARGS__, 0, 0, 0, 0, 0)
+#define fe_enc64(...) fe_mexpand(fe_get_macro(__VA_ARGS__, fe_enc_6, fe_enc_5, fe_enc_4, fe_enc_3, fe_enc_2, fe_enc_1)(__VA_ARGS__))
 /** Do not use. **/
 int fe_enc64_impl(uint8_t** buf, uint64_t mnem, FeOp op0, FeOp op1, FeOp op2, FeOp op3);
 

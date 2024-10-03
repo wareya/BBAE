@@ -180,6 +180,7 @@ static inline Value * parse_value(Program * program, char * token)
             assert(((void)"unknown type of literal value", 0));
         }
         assert(((void)"unreachable", 0));
+        return 0; // silence broken MSVC warning
     }
     else
     {
@@ -222,6 +223,7 @@ static inline Value * parse_value(Program * program, char * token)
         
         printf("culprit: %s\n", token);
         assert(((void)"tried to use unknown variable", 0));
+        return 0; // silence broken MSVC warning
     }
 }
 

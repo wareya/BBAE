@@ -9,13 +9,18 @@
 
 #if __STDC_VERSION__ <= 199901L
 #define _Static_assert(a, b) assert(((void)(b), a))
+#ifdef _MSC_VER
+#define _Alignas(x) __declspec(align(x))
+#else
 #define _Alignas(x) __attribute__((__aligned__(x))) 
+#endif
 #endif
 
 #ifdef __cplusplus
 #define restrict __restrict
 #endif
 
+#ifndef _MSC_VER
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
 #pragma GCC diagnostic ignored "-Woverlength-strings"
@@ -23,6 +28,7 @@
 #ifdef __clang__
 #pragma GCC diagnostic ignored "-Wc99-designator"
 #endif
+#endif // _MSC_VER
 
 #include "../thirdparty/fadec/fadec.h"
 #include "../thirdparty/fadec/decode.c"
@@ -32,7 +38,9 @@
 #undef LIKELY
 #undef UNLIKELY
 
+#ifndef _MSC_VER
 #pragma GCC diagnostic pop
+#endif // _MSC_VER
 
 #ifdef __cplusplus
 #undef restrict
@@ -104,11 +112,15 @@ uint64_t compile_and_run(const char * fname, uint64_t arg, uint8_t with_double)
     print_asm(jitinfo.jit_code, jitinfo.raw_code->len);
     
     // suppress non-posix-compliant gcc function pointer casting warning
+#ifndef _MSC_VER
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
+#endif
     uint64_t (*jit_main)(uint64_t) = (uint64_t(*)(uint64_t))(void *)(&jit_code[loc]);
     double (*jit_main_double)(uint64_t) = (double(*)(uint64_t))(void *)(&jit_code[loc]);
+#ifndef _MSC_VER
 #pragma GCC diagnostic pop
+#endif
     
     assert(jitinfo.raw_code);
     assert(jit_main);

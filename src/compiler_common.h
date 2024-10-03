@@ -164,7 +164,7 @@ static inline uint64_t my_strtoull(const char * str, const char ** endptr)
     if (endptr)
         *endptr = str;
     
-    return negative ? -out : out;
+    return negative ? (uint64_t)-(int64_t)out : out;
 }
 
 static uint64_t temp_ctr = 0;
@@ -296,7 +296,10 @@ static inline size_t type_size(Type type)
     else if (type.variant == TYPE_F64)
         return 8;
     else
+    {
         assert(0);
+        return 0; // silence broken MSVC warning
+    }
 }
 
 static inline uint8_t aggdata_same(AggData a, AggData b)
@@ -930,7 +933,10 @@ static inline uint8_t operands_same(Operand a, Operand b)
     else if (a.variant == OP_KIND_RAWINTEGER)
         return a.rawint == b.rawint;
     else 
+    {
         assert("FIXME" && 0);
+        return 0; // silence broken MSVC warning
+    }
 }
 
 static inline void connect_statement_to_operand(Statement * statement, Operand op)

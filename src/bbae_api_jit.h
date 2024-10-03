@@ -28,7 +28,7 @@ void jit_relocate_globals(Program * program, uint8_t * jit_code, size_t code_len
             assert(((void)"TODO: check for other symbols like function names etc", 0));
         
         if (reloc_size == 4)
-            assert(diff >= -2147483648 && diff <= 2147483647);
+            assert(diff >= -2147483647 - 1 && diff <= 2147483647);
         else if (reloc_size == 1)
             assert(diff >= -128 && diff <= 127);
         

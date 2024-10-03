@@ -35,8 +35,9 @@ static void apply_relocations(Program * program, NameUsageInfo * usages, byte_bu
         int64_t rewrite_loc = info.loc;
         if (info.size == 4)
         {
+            fflush(stderr);
             int64_t diff = target - (rewrite_loc + 4);
-            assert(diff >= -2147483648 && diff <= 2147483647);
+            assert(diff >= -2147483647 - 1 && diff <= 2147483647);
             assert(rewrite_loc + 4 <= (int64_t)code->len);
             memcpy(code->data + rewrite_loc, &diff, 4);
         }
