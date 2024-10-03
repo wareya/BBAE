@@ -7,27 +7,6 @@
 #include "memory.h"
 #include "bbae_api_jit.h"
 
-void print_asm(uint8_t * code, size_t len)
-{
-    //FILE * logfile = 0;
-    
-    size_t offset = 0; 
-    size_t runtime_address = 0; 
-    ZydisDisassembledInstruction instruction; 
-    while (ZYAN_SUCCESS(ZydisDisassembleIntel(
-        ZYDIS_MACHINE_MODE_LONG_64,
-        runtime_address,
-        code + offset,  // buffer
-        len - offset,   // length
-        &instruction
-    )))
-    {
-        printf("0x%04zX    %s\n", offset, instruction.text);
-        offset += instruction.info.length;
-        runtime_address += instruction.info.length;
-    }
-}
-
 uint64_t compile_and_run(const char * fname, uint64_t arg, uint8_t with_double)
 {
     FILE * f = fopen(fname, "rb");
@@ -65,7 +44,7 @@ uint64_t compile_and_run(const char * fname, uint64_t arg, uint8_t with_double)
     }
     assert(loc >= 0);
     
-    print_asm(jitinfo.jit_code, jitinfo.raw_code->len);
+    //print_asm(jitinfo.jit_code, jitinfo.raw_code->len);
     
     // suppress non-posix-compliant gcc function pointer casting warning
 #pragma GCC diagnostic push
