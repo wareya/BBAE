@@ -198,148 +198,149 @@ fd_decode(const uint8_t* buffer, size_t len_sz, int mode_int, uintptr_t address,
     if (UNLIKELY(off >= len))
         return FD_ERR_PARTIAL;
 
-    unsigned opcode_escape = 0;
-    uint8_t mandatory_prefix = 0; // without escape/VEX/EVEX, this is ignored.
-    if (buffer[off] == 0x0f)
     {
-        if (UNLIKELY(off + 1 >= len))
-            return FD_ERR_PARTIAL;
-        if (buffer[off + 1] == 0x38)
-            opcode_escape = 2;
-        else if (buffer[off + 1] == 0x3a)
-            opcode_escape = 3;
-        else
-            opcode_escape = 1;
-        off += opcode_escape >= 2 ? 2 : 1;
-
-        // If there is no REP/REPNZ prefix offer 66h as mandatory prefix. If
-        // there is a REP prefix, then the 66h prefix is ignored here.
-        mandatory_prefix = prefix_rep ? prefix_rep ^ 0xf1 : !!prefixes[PF_66];
-    }
-    else if (UNLIKELY((unsigned) buffer[off] - 0xc4 < 2 || buffer[off] == 0x62))
-    {
-        unsigned vex_prefix = buffer[off];
-        // VEX (C4/C5) or EVEX (62)
-        if (UNLIKELY(off + 1 >= len))
-            return FD_ERR_PARTIAL;
-        if (UNLIKELY(mode == DECODE_32 && buffer[off + 1] < 0xc0)) {
-            off++;
-            table_entry = table_walk(table_entry, 0);
-            // table_entry kinds: INSTR(0)
-            goto direct;
-        }
-
-        // VEX/EVEX + 66/F3/F2/REX will #UD.
-        // Note: REX is also here only respected if it immediately precedes the
-        // opcode, in this case the VEX/EVEX "prefix".
-        if (prefixes[PF_66] || prefixes[PF_REP] || prefix_rex)
-            return FD_ERR_UD;
-
-        uint8_t byte = buffer[off + 1];
-        if (vex_prefix == 0xc5) // 2-byte VEX
+        unsigned opcode_escape = 0;
+        uint8_t mandatory_prefix = 0; // without escape/VEX/EVEX, this is ignored.
+        if (buffer[off] == 0x0f)
         {
-            opcode_escape = 1;
-            prefix_rex = byte & 0x80 ? 0 : PREFIX_REXR;
+            if (UNLIKELY(off + 1 >= len))
+                return FD_ERR_PARTIAL;
+            if (buffer[off + 1] == 0x38)
+                opcode_escape = 2;
+            else if (buffer[off + 1] == 0x3a)
+                opcode_escape = 3;
+            else
+                opcode_escape = 1;
+            off += opcode_escape >= 2 ? 2 : 1;
+
+            // If there is no REP/REPNZ prefix offer 66h as mandatory prefix. If
+            // there is a REP prefix, then the 66h prefix is ignored here.
+            mandatory_prefix = prefix_rep ? prefix_rep ^ 0xf1 : !!prefixes[PF_66];
         }
-        else // 3-byte VEX or EVEX
+        else if (UNLIKELY((unsigned) buffer[off] - 0xc4 < 2 || buffer[off] == 0x62))
         {
-            // SDM Vol 2A 2-15 (Dec. 2016): Ignored in 32-bit mode
-            if (mode == DECODE_64)
-                prefix_rex = byte >> 5 ^ 0x7;
+            unsigned vex_prefix = buffer[off];
+            // VEX (C4/C5) or EVEX (62)
+            if (UNLIKELY(off + 1 >= len))
+                return FD_ERR_PARTIAL;
+            if (UNLIKELY(mode == DECODE_32 && buffer[off + 1] < 0xc0)) {
+                off++;
+                table_entry = table_walk(table_entry, 0);
+                // table_entry kinds: INSTR(0)
+                goto direct;
+            }
+
+            // VEX/EVEX + 66/F3/F2/REX will #UD.
+            // Note: REX is also here only respected if it immediately precedes the
+            // opcode, in this case the VEX/EVEX "prefix".
+            if (prefixes[PF_66] || prefixes[PF_REP] || prefix_rex)
+                return FD_ERR_UD;
+
+            uint8_t byte = buffer[off + 1];
+            if (vex_prefix == 0xc5) // 2-byte VEX
+            {
+                opcode_escape = 1;
+                prefix_rex = byte & 0x80 ? 0 : PREFIX_REXR;
+            }
+            else // 3-byte VEX or EVEX
+            {
+                // SDM Vol 2A 2-15 (Dec. 2016): Ignored in 32-bit mode
+                if (mode == DECODE_64)
+                    prefix_rex = byte >> 5 ^ 0x7;
+                if (vex_prefix == 0x62) // EVEX
+                {
+                    if (byte & 0x08) // Bit 3 of opcode_escape must be clear.
+                        return FD_ERR_UD;
+                    _Static_assert(PREFIX_REXRR == 0x10, "wrong REXRR value");
+                    if (mode == DECODE_64)
+                        prefix_rex |= (byte & PREFIX_REXRR) ^ PREFIX_REXRR;
+                }
+                else // 3-byte VEX
+                {
+                    if (byte & 0x18) // Bits 4:3 of opcode_escape must be clear.
+                        return FD_ERR_UD;
+                }
+
+                opcode_escape = (byte & 0x07);
+                if (UNLIKELY(opcode_escape == 0)) {
+                    int prefix_len = vex_prefix == 0x62 ? 4 : 3;
+                    // Pretend to decode the prefix plus one opcode byte.
+                    return off + prefix_len > len ? FD_ERR_PARTIAL : FD_ERR_UD;
+                }
+
+                // Load third byte of VEX prefix
+                if (UNLIKELY(off + 2 >= len))
+                    return FD_ERR_PARTIAL;
+                byte = buffer[off + 2];
+                prefix_rex |= byte & 0x80 ? PREFIX_REXW : 0;
+            }
+
+            mandatory_prefix = byte & 3;
+            vex_operand = ((byte & 0x78) >> 3) ^ 0xf;
+            prefix_rex |= PREFIX_VEX;
+
             if (vex_prefix == 0x62) // EVEX
             {
-                if (byte & 0x08) // Bit 3 of opcode_escape must be clear.
+                if (!(byte & 0x04)) // Bit 10 must be 1.
                     return FD_ERR_UD;
-                _Static_assert(PREFIX_REXRR == 0x10, "wrong REXRR value");
-                if (mode == DECODE_64)
-                    prefix_rex |= (byte & PREFIX_REXRR) ^ PREFIX_REXRR;
+                if (UNLIKELY(off + 3 >= len))
+                    return FD_ERR_PARTIAL;
+                byte = buffer[off + 3];
+                // prefix_evex is z:L'L/RC:b:V':aaa
+                vexl = (byte >> 5) & 3;
+                prefix_evex = byte | 0x100; // Ensure that prefix_evex is non-zero.
+                if (mode == DECODE_64) // V' causes UD in 32-bit mode
+                    vex_operand |= byte & 0x08 ? 0 : 0x10; // V'
+                else if (!(byte & 0x08))
+                    return FD_ERR_UD;
+                off += 4;
             }
-            else // 3-byte VEX
+            else // VEX
             {
-                if (byte & 0x18) // Bits 4:3 of opcode_escape must be clear.
-                    return FD_ERR_UD;
+                vexl = byte & 0x04 ? 1 : 0;
+                off += 0xc7 - vex_prefix; // 3 for c4, 2 for c5
             }
-
-            opcode_escape = (byte & 0x07);
-            if (UNLIKELY(opcode_escape == 0)) {
-                int prefix_len = vex_prefix == 0x62 ? 4 : 3;
-                // Pretend to decode the prefix plus one opcode byte.
-                return off + prefix_len > len ? FD_ERR_PARTIAL : FD_ERR_UD;
-            }
-
-            // Load third byte of VEX prefix
-            if (UNLIKELY(off + 2 >= len))
-                return FD_ERR_PARTIAL;
-            byte = buffer[off + 2];
-            prefix_rex |= byte & 0x80 ? PREFIX_REXW : 0;
         }
 
-        mandatory_prefix = byte & 3;
-        vex_operand = ((byte & 0x78) >> 3) ^ 0xf;
-        prefix_rex |= PREFIX_VEX;
-
-        if (vex_prefix == 0x62) // EVEX
-        {
-            if (!(byte & 0x04)) // Bit 10 must be 1.
-                return FD_ERR_UD;
-            if (UNLIKELY(off + 3 >= len))
-                return FD_ERR_PARTIAL;
-            byte = buffer[off + 3];
-            // prefix_evex is z:L'L/RC:b:V':aaa
-            vexl = (byte >> 5) & 3;
-            prefix_evex = byte | 0x100; // Ensure that prefix_evex is non-zero.
-            if (mode == DECODE_64) // V' causes UD in 32-bit mode
-                vex_operand |= byte & 0x08 ? 0 : 0x10; // V'
-            else if (!(byte & 0x08))
-                return FD_ERR_UD;
-            off += 4;
-        }
-        else // VEX
-        {
-            vexl = byte & 0x04 ? 1 : 0;
-            off += 0xc7 - vex_prefix; // 3 for c4, 2 for c5
-        }
-    }
-
-    table_entry = table_walk(table_entry, opcode_escape);
-    // table_entry kinds: INSTR(0) [only for invalid], T256(2)
-    if (UNLIKELY(!table_entry))
-        return FD_ERR_UD;
-    if (UNLIKELY(off >= len))
-        return FD_ERR_PARTIAL;
-    table_entry = table_walk(table_entry, buffer[off++]);
-    // table_entry kinds: INSTR(0), T16(1), TVEX(2), TPREFIX(3)
-
-    // Handle mandatory prefixes (which behave like an opcode ext.).
-    if ((table_entry & 3) == 3)
-        table_entry = table_walk(table_entry, mandatory_prefix);
-    // table_entry kinds: INSTR(0), T16(1), TVEX(2)
-
-    // Then, walk through ModR/M-encoded opcode extensions.
-    if (table_entry & 1) {
+        table_entry = table_walk(table_entry, opcode_escape);
+        // table_entry kinds: INSTR(0) [only for invalid], T256(2)
+        if (UNLIKELY(!table_entry))
+            return FD_ERR_UD;
         if (UNLIKELY(off >= len))
             return FD_ERR_PARTIAL;
-        unsigned isreg = buffer[off] >= 0xc0;
-        table_entry = table_walk(table_entry, ((buffer[off] >> 2) & 0xe) | isreg);
-        // table_entry kinds: INSTR(0), T8E(1), TVEX(2)
-        if (table_entry & 1)
-            table_entry = table_walk(table_entry, buffer[off] & 7);
-    }
-    // table_entry kinds: INSTR(0), TVEX(2)
+        table_entry = table_walk(table_entry, buffer[off++]);
+        // table_entry kinds: INSTR(0), T16(1), TVEX(2), TPREFIX(3)
 
-    // For VEX prefix, we have to distinguish between VEX.W and VEX.L which may
-    // be part of the opcode.
-    if (UNLIKELY(table_entry & 2))
-    {
-        uint8_t index = 0;
-        index |= prefix_rex & PREFIX_REXW ? (1 << 0) : 0;
-        // When EVEX.L'L is the rounding mode, the instruction must not have
-        // L'L constraints.
-        index |= vexl << 1;
-        table_entry = table_walk(table_entry, index);
-    }
-    // table_entry kinds: INSTR(0)
+        // Handle mandatory prefixes (which behave like an opcode ext.).
+        if ((table_entry & 3) == 3)
+            table_entry = table_walk(table_entry, mandatory_prefix);
+        // table_entry kinds: INSTR(0), T16(1), TVEX(2)
 
+        // Then, walk through ModR/M-encoded opcode extensions.
+        if (table_entry & 1) {
+            if (UNLIKELY(off >= len))
+                return FD_ERR_PARTIAL;
+            unsigned isreg = buffer[off] >= 0xc0;
+            table_entry = table_walk(table_entry, ((buffer[off] >> 2) & 0xe) | isreg);
+            // table_entry kinds: INSTR(0), T8E(1), TVEX(2)
+            if (table_entry & 1)
+                table_entry = table_walk(table_entry, buffer[off] & 7);
+        }
+        // table_entry kinds: INSTR(0), TVEX(2)
+
+        // For VEX prefix, we have to distinguish between VEX.W and VEX.L which may
+        // be part of the opcode.
+        if (UNLIKELY(table_entry & 2))
+        {
+            uint8_t index = 0;
+            index |= prefix_rex & PREFIX_REXW ? (1 << 0) : 0;
+            // When EVEX.L'L is the rounding mode, the instruction must not have
+            // L'L constraints.
+            index |= vexl << 1;
+            table_entry = table_walk(table_entry, index);
+        }
+        // table_entry kinds: INSTR(0)
+    }
 direct:
     // table_entry kinds: INSTR(0)
     if (UNLIKELY(!table_entry))
@@ -358,7 +359,8 @@ direct:
     instr->address = address;
 
     for (unsigned i = 0; i < sizeof(instr->operands) / sizeof(FdOp); i++)
-        instr->operands[i] = (FdOp) {0};
+        memset(instr->operands + i, 0, sizeof(FdOp));
+        //instr->operands[i] = (FdOp) {0};
 
     if (DESC_MODRM(desc) && UNLIKELY(off++ >= len))
         return FD_ERR_PARTIAL;
@@ -416,7 +418,7 @@ direct:
     }
 
     uint8_t operand_sizes[4] = {
-        DESC_SIZE_FIX1(desc), DESC_SIZE_FIX2(desc) + 1, op_size, op_size_alt
+        (uint8_t)DESC_SIZE_FIX1(desc), (uint8_t)(DESC_SIZE_FIX2(desc) + 1), (uint8_t)op_size, (uint8_t)op_size_alt
     };
 
     if (UNLIKELY(instr->type == FDI_MOV_CR || instr->type == FDI_MOV_DR)) {
@@ -537,54 +539,56 @@ direct:
                 goto end_modrm;
             }
 
-            // SIB byte
-            uint8_t base = rm;
-            if (rm == 4) {
-                if (UNLIKELY(off >= len))
-                    return FD_ERR_PARTIAL;
-                uint8_t sib = buffer[off++];
-                unsigned scale = sib & 0xc0;
-                unsigned idx = (sib & 0x38) >> 3;
-                idx += prefix_rex & PREFIX_REXX ? 8 : 0;
-                base = sib & 0x07;
-                if (idx == 4)
-                    idx = FD_REG_NONE;
-                op_modrm->misc = scale | idx;
-            } else {
-                op_modrm->misc = FD_REG_NONE;
-            }
+            {
+                // SIB byte
+                uint8_t base = rm;
+                if (rm == 4) {
+                    if (UNLIKELY(off >= len))
+                        return FD_ERR_PARTIAL;
+                    uint8_t sib = buffer[off++];
+                    unsigned scale = sib & 0xc0;
+                    unsigned idx = (sib & 0x38) >> 3;
+                    idx += prefix_rex & PREFIX_REXX ? 8 : 0;
+                    base = sib & 0x07;
+                    if (idx == 4)
+                        idx = FD_REG_NONE;
+                    op_modrm->misc = scale | idx;
+                } else {
+                    op_modrm->misc = FD_REG_NONE;
+                }
 
-            if (UNLIKELY(DESC_VSIB(desc))) {
-                // VSIB must have a memory operand with SIB byte.
-                if (rm != 4)
-                    return FD_ERR_UD;
-                _Static_assert(FD_REG_NONE == 0x3f, "unexpected FD_REG_NONE");
-                // idx 4 is valid for VSIB
-                if ((op_modrm->misc & 0x3f) == FD_REG_NONE)
-                    op_modrm->misc &= 0xc4;
-                if (prefix_evex) // EVEX.V':EVEX.X:SIB.idx
-                    op_modrm->misc |= prefix_evex & 0x8 ? 0 : 0x10;
-            }
+                if (UNLIKELY(DESC_VSIB(desc))) {
+                    // VSIB must have a memory operand with SIB byte.
+                    if (rm != 4)
+                        return FD_ERR_UD;
+                    _Static_assert(FD_REG_NONE == 0x3f, "unexpected FD_REG_NONE");
+                    // idx 4 is valid for VSIB
+                    if ((op_modrm->misc & 0x3f) == FD_REG_NONE)
+                        op_modrm->misc &= 0xc4;
+                    if (prefix_evex) // EVEX.V':EVEX.X:SIB.idx
+                        op_modrm->misc |= prefix_evex & 0x8 ? 0 : 0x10;
+                }
 
-            // RIP-relative addressing only if SIB-byte is absent
-            if (op_byte < 0x40 && rm == 5 && mode == DECODE_64)
-                op_modrm->reg = FD_REG_IP;
-            else if (op_byte < 0x40 && base == 5)
-                op_modrm->reg = FD_REG_NONE;
-            else
-                op_modrm->reg = base + (prefix_rex & PREFIX_REXB ? 8 : 0);
+                // RIP-relative addressing only if SIB-byte is absent
+                if (op_byte < 0x40 && rm == 5 && mode == DECODE_64)
+                    op_modrm->reg = FD_REG_IP;
+                else if (op_byte < 0x40 && base == 5)
+                    op_modrm->reg = FD_REG_NONE;
+                else
+                    op_modrm->reg = base + (prefix_rex & PREFIX_REXB ? 8 : 0);
 
-            const uint8_t* dispbase = &buffer[off];
-            if (op_byte & 0x40) {
-                if (UNLIKELY((off += 1) > len))
-                    return FD_ERR_PARTIAL;
-                instr->disp = (int8_t) LOAD_LE_1(dispbase) << dispscale;
-            } else if (op_byte & 0x80 || (op_byte < 0x40 && base == 5)) {
-                if (UNLIKELY((off += 4) > len))
-                    return FD_ERR_PARTIAL;
-                instr->disp = (int32_t) LOAD_LE_4(dispbase);
-            } else {
-                instr->disp = 0;
+                const uint8_t* dispbase = &buffer[off];
+                if (op_byte & 0x40) {
+                    if (UNLIKELY((off += 1) > len))
+                        return FD_ERR_PARTIAL;
+                    instr->disp = (int8_t) LOAD_LE_1(dispbase) << dispscale;
+                } else if (op_byte & 0x80 || (op_byte < 0x40 && base == 5)) {
+                    if (UNLIKELY((off += 4) > len))
+                        return FD_ERR_PARTIAL;
+                    instr->disp = (int32_t) LOAD_LE_4(dispbase);
+                } else {
+                    instr->disp = 0;
+                }
             }
         end_modrm:;
         }
@@ -628,111 +632,112 @@ direct:
         return FD_ERR_UD;
     }
 
-    uint32_t imm_control = UNLIKELY(DESC_IMM_CONTROL(desc));
-    if (LIKELY(!imm_control)) {
-    } else if (UNLIKELY(imm_control == 1))
     {
-        // 1 = immediate constant 1, used for shifts
-        FdOp* operand = &instr->operands[DESC_IMM_IDX(desc)];
-        operand->type = FD_OT_IMM;
-        operand->size = 1;
-        instr->imm = 1;
-    }
-    else if (UNLIKELY(imm_control == 2))
-    {
-        // 2 = memory, address-sized, used for mov with moffs operand
-        FdOp* operand = &instr->operands[DESC_IMM_IDX(desc)];
-        operand->type = FD_OT_MEM;
-        operand->size = operand_sizes[DESC_IMM_SIZE(desc)];
-        operand->reg = FD_REG_NONE;
-        operand->misc = FD_REG_NONE;
+        uint32_t imm_control = UNLIKELY(DESC_IMM_CONTROL(desc));
+        if (LIKELY(!imm_control)) {
+        } else if (UNLIKELY(imm_control == 1))
+        {
+            // 1 = immediate constant 1, used for shifts
+            FdOp* operand = &instr->operands[DESC_IMM_IDX(desc)];
+            operand->type = FD_OT_IMM;
+            operand->size = 1;
+            instr->imm = 1;
+        }
+        else if (UNLIKELY(imm_control == 2))
+        {
+            // 2 = memory, address-sized, used for mov with moffs operand
+            FdOp* operand = &instr->operands[DESC_IMM_IDX(desc)];
+            operand->type = FD_OT_MEM;
+            operand->size = operand_sizes[DESC_IMM_SIZE(desc)];
+            operand->reg = FD_REG_NONE;
+            operand->misc = FD_REG_NONE;
 
-        int moffsz = 1 << addr_size;
-        if (UNLIKELY(off + moffsz > len))
-            return FD_ERR_PARTIAL;
-        if (moffsz == 2)
-            instr->disp = LOAD_LE_2(&buffer[off]);
-        if (moffsz == 4)
-            instr->disp = LOAD_LE_4(&buffer[off]);
-        if (LIKELY(moffsz == 8))
-            instr->disp = LOAD_LE_8(&buffer[off]);
-        off += moffsz;
-    }
-    else if (UNLIKELY(imm_control == 3))
-    {
-        // 3 = register in imm8[7:4], used for RVMR encoding with VBLENDVP[SD]
-        FdOp* operand = &instr->operands[DESC_IMM_IDX(desc)];
-        operand->type = FD_OT_REG;
-        operand->size = op_size;
-        operand->misc = FD_RT_VEC;
+            int moffsz = 1 << addr_size;
+            if (UNLIKELY(off + moffsz > len))
+                return FD_ERR_PARTIAL;
+            if (moffsz == 2)
+                instr->disp = LOAD_LE_2(&buffer[off]);
+            if (moffsz == 4)
+                instr->disp = LOAD_LE_4(&buffer[off]);
+            if (LIKELY(moffsz == 8))
+                instr->disp = LOAD_LE_8(&buffer[off]);
+            off += moffsz;
+        }
+        else if (UNLIKELY(imm_control == 3))
+        {
+            // 3 = register in imm8[7:4], used for RVMR encoding with VBLENDVP[SD]
+            FdOp* operand = &instr->operands[DESC_IMM_IDX(desc)];
+            operand->type = FD_OT_REG;
+            operand->size = op_size;
+            operand->misc = FD_RT_VEC;
 
-        if (UNLIKELY(off + 1 > len))
-            return FD_ERR_PARTIAL;
-        uint8_t reg = (uint8_t) LOAD_LE_1(&buffer[off]);
-        off += 1;
-
-        if (mode == DECODE_32)
-            reg &= 0x7f;
-        operand->reg = reg >> 4;
-        instr->imm = reg & 0x0f;
-    }
-    else if (imm_control != 0)
-    {
-        // 4/5 = immediate, operand-sized/8 bit
-        // 6/7 = offset, operand-sized/8 bit (used for jumps/calls)
-        int imm_byte = imm_control & 1;
-        int imm_offset = imm_control & 2;
-
-        FdOp* operand = &instr->operands[DESC_IMM_IDX(desc)];
-        operand->type = FD_OT_IMM;
-
-        if (imm_byte) {
             if (UNLIKELY(off + 1 > len))
                 return FD_ERR_PARTIAL;
-            instr->imm = (int8_t) LOAD_LE_1(&buffer[off++]);
-            operand->size = DESC_IMM_SIZE(desc) & 1 ? 1 : op_size;
-        } else {
-            operand->size = operand_sizes[DESC_IMM_SIZE(desc)];
+            uint8_t reg = (uint8_t) LOAD_LE_1(&buffer[off]);
+            off += 1;
 
-            uint8_t imm_size;
-            if (UNLIKELY(instr->type == FDI_RET || instr->type == FDI_RETF ||
-                         instr->type == FDI_SSE_EXTRQ ||
-                         instr->type == FDI_SSE_INSERTQ))
-                imm_size = 2;
-            else if (UNLIKELY(instr->type == FDI_JMPF || instr->type == FDI_CALLF))
-                imm_size = (1 << op_size >> 1) + 2;
-            else if (UNLIKELY(instr->type == FDI_ENTER))
-                imm_size = 3;
-            else if (instr->type == FDI_MOVABS)
-                imm_size = (1 << op_size >> 1);
-            else
-                imm_size = op_size == 2 ? 2 : 4;
-
-            if (UNLIKELY(off + imm_size > len))
-                return FD_ERR_PARTIAL;
-
-            if (imm_size == 2)
-                instr->imm = (int16_t) LOAD_LE_2(&buffer[off]);
-            else if (imm_size == 3)
-                instr->imm = LOAD_LE_3(&buffer[off]);
-            else if (imm_size == 4)
-                instr->imm = (int32_t) LOAD_LE_4(&buffer[off]);
-            else if (imm_size == 6)
-                instr->imm = LOAD_LE_4(&buffer[off]) | LOAD_LE_2(&buffer[off+4]) << 32;
-            else if (imm_size == 8)
-                instr->imm = (int64_t) LOAD_LE_8(&buffer[off]);
-            off += imm_size;
+            if (mode == DECODE_32)
+                reg &= 0x7f;
+            operand->reg = reg >> 4;
+            instr->imm = reg & 0x0f;
         }
-
-        if (imm_offset)
+        else if (imm_control != 0)
         {
-            if (instr->address != 0)
-                instr->imm += instr->address + off;
-            else
-                operand->type = FD_OT_OFF;
+            // 4/5 = immediate, operand-sized/8 bit
+            // 6/7 = offset, operand-sized/8 bit (used for jumps/calls)
+            int imm_byte = imm_control & 1;
+            int imm_offset = imm_control & 2;
+
+            FdOp* operand = &instr->operands[DESC_IMM_IDX(desc)];
+            operand->type = FD_OT_IMM;
+
+            if (imm_byte) {
+                if (UNLIKELY(off + 1 > len))
+                    return FD_ERR_PARTIAL;
+                instr->imm = (int8_t) LOAD_LE_1(&buffer[off++]);
+                operand->size = DESC_IMM_SIZE(desc) & 1 ? 1 : op_size;
+            } else {
+                operand->size = operand_sizes[DESC_IMM_SIZE(desc)];
+
+                uint8_t imm_size;
+                if (UNLIKELY(instr->type == FDI_RET || instr->type == FDI_RETF ||
+                             instr->type == FDI_SSE_EXTRQ ||
+                             instr->type == FDI_SSE_INSERTQ))
+                    imm_size = 2;
+                else if (UNLIKELY(instr->type == FDI_JMPF || instr->type == FDI_CALLF))
+                    imm_size = (1 << op_size >> 1) + 2;
+                else if (UNLIKELY(instr->type == FDI_ENTER))
+                    imm_size = 3;
+                else if (instr->type == FDI_MOVABS)
+                    imm_size = (1 << op_size >> 1);
+                else
+                    imm_size = op_size == 2 ? 2 : 4;
+
+                if (UNLIKELY(off + imm_size > len))
+                    return FD_ERR_PARTIAL;
+
+                if (imm_size == 2)
+                    instr->imm = (int16_t) LOAD_LE_2(&buffer[off]);
+                else if (imm_size == 3)
+                    instr->imm = LOAD_LE_3(&buffer[off]);
+                else if (imm_size == 4)
+                    instr->imm = (int32_t) LOAD_LE_4(&buffer[off]);
+                else if (imm_size == 6)
+                    instr->imm = LOAD_LE_4(&buffer[off]) | LOAD_LE_2(&buffer[off+4]) << 32;
+                else if (imm_size == 8)
+                    instr->imm = (int64_t) LOAD_LE_8(&buffer[off]);
+                off += imm_size;
+            }
+
+            if (imm_offset)
+            {
+                if (instr->address != 0)
+                    instr->imm += instr->address + off;
+                else
+                    operand->type = FD_OT_OFF;
+            }
         }
     }
-
 skip_modrm:
     if (UNLIKELY(prefixes[PF_LOCK])) {
         if (!DESC_LOCK(desc) || instr->operands[0].type != FD_OT_MEM)

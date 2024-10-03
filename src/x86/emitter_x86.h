@@ -20,7 +20,9 @@ extern "C"
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
+#ifdef __cplusplus
 #pragma GCC diagnostic ignored "-Wc++20-extensions"
+#endif
 #ifdef __clang__
 #pragma GCC diagnostic ignored "-Wc99-designator"
 #endif
@@ -451,8 +453,8 @@ static inline uint64_t name_to_inst(int name, EncOperand * ops, int n)
         
         case INST_CVTSD2SS  : return _BBAE_SSELIKE_BIT(FE_SSE_CVTSD2SS);
         case INST_CVTSS2SD  : return _BBAE_SSELIKE_BIT(FE_SSE_CVTSS2SD);
-        case INST_CVTSI2SD  : _BBAE_CVTLIKE(CVTSD2SI)
-        case INST_CVTSI2SS  : _BBAE_CVTLIKE(CVTSS2SI)
+        case INST_CVTSI2SD  : _BBAE_CVTLIKE(CVTSI2SD)
+        case INST_CVTSI2SS  : _BBAE_CVTLIKE(CVTSI2SS)
         case INST_CVTTSD2SI : _BBAE_CVTLIKE(CVTTSD2SI)
         case INST_CVTTSS2SI : _BBAE_CVTLIKE(CVTTSS2SI)
         

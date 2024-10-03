@@ -7,6 +7,23 @@
 #include "memory.h"
 #include "bbae_api_jit.h"
 
+#if __STDC_VERSION__ <= 199901L
+#define _Static_assert(a, b) assert(((void)(b), a))
+#define _Alignas(x) __attribute__((__aligned__(x))) 
+#endif
+
+#ifdef __cplusplus
+#define restrict __restrict
+#endif
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+#pragma GCC diagnostic ignored "-Woverlength-strings"
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#ifdef __clang__
+#pragma GCC diagnostic ignored "-Wc99-designator"
+#endif
+
 #include "../thirdparty/fadec/fadec.h"
 #include "../thirdparty/fadec/decode.c"
 #undef LIKELY
@@ -14,6 +31,12 @@
 #include "../thirdparty/fadec/format.c"
 #undef LIKELY
 #undef UNLIKELY
+
+#pragma GCC diagnostic pop
+
+#ifdef __cplusplus
+#undef restrict
+#endif
 
 void print_asm(uint8_t * code, size_t len)
 {
@@ -140,10 +163,12 @@ static int _old_stdout = 0;
 //#define REOPEN_STDOUT { dup2(_old_stdout, 0); }
 #endif
 
+/*
 #undef CLOSE_STDOUT
 #define CLOSE_STDOUT ;
 #undef REOPEN_STDOUT
 #define REOPEN_STDOUT ;
+*/
 
 #define TEST_XMM(X, T, V) { \
     CLOSE_STDOUT; \
