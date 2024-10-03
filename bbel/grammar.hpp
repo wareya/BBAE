@@ -6,7 +6,6 @@
 #include <cstdint>
 
 #include <utility>
-#include <algorithm>
 
 #include "types.hpp"
 
@@ -404,7 +403,8 @@ static auto load_grammar(const char * text) -> Grammar
         all_points.insert(current_point);
     }
     
-    std::sort(tokens.begin(), tokens.end(), [](Shared<MatchingRule> a, Shared<MatchingRule> b)
+    //std::sort(tokens.begin(), tokens.end(), [](Shared<MatchingRule> a, Shared<MatchingRule> b)
+    tokens.sort([](Shared<MatchingRule> a, Shared<MatchingRule> b)
     {
         if (a->kind == MATCH_KIND_REGEX && b->kind != MATCH_KIND_REGEX)
             return 1;

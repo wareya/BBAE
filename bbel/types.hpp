@@ -353,6 +353,21 @@ public:
         erase_at(i);
     }
     
+    /// Performs insertion sort.
+    /// The given f is a function that returns 1 for less-than and 0 otherwise.
+    template<typename Comparator>
+    void sort(Comparator f)
+    {
+        for(size_t i = 1; i < size(); i += 1)
+        {
+            T item = std::move((*this)[i]);
+            size_t j;
+            for(j = i; j > 0 && f(item, (*this)[j - 1]); j -= 1)
+                (*this)[j] = std::move((*this)[j - 1]);
+            (*this)[j] = std::move(item);
+        }
+    }
+    
 private:
     
     void apply_cap_hint(size_t count)
