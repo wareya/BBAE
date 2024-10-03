@@ -10,16 +10,6 @@
 #include <new> // placement new
 
 template<typename T>
-static inline size_t guess_alignment()
-{
-    size_t n = 1;
-    while (n < sizeof(T) && n != 0)
-        n *= 2;
-    if (n == 0) return sizeof(T);
-    return n;
-}
-
-template<typename T>
 class Shared {
     class SharedInner {
     public:
@@ -395,10 +385,10 @@ private:
         
         if (mcapacity != 0)
         {
-            mbuffer_raw = (char *)malloc(mcapacity * sizeof(T) + guess_alignment<T>());
+            mbuffer_raw = (char *)malloc(mcapacity * sizeof(T) + alignof(T));
             if (!mbuffer_raw) throw;
             mbuffer = mbuffer_raw;
-            while (size_t(mbuffer) % guess_alignment<T>())
+            while (size_t(mbuffer) % alignof(T))
                 mbuffer += 1;
         }
     }
@@ -419,10 +409,10 @@ private:
     {
         mcapacity = new_capacity;
         if (mlength > mcapacity) throw;
-        char * new_buf_raw = mcapacity ? (char *)malloc(mcapacity * sizeof(T) + guess_alignment<T>()) : nullptr;
+        char * new_buf_raw = mcapacity ? (char *)malloc(mcapacity * sizeof(T) + alignof(T)) : nullptr;
         if (mcapacity && !new_buf_raw) throw;
         char * new_buf = new_buf_raw;
-        while (size_t(new_buf) % guess_alignment<T>())
+        while (size_t(new_buf) % alignof(T))
             new_buf += 1;
         for (size_t i = 0; i < mlength; i++)
         {
