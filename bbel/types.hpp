@@ -2,15 +2,102 @@
 #define _INCLUDE_BXX_TYPES
 
 #include <cstdlib> // size_t, malloc/free
-#include <utility> // std::move
-#include <initializer_list>
+#include <cstring> // memcpy, memmove
+#include <cstddef> // nullptr_t
 
-#include <cstdio>
+#include <utility> // std::move, std::forward
+#include <initializer_list>
 #include <new>
 
-//#include <functional> // hash
-
 //void asdf() { std::vector<float> asdf; }
+
+template<typename T>
+class Shared {
+    class SharedInner {
+    public:
+        friend Shared;
+        T item;
+        size_t refcount = 0;
+    };
+    SharedInner * inner = nullptr;
+    
+public:
+    constexpr explicit operator bool() const noexcept { return inner && inner->refcount > 0; }
+    constexpr const T & operator*() const { if (!inner) throw; return inner->item; }
+    constexpr T & operator*() { if (!inner) throw; return inner->item; }
+    constexpr const T * operator->() const noexcept { return inner ? &inner->item : nullptr; }
+    constexpr T * operator->() noexcept { return inner ? &inner->item : nullptr; }
+    
+    constexpr bool operator==(const Shared & other) const { return inner == other.inner; }
+    constexpr bool operator==(std::nullptr_t) const { return !*this; }
+    constexpr bool operator!=(std::nullptr_t) const { return !!*this; }
+    
+    Shared & operator=(Shared && other)
+    {
+        if (inner)
+        {
+            inner->refcount -= 1;
+            if (inner->refcount == 0)
+                delete inner;
+        }
+        
+        inner = other.inner;
+        other.inner = nullptr;
+        
+        return *this;
+    };
+    Shared & operator=(const Shared & other)
+    {
+        if (other.inner == inner)
+            return *this;
+        
+        if (inner)
+        {
+            inner->refcount -= 1;
+            if (inner->refcount == 0)
+                delete inner;
+        }
+        
+        inner = other.inner;
+        if (inner)
+            inner->refcount += 1;
+        
+        return *this;
+    };
+    
+    constexpr Shared() noexcept { }
+    constexpr Shared(std::nullptr_t) noexcept { }
+    constexpr Shared(T && from) noexcept
+    {
+        inner = new SharedInner({std::move(from), 1});
+    }
+    constexpr Shared(Shared && other) noexcept
+    {
+        inner = other.inner;
+        other.inner = nullptr;
+    }
+    constexpr Shared(const Shared & other) noexcept
+    {
+        inner = other.inner;
+        if (inner)
+            inner->refcount += 1;
+    }
+    ~Shared()
+    {
+        if (!inner) return;
+        inner->refcount -= 1;
+        if (inner->refcount == 0)
+            delete inner;
+    }
+};
+
+template<typename T, class... Args>
+constexpr static Shared<T> MakeShared(Args &&... args) noexcept
+{
+    T obj = T{std::forward<Args>(args)...};
+    Shared<T> ret(std::move(obj));
+    return ret;
+}
 
 template<typename T>
 class alignas(T) Option {

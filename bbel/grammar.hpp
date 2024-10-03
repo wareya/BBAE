@@ -6,10 +6,7 @@
 #include <cstdint>
 
 #include <utility>
-
 #include <algorithm>
-
-#include <memory>
 
 #include "types.hpp"
 
@@ -53,9 +50,9 @@ enum MatchQualifier {
 struct GrammarPoint;
 struct MatchingRule {
     MatchKind kind = MATCH_KIND_INVALID;
-    std::shared_ptr<String> text = 0;
-    std::shared_ptr<Regex> compiled_regex = 0;
-    std::shared_ptr<GrammarPoint> rule = 0;
+    Shared<String> text = 0;
+    Shared<Regex> compiled_regex = 0;
+    Shared<GrammarPoint> rule = 0;
     // qualified matches are possessive-greedy by default
     MatchQualifier qualifier = MATCH_QUAL_DEFAULT;
     bool lazy = false;
@@ -63,11 +60,11 @@ struct MatchingRule {
 };
 
 struct GrammarForm {
-    Vec<std::shared_ptr<MatchingRule>> rules;
+    Vec<Shared<MatchingRule>> rules;
 };
 
 struct GrammarPoint {
-    std::shared_ptr<String> name = 0;
+    Shared<String> name = 0;
     Vec<GrammarForm> forms;
     bool left_recursive = false;
     bool no_tokens = false;
@@ -77,31 +74,31 @@ struct GrammarPoint {
     }
 };
 
-static std::shared_ptr<MatchingRule> new_rule_regex(String regex)
+static Shared<MatchingRule> new_rule_regex(String regex)
 {
-    auto ret = MatchingRule { MATCH_KIND_REGEX, std::make_shared<String>(regex), 0, 0 };
-    return std::make_shared<MatchingRule>(std::move(ret));
+    auto ret = MatchingRule { MATCH_KIND_REGEX, MakeShared<String>(regex), 0, 0 };
+    return MakeShared<MatchingRule>(std::move(ret));
 }
-static std::shared_ptr<MatchingRule> new_rule_name(String name)
+static Shared<MatchingRule> new_rule_name(String name)
 {
-    auto ret = MatchingRule { MATCH_KIND_POINT, std::make_shared<String>(name), 0, 0 };
-    return std::make_shared<MatchingRule>(std::move(ret));
+    auto ret = MatchingRule { MATCH_KIND_POINT, MakeShared<String>(name), 0, 0 };
+    return MakeShared<MatchingRule>(std::move(ret));
 }
-static std::shared_ptr<MatchingRule> new_rule_point(std::shared_ptr<GrammarPoint> point)
+static Shared<MatchingRule> new_rule_point(Shared<GrammarPoint> point)
 {
     auto ret = MatchingRule { MATCH_KIND_POINT, 0, 0, point };
-    return std::make_shared<MatchingRule>(std::move(ret));
+    return MakeShared<MatchingRule>(std::move(ret));
 }
-static std::shared_ptr<MatchingRule> new_rule_text(String text)
+static Shared<MatchingRule> new_rule_text(String text)
 {
-    auto ret = MatchingRule { MATCH_KIND_LITERAL, std::make_shared<String>(text), 0, 0 };
-    return std::make_shared<MatchingRule>(std::move(ret));
+    auto ret = MatchingRule { MATCH_KIND_LITERAL, MakeShared<String>(text), 0, 0 };
+    return MakeShared<MatchingRule>(std::move(ret));
 }
 
 struct Grammar
 {
-    ListMap<String, std::shared_ptr<GrammarPoint>> points;
-    Vec<std::shared_ptr<MatchingRule>> tokens;
+    ListMap<String, Shared<GrammarPoint>> points;
+    Vec<Shared<MatchingRule>> tokens;
     ~Grammar()
     {
         // kill inter-point references to prevent reference cycle memory leaks
@@ -153,9 +150,9 @@ static auto load_grammar(const char * text) -> Grammar
 {
     assert(text);
     
-    ListMap<String, std::shared_ptr<GrammarPoint>> ret;
-    ListSet<std::shared_ptr<GrammarPoint>> all_points;
-    Vec<std::shared_ptr<MatchingRule>> tokens;
+    ListMap<String, Shared<GrammarPoint>> ret;
+    ListSet<Shared<GrammarPoint>> all_points;
+    Vec<Shared<MatchingRule>> tokens;
     
     enum Mode {
         MODE_NAME,
@@ -201,7 +198,7 @@ static auto load_grammar(const char * text) -> Grammar
         return is_start_of_name(c) || (c >= '0' && c <= '9');
     };
     
-    auto current_point = std::make_shared<GrammarPoint>();
+    auto current_point = MakeShared<GrammarPoint>();
     
     while (i < len)
     {
@@ -211,7 +208,7 @@ static auto load_grammar(const char * text) -> Grammar
             {
                 ret.insert(*current_point->name, current_point);
                 all_points.insert(current_point);
-                current_point = std::make_shared<GrammarPoint>();
+                current_point = MakeShared<GrammarPoint>();
             }
             mode = MODE_NAME;
             go_to_next_line();
@@ -236,7 +233,7 @@ static auto load_grammar(const char * text) -> Grammar
             if (starts_with(&text[i], "@notokens"))
                 current_point->no_tokens = true;
             
-            current_point->name = std::make_shared<String>(name);
+            current_point->name = MakeShared<String>(name);
             mode = MODE_FORMS;
             
             go_to_next_line();
@@ -244,7 +241,7 @@ static auto load_grammar(const char * text) -> Grammar
         else if (mode == MODE_FORMS)
         {
             //printf("form in... %s\n", current_point->name->data());
-            Vec<std::shared_ptr<GrammarPoint>> point_stack;
+            Vec<Shared<GrammarPoint>> point_stack;
             
             while (!line_is_empty())
             {
@@ -330,7 +327,7 @@ static auto load_grammar(const char * text) -> Grammar
                 else if (text[i] == '(')
                 {
                     point_stack.push_back(current_point);
-                    current_point = std::make_shared<GrammarPoint>();
+                    current_point = MakeShared<GrammarPoint>();
                     i += 1;
                 }
                 else if (text[i] == ')')
@@ -407,7 +404,7 @@ static auto load_grammar(const char * text) -> Grammar
         all_points.insert(current_point);
     }
     
-    std::sort(tokens.begin(), tokens.end(), [](std::shared_ptr<MatchingRule> a, std::shared_ptr<MatchingRule> b)
+    std::sort(tokens.begin(), tokens.end(), [](Shared<MatchingRule> a, Shared<MatchingRule> b)
     {
         if (a->kind == MATCH_KIND_REGEX && b->kind != MATCH_KIND_REGEX)
             return 1;
@@ -453,7 +450,7 @@ static auto load_grammar(const char * text) -> Grammar
                 {
                     assert(rule->text);
                     auto s = String("^") + *rule->text;
-                    rule->compiled_regex = std::make_shared<Regex>(s.data());
+                    rule->compiled_regex = MakeShared<Regex>(s.data());
                     assert(&*rule->compiled_regex);
                 }
                 if (rule->kind == MATCH_KIND_POINT && rule->text != 0)
@@ -474,8 +471,8 @@ static auto load_grammar(const char * text) -> Grammar
 }
 
 struct Token {
-    std::shared_ptr<String> text = 0;
-    std::shared_ptr<Regex> from_regex = 0;
+    Shared<String> text = 0;
+    Shared<Regex> from_regex = 0;
     size_t index = 0;
     size_t line_index = 0;
     size_t row = 0;
@@ -485,10 +482,10 @@ struct Token {
 
 // On success, the token stream is returned.
 // On failure, the tokenization process is returned, with an additional token with null text and regex at the end.
-static Vec<std::shared_ptr<Token>> tokenize(const Grammar & grammar, const char * _text)
+static Vec<Shared<Token>> tokenize(const Grammar & grammar, const char * _text)
 {
-    const Vec<std::shared_ptr<MatchingRule>> & tokens = grammar.tokens;
-    Vec<std::shared_ptr<Token>> ret;
+    const Vec<Shared<MatchingRule>> & tokens = grammar.tokens;
+    Vec<Shared<Token>> ret;
     
     String text = _text;
     
@@ -582,9 +579,9 @@ static Vec<std::shared_ptr<Token>> tokenize(const Grammar & grammar, const char 
                 if (index == 0)
                 {
                     assert(len > 0);
-                    auto mystr = std::make_shared<String>(text.substr(i, len));
+                    auto mystr = MakeShared<String>(text.substr(i, len));
                     puts(mystr->data());
-                    ret.push_back(std::make_shared<Token>(Token{mystr, token.compiled_regex, i, line_index, row, column}));
+                    ret.push_back(MakeShared<Token>(Token{mystr, token.compiled_regex, i, line_index, row, column}));
                     
                     found = true;
                     column += len;
@@ -596,8 +593,8 @@ static Vec<std::shared_ptr<Token>> tokenize(const Grammar & grammar, const char 
             {
                 if (starts_with(&text[i], token.text->data()))
                 {
-                    auto mystr = std::make_shared<String>(text.substr(i, token.text->size()));
-                    ret.push_back(std::make_shared<Token>(Token{mystr, 0, i, line_index, row, column}));
+                    auto mystr = MakeShared<String>(text.substr(i, token.text->size()));
+                    ret.push_back(MakeShared<Token>(Token{mystr, 0, i, line_index, row, column}));
                     
                     found = true;
                     column += token.text->size();
@@ -612,7 +609,7 @@ static Vec<std::shared_ptr<Token>> tokenize(const Grammar & grammar, const char 
         {
             //printf("failed to tokenize! got to line %zd column %zd (index %zd)\n", row, column, i);
             // append dummy token to token stream to signifify failure
-            ret.push_back(std::make_shared<Token>(Token{0, 0, i, line_index, row, column}));
+            ret.push_back(MakeShared<Token>(Token{0, 0, i, line_index, row, column}));
             return ret;
         }
         assert(found);
@@ -623,15 +620,15 @@ static Vec<std::shared_ptr<Token>> tokenize(const Grammar & grammar, const char 
 
 struct ASTNode
 {
-    Vec<std::shared_ptr<ASTNode>> children;
+    Vec<Shared<ASTNode>> children;
     size_t start_row = 1;
     size_t start_column = 1;
     size_t token_count = 0;
-    std::shared_ptr<String> text;
+    Shared<String> text;
     bool is_token = false;
 };
 
-static inline void print_AST(std::shared_ptr<ASTNode> node, size_t depth)
+static inline void print_AST(Shared<ASTNode> node, size_t depth)
 {
     auto indent = [&](){for (size_t i = 0; i < depth; i++) printf(" ");};
     
@@ -658,20 +655,20 @@ static inline void print_AST(std::shared_ptr<ASTNode> node, size_t depth)
         printf("@-\n");
     }
 }
-static inline void print_AST(std::shared_ptr<ASTNode> node)
+static inline void print_AST(Shared<ASTNode> node)
 {
     print_AST(node, 0);
 }
 
-static std::shared_ptr<ASTNode> ast_node_from_token(std::shared_ptr<Token> token)
+static Shared<ASTNode> ast_node_from_token(Shared<Token> token)
 {
-    return std::make_shared<ASTNode>(ASTNode{{}, token->row, token->column, 1, token->text, true});
+    return MakeShared<ASTNode>(ASTNode{{}, token->row, token->column, 1, token->text, true});
 }
 
 struct ParseRecord
 {
     size_t token_index;
-    std::shared_ptr<String> node_name;
+    Shared<String> node_name;
     bool operator==(const ParseRecord & other) const
     {
         return token_index == other.token_index && *node_name == *other.node_name;
@@ -693,10 +690,10 @@ struct std::hash<ParseRecord>
 };
 */
 
-static ListMap<ParseRecord, std::shared_ptr<ASTNode>> parse_hits;
+static ListMap<ParseRecord, Shared<ASTNode>> parse_hits;
 static ListSet<ParseRecord> parse_misses;
 static size_t furthest = 0;
-static ListSet<std::shared_ptr<String>> furthest_maybes;
+static ListSet<Shared<String>> furthest_maybes;
 
 static void clear_parser_global_state()
 {
@@ -704,7 +701,7 @@ static void clear_parser_global_state()
     parse_misses.clear();
 }
 
-static auto parse_with(const Vec<std::shared_ptr<Token>> & tokens, size_t starting_token_index, std::shared_ptr<GrammarPoint> node_type, size_t depth) -> Option<std::shared_ptr<ASTNode>>
+static auto parse_with(const Vec<Shared<Token>> & tokens, size_t starting_token_index, Shared<GrammarPoint> node_type, size_t depth) -> Option<Shared<ASTNode>>
 {
     const bool PARSER_DO_DEBUG_PRINT = false;
     
@@ -727,8 +724,8 @@ static auto parse_with(const Vec<std::shared_ptr<Token>> & tokens, size_t starti
     {
         //Vec<std::pair<size_t, Vec<ASTNode>>> backtrack_states;
         
-        Vec<Vec<std::shared_ptr<ASTNode>>> progress_scopes;
-        Vec<std::shared_ptr<ASTNode>> progress;
+        Vec<Vec<Shared<ASTNode>>> progress_scopes;
+        Vec<Shared<ASTNode>> progress;
         
         size_t token_index = starting_token_index;
         
@@ -888,7 +885,7 @@ static auto parse_with(const Vec<std::shared_ptr<Token>> & tokens, size_t starti
                 //assert(((void)"TODO", 0));
             }
             
-            auto ret_wrapped = std::make_shared<ASTNode>(ret);
+            auto ret_wrapped = MakeShared<ASTNode>(ret);
             
             if (node_type->name)
                 parse_hits.insert(base_key, ret_wrapped);
@@ -904,7 +901,7 @@ static auto parse_with(const Vec<std::shared_ptr<Token>> & tokens, size_t starti
     return {};
 }
 
-static auto parse_as(Grammar & grammar, const Vec<std::shared_ptr<Token>> & tokens, const char * as_node_type) -> Option<std::shared_ptr<ASTNode>>
+static auto parse_as(Grammar & grammar, const Vec<Shared<Token>> & tokens, const char * as_node_type) -> Option<Shared<ASTNode>>
 {
     furthest = 0;
     
@@ -917,7 +914,7 @@ static auto parse_as(Grammar & grammar, const Vec<std::shared_ptr<Token>> & toke
     return ret;
 }
 
-static void print_tokenization_error(const Vec<std::shared_ptr<Token>> & tokens, const String & text)
+static void print_tokenization_error(const Vec<Shared<Token>> & tokens, const String & text)
 {
     printf("Tokenization failed. Parsing cannot continue.\n");
     
@@ -944,7 +941,7 @@ static void print_tokenization_error(const Vec<std::shared_ptr<Token>> & tokens,
     puts("The grammar does not recognize the pointed-to text as valid, not even on a single-chunk level.");
 }
 
-static void print_parse_error(const Vec<std::shared_ptr<Token>> & tokens, const String & text)
+static void print_parse_error(const Vec<Shared<Token>> & tokens, const String & text)
 {
     printf("Parse failed. Expected one of:\n");
     for (auto & str : furthest_maybes)

@@ -4,8 +4,6 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#include <memory>
-
 #include "../src/bbae_builder.h"
 #include "../src/buffers.h"
 
@@ -16,7 +14,7 @@
 struct VarData
 {
     Type type;
-    std::shared_ptr<String> name;
+    Shared<String> name;
     Value * var;
     bool is_arg = false;
     bool is_global = false;
@@ -33,14 +31,14 @@ struct CompilerState
     Vec<ListMap<String, VarData>> vars = {{}};
     Vec<Value *> stack;
     
-    VarData add_var(std::shared_ptr<String> name, Type type, Value * backend_var)
+    VarData add_var(Shared<String> name, Type type, Value * backend_var)
     {
         assert(vars.size() > 0);
         auto var = VarData{type, name, backend_var, vars.size() == 2, vars.size() == 1, vars.size() - 1};
         vars.back().insert(*name, var);
         return var;
     }
-    Option<VarData> get_var(std::shared_ptr<String> name)
+    Option<VarData> get_var(Shared<String> name)
     {
         if (vars.size() == 0)
             return {};
@@ -54,7 +52,7 @@ struct CompilerState
     }
 };
 
-Type parse_type(std::shared_ptr<ASTNode> ast)
+Type parse_type(Shared<ASTNode> ast)
 {
     if (ast->children.size() == 1)
         return parse_type(ast->children[0]);
@@ -74,11 +72,11 @@ bool std_starts_with(const String & a, const String & b)
     return strncmp(a.data(), b.data(), b.size()) == 0;
 }
 
-void compile(CompilerState & state, std::shared_ptr<ASTNode> ast)
+void compile(CompilerState & state, Shared<ASTNode> ast)
 {
-    auto add_arg_prefix = [](std::shared_ptr<String> str) -> std::shared_ptr<String>
+    auto add_arg_prefix = [](Shared<String> str) -> Shared<String>
     {
-        return std::make_shared<String>(String("_arg_") + *str);
+        return MakeShared<String>(String("_arg_") + *str);
     };
     
     if (*ast->text == "program")
@@ -90,7 +88,7 @@ void compile(CompilerState & state, std::shared_ptr<ASTNode> ast)
     {
         assert(ast->children.size() == 4);
         Type return_type = parse_type(ast->children[0]);
-        std::shared_ptr<String> name = ast->children[1]->children[0]->text;
+        Shared<String> name = ast->children[1]->children[0]->text;
         
         state.current_func = create_function(state.program, name->data(), return_type);
         state.current_block = function_get_entry_block(state.current_func);
@@ -101,8 +99,8 @@ void compile(CompilerState & state, std::shared_ptr<ASTNode> ast)
         {
             printf("%zu\n", a->children.size());
             Type arg_type = parse_type(a->children[0]);
-            std::shared_ptr<String> raw_name = a->children[1]->children[0]->text;
-            std::shared_ptr<String> name = add_arg_prefix(raw_name);
+            Shared<String> raw_name = a->children[1]->children[0]->text;
+            Shared<String> name = add_arg_prefix(raw_name);
             
             auto arg = add_funcarg(state.current_func, name->data(), arg_type);
             auto var = add_stack_slot(state.current_func, raw_name->data(), type_size(arg_type));
@@ -143,7 +141,7 @@ void compile(CompilerState & state, std::shared_ptr<ASTNode> ast)
     }
     else if (*ast->text == "int")
     {
-        std::shared_ptr<String> text = ast->children[0]->text;
+        Shared<String> text = ast->children[0]->text;
         
         uint64_t val;
         if ((*text)[0] == '-')
@@ -155,7 +153,7 @@ void compile(CompilerState & state, std::shared_ptr<ASTNode> ast)
     }
     else if (*ast->text == "float")
     {
-        std::shared_ptr<String> text = ast->children[0]->text;
+        Shared<String> text = ast->children[0]->text;
         
         double val = strtod(text->data(), 0);
         
@@ -165,7 +163,7 @@ void compile(CompilerState & state, std::shared_ptr<ASTNode> ast)
     {
         assert(ast->children.size() == 2 || ast->children.size() == 3);
         Type var_type = parse_type(ast->children[0]);
-        std::shared_ptr<String> name = ast->children[1]->children[0]->text;
+        Shared<String> name = ast->children[1]->children[0]->text;
         
         auto var = add_stack_slot(state.current_func, name->data(), type_size(var_type));
         state.add_var(name, var_type, var);
@@ -181,7 +179,7 @@ void compile(CompilerState & state, std::shared_ptr<ASTNode> ast)
     else if (*ast->text == "assign")
     {
         assert(ast->children.size() == 2);
-        std::shared_ptr<String> name = ast->children[0]->children[0]->text;
+        Shared<String> name = ast->children[0]->children[0]->text;
         
         auto var_data = state.get_var(name);
         if (!var_data)
@@ -199,7 +197,7 @@ void compile(CompilerState & state, std::shared_ptr<ASTNode> ast)
     else if (*ast->text == "name")
     {
         assert(ast->children.size() == 1);
-        std::shared_ptr<String> name = ast->children[0]->text;
+        Shared<String> name = ast->children[0]->text;
         
         auto var_data = state.get_var(name);
         if (!var_data)
@@ -354,7 +352,7 @@ void compile(CompilerState & state, std::shared_ptr<ASTNode> ast)
     }
 }
 
-Program * compile_root(std::shared_ptr<ASTNode> ast)
+Program * compile_root(Shared<ASTNode> ast)
 {
     Program * program = create_empty_program();
     assert(*ast->text == "program");
