@@ -63,6 +63,7 @@ Type parse_type(Shared<ASTNode> ast)
         return basic_type(TYPE_F64);
     else
         assert(((void)"Invalid type!", 0));
+    return basic_type(TYPE_I64); // silence broken MSVC warning
 }
 
 bool std_starts_with(const String & a, const String & b)

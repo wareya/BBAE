@@ -99,10 +99,14 @@ int main(int argc, char ** argv)
     assert(loc >= 0);
     
     // suppress non-posix-compliant gcc function pointer casting warning
+#ifndef _MSC_VER
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
+#endif
     int64_t (*jit_main) (int, int) = (int64_t(*)(int, int))(void *)(&jit_code[loc]);
+#ifndef _MSC_VER
 #pragma GCC diagnostic pop
+#endif
     
     assert(jit_main);
     int64_t main_output = jit_main(0, 0);

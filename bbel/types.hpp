@@ -10,6 +10,16 @@
 #include <new> // placement new
 
 template<typename T>
+static inline size_t guess_alignment()
+{
+    size_t n = 1;
+    while (n < sizeof(T) && n != 0)
+        n *= 2;
+    if (n == 0) return sizeof(T);
+    return n;
+}
+
+template<typename T>
 class Shared {
     class SharedInner {
     public:
@@ -165,6 +175,7 @@ private:
     size_t mlength = 0;
     size_t mcapacity = 0;
     char * mbuffer = nullptr;
+    char * mbuffer_raw = nullptr;
 public:
     size_t size() const noexcept { return mlength; }
     size_t capacity() const noexcept { return mcapacity; }
@@ -230,9 +241,11 @@ public:
         mlength = other.mlength;
         mcapacity = other.mcapacity;
         mbuffer = other.mbuffer;
+        mbuffer_raw = other.mbuffer_raw;
         other.mlength = 0;
         other.mcapacity = 0;
         other.mbuffer = nullptr;
+        other.mbuffer_raw = nullptr;
     }
     template<class Iterator>
     constexpr Vec(Iterator first, Iterator past_end)
@@ -261,8 +274,8 @@ public:
     {
         for (size_t i = 0; i < mlength; i++)
             ((T*)mbuffer)[i].~T();
-        if (mbuffer)
-            free(mbuffer);
+        if (mbuffer_raw)
+            free(mbuffer_raw);
     }
     
     // Copy
@@ -285,9 +298,11 @@ public:
         mlength = other.mlength;
         mcapacity = other.mcapacity;
         mbuffer = other.mbuffer;
+        mbuffer_raw = other.mbuffer_raw;
         other.mlength = 0;
         other.mcapacity = 0;
         other.mbuffer = nullptr;
+        other.mbuffer_raw = nullptr;
         
         return *this;
     }
@@ -377,8 +392,11 @@ private:
         
         if (mcapacity != 0)
         {
-            mbuffer = (char *)malloc(mcapacity * sizeof(T));
-            if (!mbuffer) throw;
+            mbuffer_raw = (char *)malloc(mcapacity * sizeof(T) + guess_alignment<T>());
+            if (!mbuffer_raw) throw;
+            mbuffer = mbuffer_raw;
+            while (size_t(mbuffer) % guess_alignment<T>())
+                mbuffer += 1;
         }
     }
     
@@ -398,14 +416,18 @@ private:
     {
         mcapacity = new_capacity;
         if (mlength > mcapacity) throw;
-        char * new_buf = mcapacity ? (char *)malloc(mcapacity * sizeof(T)) : nullptr;
-        if (mcapacity && !new_buf) throw;
+        char * new_buf_raw = mcapacity ? (char *)malloc(mcapacity * sizeof(T) + guess_alignment<T>()) : nullptr;
+        if (mcapacity && !new_buf_raw) throw;
+        char * new_buf = new_buf_raw;
+        while (size_t(new_buf) % guess_alignment<T>())
+            new_buf += 1;
         for (size_t i = 0; i < mlength; i++)
         {
             ::new((void*)(((T*)new_buf) + i)) T(std::move(((T*)mbuffer)[i]));
             ((T*)mbuffer)[i].~T();
         }
-        if (mbuffer) free(mbuffer);
+        if (mbuffer_raw) free(mbuffer_raw);
+        mbuffer_raw = new_buf_raw;
         mbuffer = new_buf;
     }
 };
