@@ -7,6 +7,40 @@
 #include "memory.h"
 #include "bbae_api_jit.h"
 
+#include "../thirdparty/fadec/fadec.h"
+#include "../thirdparty/fadec/decode.c"
+#undef LIKELY
+#undef UNLIKELY
+#include "../thirdparty/fadec/format.c"
+#undef LIKELY
+#undef UNLIKELY
+
+void print_asm(uint8_t * code, size_t len)
+{
+    //FILE * logfile = 0;
+    
+    size_t offset = 0; 
+    
+    FdInstr inst;
+    int bytes_used;
+    while (offset < len)
+    {
+        if ((bytes_used = fd_decode(code + offset, len - offset, 64, offset, &inst)) > 0)
+        {
+            char text[64];
+            memset(text, 0, 64);
+            fd_format(&inst, text, 63);
+            printf("0x%04zX    %s\n", offset, text);
+            offset += bytes_used;
+        }
+        else
+        {
+            printf(".byte 0x%02X\n", code[offset]);
+            offset += 1;
+        }
+    }
+}
+
 uint64_t compile_and_run(const char * fname, uint64_t arg, uint8_t with_double)
 {
     FILE * f = fopen(fname, "rb");
@@ -44,7 +78,7 @@ uint64_t compile_and_run(const char * fname, uint64_t arg, uint8_t with_double)
     }
     assert(loc >= 0);
     
-    //print_asm(jitinfo.jit_code, jitinfo.raw_code->len);
+    print_asm(jitinfo.jit_code, jitinfo.raw_code->len);
     
     // suppress non-posix-compliant gcc function pointer casting warning
 #pragma GCC diagnostic push
@@ -106,12 +140,10 @@ static int _old_stdout = 0;
 //#define REOPEN_STDOUT { dup2(_old_stdout, 0); }
 #endif
 
-/*
 #undef CLOSE_STDOUT
 #define CLOSE_STDOUT ;
 #undef REOPEN_STDOUT
 #define REOPEN_STDOUT ;
-*/
 
 #define TEST_XMM(X, T, V) { \
     CLOSE_STDOUT; \

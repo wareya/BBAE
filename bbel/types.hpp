@@ -6,10 +6,8 @@
 #include <cstddef> // nullptr_t
 
 #include <utility> // std::move, std::forward
-#include <initializer_list>
-#include <new>
-
-//void asdf() { std::vector<float> asdf; }
+#include <initializer_list> // initializer list constructors
+#include <new> // placement new
 
 template<typename T>
 class Shared {

@@ -6,7 +6,7 @@
 #include <intrin.h>
 #endif
 
-#include <fadec.h>
+#include "fadec.h"
 
 
 #ifdef __GNUC__
@@ -166,20 +166,20 @@ static char*
 fd_mnemonic(char buf[DECLARE_RESTRICTED_ARRAY_SIZE(48)], const FdInstr* instr) {
 #define FD_DECODE_TABLE_STRTAB1
     static const char* mnemonic_str =
-#include <fadec-decode-private.inc>
+#include "prebuilt/fadec-decode-private.inc"
         // 20 NULL Bytes to prevent out-of-bounds reads
         "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
 #undef FD_DECODE_TABLE_STRTAB1
 
 #define FD_DECODE_TABLE_STRTAB2
     static const uint16_t mnemonic_offs[] = {
-#include <fadec-decode-private.inc>
+#include "prebuilt/fadec-decode-private.inc"
     };
 #undef FD_DECODE_TABLE_STRTAB2
 
 #define FD_DECODE_TABLE_STRTAB3
     static const uint8_t mnemonic_lens[] = {
-#include <fadec-decode-private.inc>
+#include "prebuilt/fadec-decode-private.inc"
     };
 #undef FD_DECODE_TABLE_STRTAB3
 

@@ -3,7 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include <fadec.h>
+#include "fadec.h"
 
 
 #ifdef __GNUC__
@@ -18,7 +18,7 @@
 
 // Defines FD_TABLE_OFFSET_32 and FD_TABLE_OFFSET_64, if available
 #define FD_DECODE_TABLE_DEFINES
-#include <fadec-decode-private.inc>
+#include "prebuilt/fadec-decode-private.inc"
 #undef FD_DECODE_TABLE_DEFINES
 
 enum DecodeMode {
@@ -42,7 +42,7 @@ static uint16_t
 table_lookup(unsigned cur_idx, unsigned entry_idx) {
     static _Alignas(16) const uint16_t _decode_table[] = {
 #define FD_DECODE_TABLE_DATA
-#include <fadec-decode-private.inc>
+#include "prebuilt/fadec-decode-private.inc"
 #undef FD_DECODE_TABLE_DATA
     };
     return _decode_table[cur_idx + entry_idx];
@@ -347,7 +347,7 @@ direct:
 
     static _Alignas(16) const struct InstrDesc descs[] = {
 #define FD_DECODE_TABLE_DESCS
-#include <fadec-decode-private.inc>
+#include "prebuilt/fadec-decode-private.inc"
 #undef FD_DECODE_TABLE_DESCS
     };
     const struct InstrDesc* desc = &descs[table_entry >> 2];
