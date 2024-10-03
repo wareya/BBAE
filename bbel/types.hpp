@@ -315,28 +315,27 @@ public:
             do_realloc(new_cap);
     }
     
-    constexpr void push_back(T item)
+    constexpr void insert_at(size_t i, const T & item)
     {
         if (mlength >= mcapacity)
         {
             mcapacity = mcapacity == 0 ? 1 : (mcapacity << 1);
             do_realloc(mcapacity);
         }
-        ::new((void*)(((T*)mbuffer) + mlength)) T(std::move(item));
+        
         mlength += 1;
+        
+        for (size_t j = mlength - 1; j > i; j--)
+        {
+            ::new((void*)(((T*)mbuffer) + j)) T(std::move(((T*)mbuffer)[j - 1]));
+            ((T*)mbuffer)[j - 1].~T();
+        }
+        
+        ::new((void*)(((T*)mbuffer) + i)) T(std::move(item));
     }
-    constexpr T pop_back()
+    constexpr void push_back(const T & item)
     {
-        if (mlength == 0)
-            throw;
-        
-        T ret(std::move(((T*)mbuffer)[mlength - 1]));
-        
-        ((T*)mbuffer)[mlength - 1].~T();
-        mlength -= 1;
-        maybe_shrink();
-        
-        return ret;
+        insert_at(size(), item);
     }
     constexpr T erase_at(size_t i)
     {
@@ -354,6 +353,10 @@ public:
         maybe_shrink();
         
         return ret;
+    }
+    constexpr T pop_back()
+    {
+        return erase_at(size() - 1);
     }
     constexpr void erase(const T * which)
     {
