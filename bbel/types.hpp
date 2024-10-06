@@ -1,6 +1,8 @@
 #ifndef _INCLUDE_BXX_TYPES
 #define _INCLUDE_BXX_TYPES
 
+#include <cmath>
+#include <cstdio> // size_t, malloc/free
 #include <cstdlib> // size_t, malloc/free
 #include <cstring> // memcpy, memmove
 #include <cstddef> // nullptr_t
@@ -8,6 +10,8 @@
 #include <utility> // std::move, std::forward
 #include <initializer_list> // initializer list constructors
 #include <new> // placement new
+
+#include "sorting.hpp"
 
 template<typename T>
 class Shared {
@@ -112,15 +116,10 @@ public:
     
     constexpr Option() noexcept { }
     
-    constexpr Option(T && item)
+    template <typename U>
+    constexpr Option(U && item)
     {
-        ::new((void*)(T*)data) T(std::move(item));
-        isok = true;
-    }
-    
-    constexpr Option(const T & item)
-    {
-        ::new((void*)(T*)data) T(item);
+        ::new((void*)(T*)data) T(std::forward<U>(item));
         isok = true;
     }
     
@@ -221,6 +220,7 @@ public:
     
     // Copy
     
+    /// If the copy constructor of T throws an exception during operation, the state of the container is undefined.
     constexpr Vec(const Vec & other)
     {
         apply_cap_hint(other.capacity());
@@ -268,8 +268,7 @@ public:
             free(mbuffer_raw);
     }
     
-    // Copy
-    
+    /// If the copy constructor of T throws an exception during operation, the state of the container is undefined.
     constexpr Vec & operator=(const Vec & other)
     {
         if (this == &other)
@@ -299,13 +298,33 @@ public:
     
     // API
     
+    /// If T's move constructor throws during operation, the container is invalid (but destructible).
     constexpr void reserve(size_t new_cap)
     {
         if (new_cap > mlength)
             do_realloc(new_cap);
     }
     
-    constexpr void insert_at(size_t i, const T & item)
+    void swap_contents(Vec & other)
+    {
+        size_t temp_mlength = other.mlength;
+        size_t temp_mcapacity = other.mcapacity;
+        char * temp_mbuffer = other.mbuffer;
+        char * temp_mbuffer_raw = other.mbuffer_raw;
+        
+        other.mlength = mlength;
+        other.mcapacity = mcapacity;
+        other.mbuffer = mbuffer;
+        other.mbuffer_raw = mbuffer_raw;
+        
+        mlength = temp_mlength;
+        mcapacity = temp_mcapacity;
+        mbuffer = temp_mbuffer;
+        mbuffer_raw = temp_mbuffer_raw;
+    }
+    
+private:
+    void prepare_insert(size_t i)
     {
         if (mlength >= mcapacity)
         {
@@ -321,23 +340,49 @@ public:
             ((T*)mbuffer)[j - 1].~T();
         }
         
-        ::new((void*)(((T*)mbuffer) + i)) T(std::move(item));
     }
-    constexpr void push_back(const T & item)
+public:
+    /// If T's move or copy constructors throw during operation, one of the following happens:
+    /// 1) If i is size() - 1 (before calling), the container is unaffected, except its capacity may be increased.
+    /// 2) Otherwise, the container's state is undefined.
+    template <typename U>
+    void insert_at(size_t i, U && item)
+    {
+        prepare_insert(i);
+        try
+        {
+            ::new((void*)(((T*)mbuffer) + i)) T(std::forward<U>(item));
+        }
+        catch (...)
+        {
+            mlength -= 1;
+            throw;
+        }
+    }
+    void push_back(T && item)
     {
         insert_at(size(), item);
     }
+    void push_back(const T & item)
+    {
+        insert_at(size(), item);
+    }
+    /// If T's move constructor throws during operation, one of the following happens:
+    /// 1) If i is size() - 1 (before calling), the container is unaffected.
+    /// 2) Otherwise, the container's state is undefined.
     constexpr T erase_at(size_t i)
     {
         if (i >= mlength)
             throw;
         
         T ret(std::move(((T*)mbuffer)[i]));
+        
         for (size_t j = i; j + 1 < mlength; j++)
         {
             ((T*)mbuffer)[j].~T();
             ::new((void*)(((T*)mbuffer) + j)) T(std::move(((T*)mbuffer)[j + 1]));
         }
+        
         ((T*)mbuffer)[mlength - 1].~T();
         mlength -= 1;
         maybe_shrink();
@@ -359,19 +404,72 @@ public:
         erase_at(i);
     }
     
+    /// Performs merge sort with auxiliary memory.
+    /// Insertion sort is a sorting algorithm with:
+    /// - Downside: temporarily allocates size() extra items worth of memory
+    /// - All other properties are (nearly) ideal
+    /// The given f is a function that returns 1 for less-than and 0 otherwise.
+    /// This is an adaptive variant that skips the beginning and end of the Vec if they're already sorted.
+    template<typename Comparator>
+    void merge_sort(Comparator f)
+    {
+        if (size() * sizeof(T) <= 128 || size() < 8)
+            return insertion_sort(f);
+        Vec<T> temp;
+        temp.reserve(size());
+        size_t start = 0;
+        size_t one_past_end = size();
+        shrink_sort_bounds(f, data(), start, one_past_end);
+        merge_sort_impl(f, data(), temp.data(), start, one_past_end, 0);
+    }
+    /// Performs merge sort in place.
+    /// Insertion sort is a sorting algorithm with:
+    /// - Downside: slightly higher "constant factor" than merge_sort, except on already-mostly-sorted arrays
+    /// - All other properties are (nearly) ideal
+    /// The given f is a function that returns 1 for less-than and 0 otherwise.
+    /// This is an adaptive variant that skips the beginning and end of the Vec if they're already sorted.
+    template<typename Comparator>
+    void merge_sort_inplace(Comparator f)
+    {
+        if (size() * sizeof(T) <= 128 || size() < 8)
+            return insertion_sort(f);
+        size_t start = 0;
+        size_t one_past_end = size();
+        shrink_sort_bounds(f, data(), start, one_past_end);
+        merge_sort_inplace_impl(f, data(), start, one_past_end);
+    }
     /// Performs insertion sort.
+    /// Insertion sort is a sorting algorithm with:
+    /// - Downside: spends up to n^2 time, where n increases linearly with Vec size
+    /// - All other properties are (nearly) ideal
+    /// The given f is a function that returns 1 for less-than and 0 otherwise.
+    /// Insertion sort is inherently adaptive and runs in O(n) time if the list is already sorted.
+    template<typename Comparator>
+    void insertion_sort(Comparator f)
+    {
+        insertion_sort_impl(f, data(), 0, size());
+    }
+    /// Performs quicksort.
+    /// quicksort is a sorting algorithm with:
+    /// - Downside: "unstable" (does not retain order of equally-ordered elements).
+    /// - Downside: Can take more than O(n logn) time in rare cases, but is usually ideally fast.
+    /// - All other properties are (nearly) ideal
+    /// The given f is a function that returns 1 for less-than and 0 otherwise.
+    /// This is an adaptive sort that skips the beginning and end of the Vec if they're already sorted.
+    template<typename Comparator>
+    void quick_sort(Comparator f)
+    {
+        size_t start = 0;
+        size_t one_past_end = size();
+        shrink_sort_bounds(f, data(), start, one_past_end);
+        quick_sort_impl(f, data(), start, one_past_end);
+    }
+    /// Sorts the Vec.
     /// The given f is a function that returns 1 for less-than and 0 otherwise.
     template<typename Comparator>
     void sort(Comparator f)
     {
-        for(size_t i = 1; i < size(); i += 1)
-        {
-            T item = std::move((*this)[i]);
-            size_t j;
-            for(j = i; j > 0 && f(item, (*this)[j - 1]); j -= 1)
-                (*this)[j] = std::move((*this)[j - 1]);
-            (*this)[j] = std::move(item);
-        }
+        this->merge_sort_in_place(f);
     }
     
 private:
@@ -415,10 +513,9 @@ private:
         while (size_t(new_buf) % alignof(T))
             new_buf += 1;
         for (size_t i = 0; i < mlength; i++)
-        {
             ::new((void*)(((T*)new_buf) + i)) T(std::move(((T*)mbuffer)[i]));
+        for (size_t i = 0; i < mlength; i++)
             ((T*)mbuffer)[i].~T();
-        }
         if (mbuffer_raw) free(mbuffer_raw);
         mbuffer_raw = new_buf_raw;
         mbuffer = new_buf;
@@ -451,21 +548,11 @@ struct ListMap {
     }
     void clear() { list = {}; }
     
-    void insert(TK && key, TV && val)
+    
+    template<typename U1, typename U2>
+    void insert(U1 && key, U2 && val)
     {
-        list.push_back({key, val});
-    }
-    void insert(const TK & key, TV && val)
-    {
-        list.push_back({key, val});
-    }
-    void insert(TK && key, const TV & val)
-    {
-        list.push_back({key, val});
-    }
-    void insert(const TK & key, const TV & val)
-    {
-        list.push_back({key, val});
+        list.push_back({std::forward<U1>(key), std::forward<U2>(val)});
     }
     
     Pair<TK, TV> * begin() noexcept { return list.begin(); }
