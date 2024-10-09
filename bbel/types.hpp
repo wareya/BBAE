@@ -221,6 +221,7 @@ public:
     // Copy
     
     /// If the copy constructor of T throws an exception during operation, the state of the container is undefined.
+    //template<typename = typename std::enable_if<std::is_copy_constructible<T>::value>::type>
     constexpr Vec(const Vec & other)
     {
         apply_cap_hint(other.capacity());
@@ -269,6 +270,7 @@ public:
     }
     
     /// If the copy constructor of T throws an exception during operation, the state of the container is undefined.
+    //template<typename = typename std::enable_if<std::is_copy_constructible<T>::value>::type>
     constexpr Vec & operator=(const Vec & other)
     {
         if (this == &other)
@@ -339,7 +341,6 @@ private:
             ::new((void*)(((T*)mbuffer) + j)) T(std::move(((T*)mbuffer)[j - 1]));
             ((T*)mbuffer)[j - 1].~T();
         }
-        
     }
 public:
     /// If T's move or copy constructors throw during operation, one of the following happens:
@@ -420,8 +421,37 @@ public:
         size_t start = 0;
         size_t one_past_end = size();
         shrink_sort_bounds(f, data(), start, one_past_end);
-        merge_sort_impl(f, data(), temp.data(), start, one_past_end, 0);
+        //size_t midpoint = start + (one_past_end - start) / 2;
+        //merge_sort_impl(f, data(), temp.data(), start, one_past_end, midpoint, 0);
+        merge_sort_bottomup_impl(f, data(), temp.data(), start, one_past_end);
+        //merge_sort_bottomup_textbook_impl(f, data(), temp.data(), start, one_past_end);
     }
+    template<typename Comparator>
+    void merge_sort_td(Comparator f)
+    {
+        if (size() * sizeof(T) <= 128 || size() < 8)
+            return insertion_sort(f);
+        Vec<T> temp;
+        temp.reserve(size());
+        size_t start = 0;
+        size_t one_past_end = size();
+        shrink_sort_bounds(f, data(), start, one_past_end);
+        size_t midpoint = start + (one_past_end - start) / 2;
+        merge_sort_impl(f, data(), temp.data(), start, one_past_end, midpoint, 0);
+    }
+    template<typename Comparator>
+    void merge_sort_bu(Comparator f)
+    {
+        if (size() * sizeof(T) <= 128 || size() < 8)
+            return insertion_sort(f);
+        Vec<T> temp;
+        temp.reserve(size());
+        size_t start = 0;
+        size_t one_past_end = size();
+        shrink_sort_bounds(f, data(), start, one_past_end);
+        merge_sort_bottomup_textbook_impl(f, data(), temp.data(), start, one_past_end);
+    }
+    
     /// Performs merge sort in place.
     /// Insertion sort is a sorting algorithm with:
     /// - Downside: slightly higher "constant factor" than merge_sort, except on already-mostly-sorted arrays
@@ -437,6 +467,17 @@ public:
         size_t one_past_end = size();
         shrink_sort_bounds(f, data(), start, one_past_end);
         merge_sort_inplace_impl(f, data(), start, one_past_end);
+        //merge_sort_bottomup_inplace_impl(f, data(), start, one_past_end);
+    }
+    template<typename Comparator>
+    void merge_sort_inplace_bu(Comparator f)
+    {
+        if (size() * sizeof(T) <= 128 || size() < 8)
+            return insertion_sort(f);
+        size_t start = 0;
+        size_t one_past_end = size();
+        shrink_sort_bounds(f, data(), start, one_past_end);
+        merge_sort_bottomup_inplace_impl(f, data(), start, one_past_end);
     }
     /// Performs insertion sort.
     /// Insertion sort is a sorting algorithm with:
@@ -452,7 +493,7 @@ public:
     /// Performs quicksort.
     /// quicksort is a sorting algorithm with:
     /// - Downside: "unstable" (does not retain order of equally-ordered elements).
-    /// - Downside: Can take more than O(n logn) time in rare cases, but is usually ideally fast.
+    /// - Downside: Can take more than O(n logn) time for specially-crafted malicious inputs, but is usually ideally fast.
     /// - All other properties are (nearly) ideal
     /// The given f is a function that returns 1 for less-than and 0 otherwise.
     /// This is an adaptive sort that skips the beginning and end of the Vec if they're already sorted.
@@ -491,6 +532,7 @@ private:
         }
     }
     
+    //template<typename = typename std::enable_if<std::is_copy_constructible<T>::value>::type>
     static void copy_into(Vec & a, const Vec & b)
     {
         a.mlength = b.size();
