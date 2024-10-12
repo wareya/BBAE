@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <cassert>
 
 #include <algorithm>
 #include <string>
@@ -22,7 +23,6 @@ uint32_t rng(uint64_t * state)
     *state = (*state + c) * a;
     return (*state >> 32);
 }
-
 
 size_t movecount = 0;
 size_t copycount = 0;
@@ -68,37 +68,13 @@ struct I {
 template<typename T>
 void comparify(Vec<T> & vec)
 {
-    Vec<T> vec2 = vec;
-    double time = 0.0;
-    for (size_t i = 0; i < 5; i++)
-    {
-        vec2 = vec;
-        double start = seconds();
-        vec2.merge_sort_bu([](auto & a, auto & b) { return a < b; });
-        double end = seconds();
-        time += (end - start) / 5.0;
-    }
-    printf(", %f", time);
-    
     Vec<T> vec3 = vec;
-    time = 0.0;
+    double time = 0.0;
     for (size_t i = 0; i < 5; i++)
     {
         vec3 = vec;
         double start = seconds();
         vec3.merge_sort([](auto & a, auto & b) { return a < b; });
-        double end = seconds();
-        time += (end - start) / 5.0;
-    }
-    printf(", %f", time);
-    
-    Vec<T> vec4 = vec;
-    time = 0.0;
-    for (size_t i = 0; i < 5; i++)
-    {
-        vec4 = vec;
-        double start = seconds();
-        vec4.merge_sort_td([](auto & a, auto & b) { return a < b; });
         double end = seconds();
         time += (end - start) / 5.0;
     }
@@ -128,30 +104,6 @@ void comparify(Vec<T> & vec)
     }
     printf(", %f", time);
     
-    Vec<T> vec7 = vec;
-    time = 0.0;
-    for (size_t i = 0; i < 5; i++)
-    {
-        vec7 = vec;
-        double start = seconds();
-        vec7.merge_sort_inplace([](auto & a, auto & b) { return a < b; });
-        double end = seconds();
-        time += (end - start) / 5.0;
-    }
-    printf(", %f", time);
-    
-    Vec<T> vecF = vec;
-    time = 0.0;
-    for (size_t i = 0; i < 5; i++)
-    {
-        vecF = vec;
-        double start = seconds();
-        vecF.merge_sort_inplace_bu([](auto & a, auto & b) { return a < b; });
-        double end = seconds();
-        time += (end - start) / 5.0;
-    }
-    printf(", %f", time);
-    
     Vec<T> vec8 = vec;
     time = 0.0;
     for (size_t i = 0; i < 5; i++)
@@ -164,12 +116,27 @@ void comparify(Vec<T> & vec)
     }
     printf(", %f", time);
     
+    Rope<T> rope;
+    for (size_t i = 0; i < vec.size(); i++)
+        rope.insert_at(i, vec[i]);
+    
+    Rope<T> rope2 = rope;
+    time = 0.0;
+    for (size_t i = 0; i < 5; i++)
+    {
+        rope2 = rope;
+        double start = seconds();
+        rope2.sort([](auto & a, auto & b) { return a < b; });
+        
+        double end = seconds();
+        time += (end - start) / 5.0;
+    }
+    printf(", %f\n", time);
+    
     for (size_t i = 0; i < vec.size(); i++)
     {
-        assert(vec2[i] == vec5[i]);
         assert(vec3[i] == vec5[i]);
-        assert(vec4[i] == vec5[i]);
-        assert(vec7[i] == vec5[i]);
+        assert(rope2[i] == vec5[i]);
     }
 }
     
@@ -285,20 +252,48 @@ int main(void)
         printf("%f\n", end - start);
     }
     
-    printf("data, textbook bu, coherent bu, td, std::stable_sort, std::sort, inplace td, inplace bu, quicksort\n");
+    printf("data, coherent bu, std::stable_sort, std::sort, quicksort, rope insertion\n");
+    
+    Vec<uint32_t> rs;
+    //for (size_t i = 0; i < 15117311; i++)
+    //    rs.push_back(5117311 - i);
+    for (size_t i = 0; i < 151173; i++)
+        rs.push_back(51173 - i);
+    printf("broken reversed");
+    comparify(rs);
     
     state  = 6153643146;
     state2 = 6153643149;
     n = 0;
     n2 = 0;
     Vec<uint32_t> forwards;
-    for (size_t i = 0; i < 15117311; i++)
+    //for (size_t i = 0; i < 15117311; i++)
+    for (size_t i = 0; i < 15; i++)
         forwards.push_back((n  += (rng(&state) >> 28)) + i);
     printf("presorted");
     comparify(forwards);
     
+    forwards.insert_at(0, 0xFFFFFFFF);
+    
+    //Rope<uint32_t> rope;
+    //for (size_t i = 0; i < forwards.size(); i++)
+    //    rope.insert_at(i, forwards[i]);
+    //rope.sort([](auto & a, auto & b) { return a < b; });
+    //for (size_t i = 0; i < rope.size(); i++)
+    //    printf("%u\n", rope[i]);
+    
+    printf("almost presorted");
+    comparify(forwards);
+    
     state2 = 6153643149;
     Vec<std::string> strings;
+    for (size_t i = 0; i < 217311; i++)
+        strings.push_back(std::to_string(rng(&state2)));
+    printf("strings (1/10th as many)");
+    comparify(strings);
+    
+    state2 = 6153643149;
+    strings = {};
     for (size_t i = 0; i < 2173111; i++)
         strings.push_back(std::to_string(rng(&state2)));
     printf("strings");
@@ -338,10 +333,6 @@ int main(void)
         white4.push_back((rng(&state2), state2));
     printf("white noise (u64)");
     comparify(white4);
-    
-    forwards.insert_at(0, 0xFFFFFFFF);
-    printf("almost presorted");
-    comparify(forwards);
     
     state2 = 6153643149;
     Vec<uint32_t> bruh;
