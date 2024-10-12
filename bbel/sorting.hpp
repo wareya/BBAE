@@ -168,7 +168,8 @@ void tree_insertion_sort_impl(Comparator f, D & data, size_t start, size_t one_p
     {
         if (f(data[i], data[i - 1]))
         {
-            T item(data.erase_at(i));
+            T item(std::move(data[i]));
+            data.erase(i, 1);
             
             size_t insert_i = i - 1;
             bsearch(insert_i, start, 0, 1, [&](auto avg)
@@ -177,7 +178,7 @@ void tree_insertion_sort_impl(Comparator f, D & data, size_t start, size_t one_p
                 { return f(item, data[avg]); });
                 //{ return !f(data[avg], item); });
             
-            data.insert_at(insert_i, item);
+            data.insert(insert_i, item);
         }
     }
 }

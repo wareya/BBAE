@@ -625,8 +625,8 @@ private:
 //template<typename T, int min_size = 16, int max_size = 64>
 //template<typename T, int min_size = 32, int max_size = 128>
 //template<typename T, int min_size = 64, int max_size = 256>
-//template<typename T, int min_size = 128, int max_size = 512>
-template<typename T, int min_size = 256, int max_size = 1024>
+template<typename T, int min_size = 128, int max_size = 512>
+//template<typename T, int min_size = 256, int max_size = 1024>
 //template<typename T, int min_size = 512, int max_size = 2048>
 class Rope {
 private:
@@ -803,6 +803,7 @@ private:
                 mlength += 1;
             }
         }
+        
         void print_structure(size_t depth)
         {
             for (size_t i = 0; i < depth; i++)
@@ -1026,6 +1027,10 @@ public:
         
         rebalance();
     }
+    void insert(size_t i, T item)
+    {
+        insert_at(i, item);
+    }
     T erase_at(size_t i)
     {
         if (root)
@@ -1035,6 +1040,15 @@ public:
             return ret;
         }
         throw;
+    }
+    void erase(size_t i)
+    {
+        erase_at(i);
+    }
+    void erase(size_t i, size_t count)
+    {
+        for (size_t n = 0; n < count; n++)
+            erase_at(i);
     }
     void print_structure()
     {
