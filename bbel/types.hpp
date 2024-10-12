@@ -112,8 +112,8 @@ class CopyableUnique {
     T * data = nullptr;
 public:
     constexpr explicit operator bool() const noexcept { return data; }
-    constexpr const T & operator*() const { if (!data) throw; return data; }
-    constexpr T & operator*() { if (!data) throw; return data; }
+    constexpr const T & operator*() const { if (!data) throw; return *data; }
+    constexpr T & operator*() { if (!data) throw; return *data; }
     constexpr const T * operator->() const noexcept { return data; }
     constexpr T * operator->() noexcept { return data; }
     constexpr bool operator==(const CopyableUnique & other) const { return data == other.data; }
@@ -627,6 +627,7 @@ private:
 //template<typename T, int min_size = 64, int max_size = 256>
 //template<typename T, int min_size = 128, int max_size = 512>
 template<typename T, int min_size = 256, int max_size = 1024>
+//template<typename T, int min_size = 512, int max_size = 2048>
 class Rope {
 private:
     // minimum chunk size before merging children together
@@ -643,37 +644,37 @@ private:
         CopyableUnique<RopeNode> right = 0;
         
         template<typename D>
-        static RopeNode from_copy(T * data, size_t count)
+        static RopeNode from_copy(D data, size_t start, size_t count)
         {
             RopeNode ret;
             if (count <= max_size)
             {
-                for (size_t i = count; i > 0; i--)
-                    ret.items.push_back(data[i]);
+                for (size_t i = 0; i < count; i++)
+                    ret.items.push_back(data[start + i]);
                 
                 ret.mlength = count;
                 return ret;
             }
-            ret.left = from_copy(data, count / 2);
-            ret.right = from_copy(data + count / 2, count - count / 2);
+            ret.left = from_copy(data, start, count / 2);
+            ret.right = from_copy(data, start + count / 2, count - count / 2);
             ret.fix_metadata();
             return ret;
         }
         
         template<typename D>
-        static RopeNode from_move(T * data, size_t count)
+        static RopeNode from_move(D data, size_t start, size_t count)
         {
             RopeNode ret;
             if (count <= max_size)
             {
-                for (size_t i = count; i > 0; i--)
-                    ret.items.push_back(std::move(data[i]));
+                for (size_t i = 0; i < count; i++)
+                    ret.items.push_back(std::move(data[start + i]));
                 
                 ret.mlength = count;
                 return ret;
             }
-            ret.left = from_move(data, count / 2);
-            ret.right = from_move(data + count / 2, count - count / 2);
+            ret.left = from_move(data, start, count / 2);
+            ret.right = from_move(data, start + count / 2, count - count / 2);
             ret.fix_metadata();
             return ret;
         }
@@ -700,6 +701,8 @@ private:
             else
                 return right->get_at(i - left->size());
         }
+        const T & operator[](size_t pos) const { return get_at(pos); }
+        T & operator[](size_t pos) { return get_at(pos); }
         
         size_t calc_size()
         {
@@ -767,6 +770,7 @@ private:
                 if (mheight < left->mheight + 1)
                     mheight = left->mheight + 1;
                 mleaves = left->mleaves + right->mleaves;
+                mlength += 1;
             }
             else if (right && i - left->size() <= right->size())
             {
@@ -774,35 +778,30 @@ private:
                 if (mheight < right->mheight + 1)
                     mheight = right->mheight + 1;
                 mleaves = left->mleaves + right->mleaves;
+                mlength += 1;
             }
             else
             {
                 assert(i <= items.size());
                 items.insert_at(i, item);
+                
+                if (items.size() > split_chunk_size)
+                {
+                    left = MakeUnique<RopeNode>();
+                    right = MakeUnique<RopeNode>();
+                    
+                    left->items = std::move(items);
+                    right->items = left->items.split_at(left->items.size() / 2);
+                    
+                    left->mlength = left->items.size();
+                    right->mlength = right->items.size();
+                    
+                    mheight = 1;
+                    mleaves = 2;
+                }
+                
+                mlength += 1;
             }
-            
-            mlength += 1;
-            
-            if (items.size() > split_chunk_size)
-            {
-                Vec<T> items_right = items.split_at(items.size() / 2);
-                left = MakeUnique<RopeNode>();
-                right = MakeUnique<RopeNode>();
-                
-                left->items = std::move(items);
-                left->mlength = left->items.size();
-                left->mleaves = 1;
-                
-                right->items = std::move(items_right);
-                right->mlength = right->items.size();
-                right->mleaves = 1;
-                
-                mheight = 1;
-                mleaves = 2;
-            }
-            
-            if (left)
-                assert(mlength == left->size() + right->size());
         }
         void print_structure(size_t depth)
         {
@@ -874,8 +873,8 @@ private:
                 height_c = right->right->mheight + 1;
             }
             // case A: a and c same but b shorter. rebalance whichever side b came from.
-            if ((height_a == height_c && height_a == height_b) ||
-                (height_a == height_c && height_a > height_b))
+            //if (height_a == height_c && height_a >= height_b)
+            if (height_a == height_c && height_a > height_b)
             {
                 //puts("case A!");
                 if (left->mheight >= right->mheight)
@@ -886,9 +885,8 @@ private:
                 //assert(start_len == size());
                 return;
             }
-            // case B: A or C is lowest. need to rotate
-            if ((height_a >= height_b && height_a > height_c) ||
-                (height_c >= height_b && height_c > height_a))
+            // case B: A or C is highest, A and C different. need to rotate
+            if (height_a > height_b || height_c > height_b)
             {
                 //puts("case B!");
                 // don't want to use left->mheight etc here because in edge cases it can cause antibalancing rotations
@@ -903,7 +901,6 @@ private:
                     right = std::move(left);
                     
                     left = std::move(a);
-                    fflush(stdout);
                     
                     right->left = std::move(b);
                     right->right = std::move(c);
@@ -928,61 +925,43 @@ private:
                 }
                 
                 fix_metadata();
-                //assert(start_len == size());
                 return;
             }
             
-            // case C: B is highest. need to split and prepend/append
-            if (height_b > height_a && height_b > height_c)
+            // case C: B is highest or tied. need to split and prepend/append
+            if (height_b >= height_a && height_b >= height_c)
             {
                 //puts("case C!");
-                CopyableUnique<RopeNode> l;
-                CopyableUnique<RopeNode> r;
-                
-                CopyableUnique<RopeNode> a;
-                CopyableUnique<RopeNode> b1;
-                CopyableUnique<RopeNode> b2;
-                CopyableUnique<RopeNode> c;
+                auto l = MakeUnique<RopeNode>();
+                auto r = MakeUnique<RopeNode>();
                 
                 if (left->mheight >= right->mheight)
                 {
-                    a = std::move(left->left);
-                    b1 = std::move(left->right->left);
-                    b2 = std::move(left->right->right);
-                    c = std::move(right);
-                    
-                    r = std::move(left->right);
-                    l = std::move(left);
+                    l->left = std::move(left->left);
+                    l->right = std::move(left->right->left);
+                    r->left = std::move(left->right->right);
+                    r->right = std::move(right);
                 }
                 else
                 {
-                    a = std::move(left);
-                    b1 = std::move(right->left->left);
-                    b2 = std::move(right->left->right);
-                    c = std::move(right->right);
-                    
-                    l = std::move(right->left);
-                    r = std::move(right);
+                    l->left = std::move(left);
+                    l->right = std::move(right->left->left);
+                    r->left = std::move(right->left->right);
+                    r->right = std::move(right->right);
                 }
-                
-                l->left = std::move(a);
-                l->right = std::move(b1);
-                l->fix_metadata();
-                
-                r->left = std::move(b2);
-                r->right = std::move(c);
-                r->fix_metadata();
-                
-                if (l->mheight >= r->mheight)
-                    l->rebalance_impl();
-                else
-                    r->rebalance_impl();
                 
                 left = std::move(l);
                 right = std::move(r);
                 
+                left->fix_metadata();
+                right->fix_metadata();
+                
+                if (left->mheight >= right->mheight)
+                    left->rebalance_impl();
+                else
+                    right->rebalance_impl();
+                
                 fix_metadata();
-                //assert(start_len == size());
                 return;
             }
             
@@ -994,6 +973,7 @@ private:
     
     CopyableUnique<RopeNode> root = 0;
     
+    __attribute__((noinline))
     void rebalance()
     {
         if (!root)
@@ -1003,17 +983,32 @@ private:
         //size_t s = (root->size() + 7) / 8;
         
         size_t s = root->mleaves;
-        s += 2;
+        s += 1;
         
+        // log of base phi approximation
         size_t logn = 1;
         while (s >>= 1)
             logn += 1;
+        logn = logn * 23 / 16;
         
         if (root->mheight > logn)
-            root->rebalance_impl();
+        {
+            if constexpr(1)
+            {
+                root->rebalance_impl();
+            }
+            else
+            {
+                auto new_root = MakeUnique<RopeNode>(std::move(RopeNode::from_move(*root, 0, root->mlength)));
+                root = new_root;
+            }
+            num_rebalances += 1;
+        }
     }
     
 public:
+    size_t num_rebalances = 0;
+    
     const T & operator[](size_t pos) const { if (!root) throw; return root->get_at(pos); }
     T & operator[](size_t pos) { if (!root) throw; return root->get_at(pos); }
     

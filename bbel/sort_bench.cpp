@@ -255,10 +255,10 @@ int main(void)
     printf("data, coherent bu, std::stable_sort, std::sort, quicksort, rope insertion\n");
     
     Vec<uint32_t> rs;
-    //for (size_t i = 0; i < 15117311; i++)
-    //    rs.push_back(5117311 - i);
-    for (size_t i = 0; i < 151173; i++)
-        rs.push_back(51173 - i);
+    for (size_t i = 0; i < 15117311; i++)
+        rs.push_back(5117311 - i);
+    //for (size_t i = 0; i < 151173; i++)
+    //    rs.push_back(51173 - i);
     printf("broken reversed");
     comparify(rs);
     
@@ -267,8 +267,8 @@ int main(void)
     n = 0;
     n2 = 0;
     Vec<uint32_t> forwards;
-    //for (size_t i = 0; i < 15117311; i++)
-    for (size_t i = 0; i < 15; i++)
+    for (size_t i = 0; i < 15117311; i++)
+    //for (size_t i = 0; i < 15; i++)
         forwards.push_back((n  += (rng(&state) >> 28)) + i);
     printf("presorted");
     comparify(forwards);

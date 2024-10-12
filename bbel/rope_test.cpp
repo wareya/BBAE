@@ -53,38 +53,43 @@ int main(void)
     Rope<uint32_t> rope2;
     Vec<uint32_t> vec2;
     
+    size_t count = 10000000;
+    printf("n: %zd\n", count);
+    
     uint64_t state = 1234567;
     double start = seconds();
-    for (size_t i = 0; i < 10000000; i++)
+    for (size_t i = 0; i < count; i++)
         rope2.insert_at(i, state);
     double end = seconds();
-    printf("rope 10m build time: %f\n", end - start);
+    printf("rope build time: %f\n", end - start);
     
     state = 1234567;
     start = seconds();
-    for (size_t i = 0; i < 10000000; i++)
+    for (size_t i = 0; i < count; i++)
         vec2.insert_at(i, state);
     end = seconds();
     
-    printf("vec 10m build time: %f\n", end - start);
+    printf("vec build time: %f\n", end - start);
     
     uint32_t n = 0;
     
     start = seconds();
-    for (size_t i = 0; i < 10000000; i++)
+    for (size_t i = 0; i < count; i++)
         n += rope2[i];
     end = seconds();
     
-    printf("rope2 10m iterate time: %f (sum: %d)\n", end - start, n);
+    printf("rope2 iterate time: %f (sum: %d)\n", end - start, n);
     
     n = 0;
     
     start = seconds();
-    for (size_t i = 0; i < 10000000; i++)
+    for (size_t i = 0; i < count; i++)
         n += vec2[i];
     end = seconds();
     
-    printf("vec 10m iterate time: %f (sum: %d)\n", end - start, n);
+    printf("vec iterate time: %f (sum: %d)\n", end - start, n);
+    
+    printf("rope rebalances: %zd\n", rope2.num_rebalances);
     
     return 0;
 }
