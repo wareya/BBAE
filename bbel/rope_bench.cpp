@@ -27,27 +27,27 @@ int main(void)
     __gnu_cxx::rope<uint32_t> rope_stl;
     Vec<uint32_t> vec2;
     
-    size_t count = 10000000;
+    size_t count = 1000000;
     printf("n: %zd\n", count);
     
     uint64_t state = 1234567;
     double start = seconds();
     for (size_t i = 0; i < count; i++)
-        rope2.insert_at(i, state);
+        rope2.insert_at(i, rng(&state));
     double end = seconds();
     printf("rope build time: %f\n", end - start);
     
     state = 1234567;
     start = seconds();
     for (size_t i = 0; i < count; i++)
-        rope_stl.insert(i, state);
+        rope_stl.insert(i, rng(&state));
     end = seconds();
     printf("rope stl build time: %f\n", end - start);
     
     state = 1234567;
     start = seconds();
     for (size_t i = 0; i < count; i++)
-        vec2.insert_at(i, state);
+        vec2.insert_at(i, rng(&state));
     end = seconds();
     
     printf("vec build time: %f\n", end - start);
