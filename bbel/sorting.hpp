@@ -26,33 +26,6 @@ int get_default_insertion_sort_size()
         return 8;
 }
 
-template<typename T, typename D>
-void transfer_into_uninit(D dst, D src, size_t count)
-{
-    if constexpr (std::is_trivially_copyable<T>::value)
-        memcpy(dst, src, sizeof(T) * count);
-    else
-    {
-        for (ptrdiff_t i = count - 1; i >= 0; i -= 1)
-        {
-            ::new((void*)(dst + i)) T(std::move(src[i]));
-            src[i].~T();
-        }
-    }
-}
-template<typename Comparator>
-void bsearch(size_t & a, size_t b, int round_up, int b_offs, Comparator f)
-{
-    // rounding-and-offset-aware binary search
-    // (doesn't care whether a or b is higher)
-    while (a != b)
-    {
-        size_t avg = (a + b + round_up) / 2;
-        if (f(avg)) a = avg;
-        else        b = avg + b_offs;
-    }
-}
-
 template<typename T, typename D, typename Comparator>
 void shrink_sort_bounds(Comparator f, D data, size_t & start, size_t & one_past_end)
 {
@@ -76,31 +49,9 @@ void shrink_sort_bounds(Comparator f, D data, size_t & start, size_t & one_past_
     }
 }
 
-template<typename T, typename D>
-void swap_subsection(D data, size_t start, size_t half_length)
-{
-    for (size_t i = start; i < start + half_length; i++)
-        std::swap(data[i], data[i + half_length]);
-}
-template<typename T, typename D>
-void reverse_subsection(D data, size_t start, size_t length)
-{
-    for (size_t i = start; i < start + length / 2; i++)
-        std::swap(data[i], data[start + length - (i - start) - 1]);
-}
-template<typename T, typename D>
-void rotate_subsection(D data, size_t start, size_t length, size_t left_rotation)
-{
-    reverse_subsection(data, start, length);
-    reverse_subsection(data, start + (length - left_rotation), left_rotation);
-    reverse_subsection(data, start, length - left_rotation);
-}
-
 // ####
 // insertion sort
 // ####
-
-#include <assert.h>
 
 template<typename T, typename D, typename Comparator>
 void insertion_sort_impl(Comparator f, D data, size_t start, size_t one_past_end)

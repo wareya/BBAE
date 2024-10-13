@@ -11,6 +11,56 @@
 #include <initializer_list> // initializer list constructors
 #include <new> // placement new
 
+// ####
+// helpers
+// ####
+
+template<typename T, typename D>
+void transfer_into_uninit(D dst, D src, size_t count)
+{
+    if constexpr (std::is_trivially_copyable<T>::value)
+        memcpy(dst, src, sizeof(T) * count);
+    else
+    {
+        for (ptrdiff_t i = count - 1; i >= 0; i -= 1)
+        {
+            ::new((void*)(dst + i)) T(std::move(src[i]));
+            src[i].~T();
+        }
+    }
+}
+template<typename Comparator>
+void bsearch(size_t & a, size_t b, int round_up, int b_offs, Comparator f)
+{
+    // rounding-and-offset-aware binary search
+    // (doesn't care whether a or b is higher)
+    while (a != b)
+    {
+        size_t avg = (a + b + round_up) / 2;
+        if (f(avg)) a = avg;
+        else        b = avg + b_offs;
+    }
+}
+template<typename T, typename D>
+void swap_subsection(D data, size_t start, size_t half_length)
+{
+    for (size_t i = start; i < start + half_length; i++)
+        std::swap(data[i], data[i + half_length]);
+}
+template<typename T, typename D>
+void reverse_subsection(D data, size_t start, size_t length)
+{
+    for (size_t i = start; i < start + length / 2; i++)
+        std::swap(data[i], data[start + length - (i - start) - 1]);
+}
+template<typename T, typename D>
+void rotate_subsection(D data, size_t start, size_t length, size_t left_rotation)
+{
+    reverse_subsection(data, start, length);
+    reverse_subsection(data, start + (length - left_rotation), left_rotation);
+    reverse_subsection(data, start, length - left_rotation);
+}
+
 #include "sorting.hpp"
 
 template<typename T>
@@ -620,8 +670,6 @@ private:
 };
 
 
-#include <assert.h>
-
 //template<typename T, int min_size = 16, int max_size = 64>
 //template<typename T, int min_size = 32, int max_size = 128>
 //template<typename T, int min_size = 64, int max_size = 256>
@@ -640,11 +688,11 @@ private:
         size_t mheight = 0;
         size_t mleaves = 1;
         Vec<T> items = {};
-        CopyableUnique<RopeNode> left = 0;
-        CopyableUnique<RopeNode> right = 0;
+        Shared<RopeNode> left = 0;
+        Shared<RopeNode> right = 0;
         
         template<typename D>
-        static RopeNode from_copy(D data, size_t start, size_t count)
+        static RopeNode from_copy(const D data, size_t start, size_t count)
         {
             RopeNode ret;
             if (count <= max_size)
@@ -662,7 +710,7 @@ private:
         }
         
         template<typename D>
-        static RopeNode from_move(D data, size_t start, size_t count)
+        static RopeNode from_move(const D data, size_t start, size_t count)
         {
             RopeNode ret;
             if (count <= max_size)
@@ -679,7 +727,7 @@ private:
             return ret;
         }
         
-        size_t size()
+        size_t size() const
         {
             return mlength;
         }
@@ -704,34 +752,45 @@ private:
         const T & operator[](size_t pos) const { return get_at(pos); }
         T & operator[](size_t pos) { return get_at(pos); }
         
-        size_t calc_size()
+        size_t calc_size() const
         {
             if (left || right)
             {
-                assert(left && right);
+                if (!(left && right)) throw;
+                
                 return left->calc_size() + right->calc_size();
             }
             return items.size();
         }
         
-        T erase_at(size_t i)
+        T erase_at(size_t i, Shared<RopeNode> * where, size_t * where_start)
         {
-            assert(i < mlength);
+            if (!(i < mlength)) throw;
             
             T item = [&]()
             {
                 if (left && i < left->size())
                 {
-                    T item(left->erase_at(i));
+                    T item(left->erase_at(i, where, where_start));
+                    
+                    if (where && !left->left)
+                        *where = left;
+                    
                     mheight = right->mheight + 1;
                     if (mheight < left->mheight + 1)
                         mheight = left->mheight + 1;
                     mleaves = left->mleaves + right->mleaves;
                     return item;
                 }
-                else if (right && i - left->size() < right->size())
+                else if (right)// && i - left->size() < right->size())
                 {
-                    T item(right->erase_at(i - left->size()));
+                    T item(right->erase_at(i - left->size(), where, where_start));
+                    
+                    if (where && !right->left)
+                        *where = right;
+                    if (where_start)
+                        *where_start += left->size();
+                    
                     mheight = left->mheight + 1;
                     if (mheight < right->mheight + 1)
                         mheight = right->mheight + 1;
@@ -740,7 +799,7 @@ private:
                 }
                 else
                 {
-                    assert(i < items.size());
+                    if(!(i < items.size())) throw;
                     T item(items.erase_at(i));
                     return item;
                 }
@@ -762,19 +821,29 @@ private:
             return item;
         }
         
-        void insert_at(size_t i, T item)
+        void insert_at(size_t i, T item, Shared<RopeNode> * where, size_t * where_start)
         {
             if (left && i <= left->size())
             {
-                left->insert_at(i, item);
+                left->insert_at(i, item, where, where_start);
+                
+                if (where && !left->left)
+                    *where = left;
+                
                 if (mheight < left->mheight + 1)
                     mheight = left->mheight + 1;
                 mleaves = left->mleaves + right->mleaves;
                 mlength += 1;
             }
-            else if (right && i - left->size() <= right->size())
+            else if (right)// && i - left->size() <= right->size())
             {
-                right->insert_at(i - left->size(), item);
+                right->insert_at(i - left->size(), item, where, where_start);
+                
+                if (where && !right->left)
+                    *where = right;
+                if (where_start)
+                    *where_start += left->size();
+                
                 if (mheight < right->mheight + 1)
                     mheight = right->mheight + 1;
                 mleaves = left->mleaves + right->mleaves;
@@ -782,13 +851,13 @@ private:
             }
             else
             {
-                assert(i <= items.size());
+                if (!(i <= items.size())) throw;
                 items.insert_at(i, item);
                 
                 if (items.size() > split_chunk_size)
                 {
-                    left = MakeUnique<RopeNode>();
-                    right = MakeUnique<RopeNode>();
+                    left = MakeShared<RopeNode>();
+                    right = MakeShared<RopeNode>();
                     
                     left->items = std::move(items);
                     right->items = left->items.split_at(left->items.size() / 2);
@@ -804,7 +873,18 @@ private:
             }
         }
         
-        void print_structure(size_t depth)
+        void update_length_into(size_t i)
+        {
+            if (left && i <= left->size())
+                left->update_length_into(i);
+            else if (right)
+                right->update_length_into(i - left->size());
+            else
+                return;
+            mlength = left->mlength + right->mlength;
+        }
+        
+        void print_structure(size_t depth) const
         {
             for (size_t i = 0; i < depth; i++)
                 printf("-");
@@ -824,7 +904,7 @@ private:
         {
             if (left)
             {
-                assert(right);
+                if (!right) throw;
                 mheight = left->mheight + 1;
                 if (mheight < right->mheight + 1)
                     mheight = right->mheight + 1;
@@ -895,9 +975,9 @@ private:
                 //  (the difference is which side gets rebalanced)
                 if (height_a >= height_c)
                 {
-                    CopyableUnique<RopeNode> a(std::move(left->left));
-                    CopyableUnique<RopeNode> b(std::move(left->right));
-                    CopyableUnique<RopeNode> c(std::move(right));
+                    Shared<RopeNode> a(std::move(left->left));
+                    Shared<RopeNode> b(std::move(left->right));
+                    Shared<RopeNode> c(std::move(right));
                     
                     right = std::move(left);
                     
@@ -911,9 +991,9 @@ private:
                 }
                 else
                 {
-                    CopyableUnique<RopeNode> a(std::move(left));
-                    CopyableUnique<RopeNode> b(std::move(right->left));
-                    CopyableUnique<RopeNode> c(std::move(right->right));
+                    Shared<RopeNode> a(std::move(left));
+                    Shared<RopeNode> b(std::move(right->left));
+                    Shared<RopeNode> c(std::move(right->right));
                     
                     left = std::move(right);
                     
@@ -933,8 +1013,8 @@ private:
             if (height_b >= height_a && height_b >= height_c)
             {
                 //puts("case C!");
-                auto l = MakeUnique<RopeNode>();
-                auto r = MakeUnique<RopeNode>();
+                auto l = MakeShared<RopeNode>();
+                auto r = MakeShared<RopeNode>();
                 
                 if (left->mheight >= right->mheight)
                 {
@@ -968,13 +1048,11 @@ private:
             
             // case D: FIXME
             printf("FIXME/TODO: %zu %zu %zu\n", height_a, height_b, height_c);
-            assert(0);
+            throw;
         }
     };
     
-    CopyableUnique<RopeNode> root = 0;
-    
-    __attribute__((noinline))
+    //__attribute__((noinline))
     void rebalance()
     {
         if (!root)
@@ -1000,20 +1078,119 @@ private:
             }
             else
             {
-                auto new_root = MakeUnique<RopeNode>(std::move(RopeNode::from_move(*root, 0, root->mlength)));
+                auto new_root = MakeShared<RopeNode>(std::move(RopeNode::from_move(*root, 0, root->mlength)));
                 root = new_root;
             }
             num_rebalances += 1;
         }
     }
     
+    Shared<RopeNode> root = 0;
+    
+    size_t cached_node_start = 0;
+    size_t cached_node_len = 0;
+    Shared<RopeNode> cached_node = 0;
+    
+    size_t insert_cached_node_start = 0;
+    size_t insert_cached_node_len = 0;
+    Shared<RopeNode> insert_cached_node = 0;
+    
+    size_t erase_cached_node_start = 0;
+    size_t erase_cached_node_len = 0;
+    Shared<RopeNode> erase_cached_node = 0;
+    
+    void kill_cache()
+    {
+        cached_node = 0;
+        insert_cached_node = 0;
+    }
+    
+    void fix_cache(size_t prev_leaves, size_t i, ptrdiff_t diff)
+    {
+        if (prev_leaves != root->mleaves)
+            kill_cache();
+        
+        if (diff > 0)
+        {
+            if (cached_node && i < cached_node_start)
+                cached_node_start += diff;
+            if (insert_cached_node && i < insert_cached_node_start)
+                insert_cached_node_start += diff;
+            if (erase_cached_node && i < erase_cached_node_start)
+                erase_cached_node_start += diff;
+        }
+        else
+        {
+            if (cached_node && i < cached_node_start)
+            {
+                if (i - diff >= cached_node_start)
+                    cached_node = 0;
+                else
+                    cached_node_start -= diff;
+            }
+            if (insert_cached_node && i < insert_cached_node_start)
+            {
+                if (i - diff >= insert_cached_node_start)
+                    insert_cached_node = 0;
+                else
+                    insert_cached_node_start -= diff;
+            }
+            if (erase_cached_node && i < erase_cached_node_start)
+            {
+                if (i - diff >= erase_cached_node_start)
+                    erase_cached_node = 0;
+                else
+                    erase_cached_node_start -= diff;
+            }
+        }
+    }
+    
 public:
+    
     size_t num_rebalances = 0;
     
-    const T & operator[](size_t pos) const { if (!root) throw; return root->get_at(pos); }
-    T & operator[](size_t pos) { if (!root) throw; return root->get_at(pos); }
+    Rope() = default;
+    Rope(const Rope &) = default;
+    Rope(Rope &&) = default;
     
-    size_t size()
+    Rope & operator=(Rope && other) = default;
+    Rope & operator=(const Rope & other)
+    {
+        root = MakeShared<RopeNode>(std::move(RopeNode::from_copy(*other.root, 0, other.size())));
+        return *this;
+    };
+    
+    T & operator[](size_t pos)
+    {
+        if (!root) throw;
+        
+        if (cached_node && (pos - cached_node_start) < cached_node_len)
+            return (*cached_node)[pos - cached_node_start];
+        if (insert_cached_node && (pos - insert_cached_node_start) < insert_cached_node_len)
+            return (*insert_cached_node)[pos - insert_cached_node_start];
+        if (erase_cached_node && (pos - erase_cached_node_start) < erase_cached_node_len)
+            return (*erase_cached_node)[pos - erase_cached_node_start];
+        
+        cached_node_start = 0;
+        cached_node = root;
+        size_t i = pos;
+        while (cached_node->left)
+        {
+            if (i < cached_node->left->size())
+                cached_node = cached_node->left;
+            else
+            {
+                i -= cached_node->left->size();
+                cached_node_start += cached_node->left->size();
+                cached_node = cached_node->right;
+            }
+        }
+        cached_node_len = cached_node->size();
+        
+        return (*cached_node)[pos - cached_node_start];
+    }
+    
+    size_t size() const
     {
         if (root)
             return root->mlength;
@@ -1022,8 +1199,50 @@ public:
     void insert_at(size_t i, T item)
     {
         if (!root)
-            root = MakeUnique<RopeNode>();
-        root->insert_at(i, item);
+            root = MakeShared<RopeNode>();
+        
+        Shared<RopeNode> where;
+        size_t where_start = 0;
+        
+        if (cached_node && i <= cached_node_start + cached_node_len
+            && i >= cached_node_start && cached_node->size() < split_chunk_size)
+        {
+            where = cached_node;
+            where_start = cached_node_start;
+        }
+        else if (insert_cached_node && i <= insert_cached_node_start + insert_cached_node_len
+            && i >= insert_cached_node_start && insert_cached_node->size() < split_chunk_size)
+        {
+            where = insert_cached_node;
+            where_start = insert_cached_node_start;
+        }
+        else if (erase_cached_node && i <= erase_cached_node_start + erase_cached_node_len
+            && i >= erase_cached_node_start && erase_cached_node->size() < split_chunk_size)
+        {
+            where = erase_cached_node;
+            where_start = erase_cached_node_start;
+        }
+        
+        size_t prev_leaves = root->mleaves;
+        if (where)
+        {
+            where->insert_at(i - where_start, item, 0, 0);
+            root->update_length_into(i);
+            rebalance();
+            fix_cache(prev_leaves, i, 1);
+            return;
+        }
+        
+        root->insert_at(i, item, &where, &where_start);
+        
+        if (where)
+        {
+            insert_cached_node = where;
+            insert_cached_node_start = where_start;
+            insert_cached_node_len = where->size();
+        }
+        
+        fix_cache(prev_leaves, i, 1);
         
         rebalance();
     }
@@ -1033,13 +1252,55 @@ public:
     }
     T erase_at(size_t i)
     {
-        if (root)
+        if (!root)
+            throw;
+        
+        
+        Shared<RopeNode> where;
+        size_t where_start = 0;
+        
+        if (cached_node && i < cached_node_start + cached_node_len
+            && i >= cached_node_start && cached_node->size() > min_chunk_size)
         {
-            T ret = root->erase_at(i);
+            where = cached_node;
+            where_start = cached_node_start;
+        }
+        else if (insert_cached_node && i < insert_cached_node_start + insert_cached_node_len
+            && i >= insert_cached_node_start && insert_cached_node->size() > min_chunk_size)
+        {
+            where = insert_cached_node;
+            where_start = insert_cached_node_start;
+        }
+        else if (erase_cached_node && i < erase_cached_node_start + erase_cached_node_len
+            && i >= erase_cached_node_start && erase_cached_node->size() > min_chunk_size)
+        {
+            where = erase_cached_node;
+            where_start = erase_cached_node_start;
+        }
+        
+        size_t prev_leaves = root->mleaves;
+        if (where)
+        {
+            auto ret = where->erase_at(i - where_start, 0, 0);
+            root->update_length_into(i);
             rebalance();
+            fix_cache(prev_leaves, i, -1);
             return ret;
         }
-        throw;
+        
+        T ret = root->erase_at(i, &where, &where_start);
+        
+        if (where)
+        {
+            erase_cached_node = where;
+            erase_cached_node_start = where_start;
+            erase_cached_node_len = where->size();
+        }
+        
+        fix_cache(prev_leaves, i, -1);
+        
+        rebalance();
+        return ret;
     }
     void erase(size_t i)
     {
@@ -1050,7 +1311,7 @@ public:
         for (size_t n = 0; n < count; n++)
             erase_at(i);
     }
-    void print_structure()
+    void print_structure() const
     {
         if (!root)
             return (void)puts("empty");
