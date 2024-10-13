@@ -763,7 +763,7 @@ private:
             return items.size();
         }
         
-        T erase_at(size_t i, Shared<RopeNode> * where, size_t * where_start)
+        T erase_at(size_t i)
         {
             if (!(i < mlength)) throw;
             
@@ -771,10 +771,7 @@ private:
             {
                 if (left && i < left->size())
                 {
-                    T item(left->erase_at(i, where, where_start));
-                    
-                    if (where && !left->left)
-                        *where = left;
+                    T item(left->erase_at(i));
                     
                     mheight = right->mheight + 1;
                     if (mheight < left->mheight + 1)
@@ -784,12 +781,7 @@ private:
                 }
                 else if (right)// && i - left->size() < right->size())
                 {
-                    T item(right->erase_at(i - left->size(), where, where_start));
-                    
-                    if (where && !right->left)
-                        *where = right;
-                    if (where_start)
-                        *where_start += left->size();
+                    T item(right->erase_at(i - left->size()));
                     
                     mheight = left->mheight + 1;
                     if (mheight < right->mheight + 1)
@@ -821,14 +813,11 @@ private:
             return item;
         }
         
-        void insert_at(size_t i, T item, Shared<RopeNode> * where, size_t * where_start)
+        void insert_at(size_t i, T item)
         {
             if (left && i <= left->size())
             {
-                left->insert_at(i, item, where, where_start);
-                
-                if (where && !left->left)
-                    *where = left;
+                left->insert_at(i, item);
                 
                 if (mheight < left->mheight + 1)
                     mheight = left->mheight + 1;
@@ -837,12 +826,7 @@ private:
             }
             else if (right)// && i - left->size() <= right->size())
             {
-                right->insert_at(i - left->size(), item, where, where_start);
-                
-                if (where && !right->left)
-                    *where = right;
-                if (where_start)
-                    *where_start += left->size();
+                right->insert_at(i - left->size(), item);
                 
                 if (mheight < right->mheight + 1)
                     mheight = right->mheight + 1;
@@ -1097,58 +1081,24 @@ private:
     size_t cached_node_len = 0;
     Shared<RopeNode> cached_node = 0;
     
-    size_t insert_cached_node_start = 0;
-    size_t insert_cached_node_len = 0;
-    Shared<RopeNode> insert_cached_node = 0;
-    
-    size_t erase_cached_node_start = 0;
-    size_t erase_cached_node_len = 0;
-    Shared<RopeNode> erase_cached_node = 0;
-    
     void kill_cache()
     {
         cached_node = 0;
-        insert_cached_node = 0;
-        erase_cached_node = 0;
     }
     
     void fix_cache(size_t prev_leaves, size_t i, ptrdiff_t diff)
     {
-        if (prev_leaves != root->mleaves)
+        if (prev_leaves != root->mleaves) // structure changed. a node somewhere got split or merged. kill cache.
             kill_cache();
-        
-        if (diff > 0)
+        else if (diff > 0 && cached_node && i < cached_node_start)
+            cached_node_start += diff;
+        else if (cached_node && i < cached_node_start)
         {
-            if (cached_node && i < cached_node_start)
-                cached_node_start += diff;
-            if (insert_cached_node && i < insert_cached_node_start)
-                insert_cached_node_start += diff;
-            if (erase_cached_node && i < erase_cached_node_start)
-                erase_cached_node_start += diff;
-        }
-        else
-        {
-            if (cached_node && i < cached_node_start)
-            {
-                if (i - diff >= cached_node_start)
-                    cached_node = 0;
-                else
-                    cached_node_start -= diff;
-            }
-            if (insert_cached_node && i < insert_cached_node_start)
-            {
-                if (i - diff >= insert_cached_node_start)
-                    insert_cached_node = 0;
-                else
-                    insert_cached_node_start -= diff;
-            }
-            if (erase_cached_node && i < erase_cached_node_start)
-            {
-                if (i - diff >= erase_cached_node_start)
-                    erase_cached_node = 0;
-                else
-                    erase_cached_node_start -= diff;
-            }
+            // erase ran into cached node. kill cache.
+            if (i - diff > cached_node_start)
+                kill_cache();
+            else
+                cached_node_start -= diff;
         }
     }
     
@@ -1173,10 +1123,6 @@ public:
         
         if (cached_node && (pos - cached_node_start) < cached_node_len)
             return (*cached_node)[pos - cached_node_start];
-        if (insert_cached_node && (pos - insert_cached_node_start) < insert_cached_node_len)
-            return (*insert_cached_node)[pos - insert_cached_node_start];
-        if (erase_cached_node && (pos - erase_cached_node_start) < erase_cached_node_len)
-            return (*erase_cached_node)[pos - erase_cached_node_start];
         
         cached_node_start = 0;
         cached_node = root;
@@ -1208,50 +1154,11 @@ public:
         if (!root)
             root = MakeShared<RopeNode>();
         
-        Shared<RopeNode> where;
-        size_t where_start = 0;
-        
-        if (cached_node && i <= cached_node_start + cached_node_len
-            && i >= cached_node_start && cached_node->size() < split_chunk_size)
-        {
-            where = cached_node;
-            where_start = cached_node_start;
-        }
-        else if (insert_cached_node && i <= insert_cached_node_start + insert_cached_node_len
-            && i >= insert_cached_node_start && insert_cached_node->size() < split_chunk_size)
-        {
-            where = insert_cached_node;
-            where_start = insert_cached_node_start;
-        }
-        else if (erase_cached_node && i <= erase_cached_node_start + erase_cached_node_len
-            && i >= erase_cached_node_start && erase_cached_node->size() < split_chunk_size)
-        {
-            where = erase_cached_node;
-            where_start = erase_cached_node_start;
-        }
-        
         size_t prev_leaves = root->mleaves;
-        if (where)
-        {
-            where->insert_at(i - where_start, item, 0, 0);
-            root->update_length_into(i);
-            rebalance();
-            fix_cache(prev_leaves, i, 1);
-            return;
-        }
-        
-        root->insert_at(i, item, &where, &where_start);
-        
-        if (where)
-        {
-            insert_cached_node = where;
-            insert_cached_node_start = where_start;
-            insert_cached_node_len = where->size();
-        }
+        root->insert_at(i, item);
+        rebalance();
         
         fix_cache(prev_leaves, i, 1);
-        
-        rebalance();
     }
     void insert(size_t i, T item)
     {
@@ -1262,51 +1169,11 @@ public:
         if (!root)
             throw;
         
-        
-        Shared<RopeNode> where;
-        size_t where_start = 0;
-        
-        if (cached_node && i < cached_node_start + cached_node_len
-            && i >= cached_node_start && cached_node->size() > min_chunk_size)
-        {
-            where = cached_node;
-            where_start = cached_node_start;
-        }
-        else if (insert_cached_node && i < insert_cached_node_start + insert_cached_node_len
-            && i >= insert_cached_node_start && insert_cached_node->size() > min_chunk_size)
-        {
-            where = insert_cached_node;
-            where_start = insert_cached_node_start;
-        }
-        else if (erase_cached_node && i < erase_cached_node_start + erase_cached_node_len
-            && i >= erase_cached_node_start && erase_cached_node->size() > min_chunk_size)
-        {
-            where = erase_cached_node;
-            where_start = erase_cached_node_start;
-        }
-        
         size_t prev_leaves = root->mleaves;
-        if (where)
-        {
-            auto ret = where->erase_at(i - where_start, 0, 0);
-            root->update_length_into(i);
-            rebalance();
-            fix_cache(prev_leaves, i, -1);
-            return ret;
-        }
-        
-        T ret = root->erase_at(i, &where, &where_start);
-        
-        if (where)
-        {
-            erase_cached_node = where;
-            erase_cached_node_start = where_start;
-            erase_cached_node_len = where->size();
-        }
+        T ret = root->erase_at(i);
+        rebalance();
         
         fix_cache(prev_leaves, i, -1);
-        
-        rebalance();
         return ret;
     }
     void erase(size_t i)

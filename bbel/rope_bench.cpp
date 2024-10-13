@@ -23,7 +23,7 @@ uint32_t rng(uint64_t * state)
 
 int main(void)
 {
-    Rope<uint32_t> rope2;
+    Rope<uint32_t, 256, 1024> rope2;
     __gnu_cxx::rope<uint32_t> rope_stl;
     Vec<uint32_t> vec2;
     
@@ -33,21 +33,21 @@ int main(void)
     uint64_t state = 1234567;
     double start = seconds();
     for (size_t i = 0; i < count; i++)
-        rope2.insert_at(i, rng(&state));
+        rope2.insert_at(i, count/2 - i);
     double end = seconds();
     printf("rope build time: %f\n", end - start);
     
     state = 1234567;
     start = seconds();
     for (size_t i = 0; i < count; i++)
-        rope_stl.insert(i, rng(&state));
+        rope_stl.insert(i, count/2 - i);
     end = seconds();
     printf("rope stl build time: %f\n", end - start);
     
     state = 1234567;
     start = seconds();
     for (size_t i = 0; i < count; i++)
-        vec2.insert_at(i, rng(&state));
+        vec2.insert_at(i, count/2 - i);
     end = seconds();
     
     printf("vec build time: %f\n", end - start);
