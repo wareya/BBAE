@@ -1134,13 +1134,87 @@ private:
         }
     }
     
+    template <ptrdiff_t dir = 1>
     class RopeIterator {
-        ptrdiff_t dir = 1;
+        Rope * rope;
         ptrdiff_t index = 0;
-        Rope & rope;
         
-        //RopeIterator & operator+=(size_t )
+        ptrdiff_t wrap_index(ptrdiff_t i) const
+        {
+            i *= dir;
+            if (index + i < 0)
+                return index + i + 1 + (ptrdiff_t)rope->size();
+            return index + i;
+        }
         
+    public:
+        
+#ifdef BXX_STDLIB_ITERATOR_INCLUDED
+        using value_type = T;
+        using difference_type = ptrdiff_t;
+        using pointer = T *;
+        using reference = T &;
+        using iterator_category = std::random_access_iterator_tag;
+#endif // BXX_STDLIB_ITERATOR_INCLUDED
+        
+        RopeIterator(Rope * rope, ptrdiff_t index) : rope(rope), index(index) { }
+        
+        const T & operator[](ptrdiff_t pos) const noexcept { return (*rope)[wrap_index(pos)]; }
+        T & operator[](ptrdiff_t pos) noexcept { return (*rope)[wrap_index(pos)]; }
+        const T & operator*() const { return (*rope)[wrap_index(0)]; }
+        T & operator*() { return (*rope)[wrap_index(0)]; }
+        const T * operator->() const noexcept { return &(*rope)[wrap_index(0)]; }
+        T * operator->() noexcept { return &(*rope)[wrap_index(0)]; }
+        
+        RopeIterator & operator++() { index += dir; return *this; }
+        RopeIterator & operator--() { index -= dir; return *this; }
+        
+        RopeIterator & operator++(int) { auto ret = *this; index += dir; return ret; }
+        RopeIterator & operator--(int) { auto ret = *this; index -= dir; return ret; }
+        
+        RopeIterator & operator+=(ptrdiff_t n)
+        {
+            index += dir * n;
+            return *this;
+        }
+        RopeIterator & operator-=(ptrdiff_t n)
+        {
+            index -= dir * n;
+            return *this;
+        }
+        
+        bool operator> (const RopeIterator & other) const { return wrap_index(0) >  other.wrap_index(0); }
+        bool operator>=(const RopeIterator & other) const { return wrap_index(0) >= other.wrap_index(0); }
+        bool operator< (const RopeIterator & other) const { return wrap_index(0) <  other.wrap_index(0); }
+        bool operator<=(const RopeIterator & other) const { return wrap_index(0) <= other.wrap_index(0); }
+        bool operator!=(const RopeIterator & other) const { return wrap_index(0) != other.wrap_index(0); }
+        bool operator==(const RopeIterator & other) const { return wrap_index(0) == other.wrap_index(0); }
+        
+        friend RopeIterator operator+(ptrdiff_t n, RopeIterator it)
+        {
+            it.index += dir * n;
+            return it;
+        }
+        friend RopeIterator operator+(RopeIterator it, ptrdiff_t n)
+        {
+            it.index += dir * n;
+            return it;
+        }
+        friend RopeIterator operator-(ptrdiff_t n, RopeIterator it)
+        {
+            it.index -= dir * n;
+            return it;
+        }
+        friend RopeIterator operator-(RopeIterator it, ptrdiff_t n)
+        {
+            it.index -= dir * n;
+            return it;
+        }
+        
+        ptrdiff_t operator-(const RopeIterator & other) const
+        {
+            return wrap_index(index) - wrap_index(other.index);
+        }
     };
     
 public:
@@ -1154,7 +1228,6 @@ public:
         root = MakeShared<RopeNode>(std::move(RopeNode::from_copy(*other.root, 0, other.size())));
     }
     
-    Rope & operator=(Rope other) = delete;
     Rope & operator=(Rope && other) = default;
     Rope & operator=(const Rope & other)
     {
@@ -1256,6 +1329,16 @@ public:
         //tree_insertion_sort_impl<T>(f, *this, 0, size());
         inout_tree_insertion_sort_impl<T>(f, *this, 0, size());
         //kill_cache();
+    }
+    
+    RopeIterator<1> begin()
+    {
+        return RopeIterator<1>{this, 0};
+    }
+    RopeIterator<1> end()
+    {
+        return RopeIterator<1>{this, -1};
+        //return RopeIterator<1>{this, (ptrdiff_t)size()};
     }
 };
 

@@ -1,11 +1,12 @@
-#include "types.hpp"
+//#include <iterator>
+//#define BXX_STDLIB_ITERATOR_INCLUDED
 
-#include "picojson.hpp"
+#include "types.hpp"
 
 #include <stdint.h>
 
 #include <chrono>
-#include <ext/rope>
+#include <algorithm>
 
 double seconds()
 {
@@ -24,39 +25,30 @@ uint32_t rng(uint64_t * state)
 int main(void)
 {
     Rope<uint32_t> rope2;
-    __gnu_cxx::rope<uint32_t> rope_stl;
     Vec<uint32_t> vec2;
     
-    size_t count = 3000000;
+    size_t count = 30000000;
     printf("n: %zd\n", count);
     
     uint64_t state = 1234567;
     double start = seconds();
     for (size_t i = 0; i < count; i++)
-        rope2.insert_at(i, i - 1500000);
-        //rope2.insert_at(i, i);
+        //rope2.insert_at(i, i - 1500000);
+        rope2.insert_at(i, i);
         //rope2.insert_at(i, rng(&state));
     //rope2.insert_at(0, 0xFFFFFFFF);
+    rope2.insert_at(count, 0);
     double end = seconds();
     printf("rope build time: %f\n", end - start);
     
     state = 1234567;
     start = seconds();
     for (size_t i = 0; i < count; i++)
-        rope_stl.insert(i, i - 1500000);
-        //rope_stl.insert(i, i);
-        //rope_stl.insert(i, rng(&state));
-    //rope_stl.insert(0, 0xFFFFFFFF);
-    end = seconds();
-    printf("rope stl build time: %f\n", end - start);
-    
-    state = 1234567;
-    start = seconds();
-    for (size_t i = 0; i < count; i++)
-        vec2.insert_at(i, i - 1500000);
-        //vec2.insert_at(i, i);
+        //vec2.insert_at(i, i - 1500000);
+        vec2.insert_at(i, i);
         //vec2.insert_at(i, rng(&state));
     //vec2.insert_at(0, 0xFFFFFFFF);
+    vec2.insert_at(count, 0);
     end = seconds();
     
     printf("vec build time: %f\n", end - start);
@@ -74,29 +66,13 @@ int main(void)
     
     start = seconds();
     for (size_t i = 0; i < count; i++)
-        n += rope_stl[i];
-    end = seconds();
-    
-    printf("rope stl iterate time: %f (sum: %d)\n", end - start, n);
-    n = 0;
-    
-    start = seconds();
-    for (auto v = rope_stl.begin(); v < rope_stl.end(); v++)
-        n += *v;
-    end = seconds();
-    
-    printf("rope stl iterate time (iterator): %f (sum: %d)\n", end - start, n);
-    
-    n = 0;
-    
-    start = seconds();
-    for (size_t i = 0; i < count; i++)
         n += vec2[i];
     end = seconds();
     
     printf("vec iterate time: %f (sum: %d)\n", end - start, n);
     
     auto r2copy = rope2;
+    auto r2copy2 = rope2;
     
     start = seconds();
     rope2.sort([&](auto & a, auto & b) { return a < b; });
@@ -107,6 +83,11 @@ int main(void)
     tree_insertion_sort_impl<uint32_t>([&](auto & a, auto & b) { return a < b; }, r2copy, 0, r2copy.size());
     end = seconds();
     printf("rope ltr sort time: %f\n", end - start);
+    
+    //start = seconds();
+    //std::stable_sort(r2copy2.begin(), r2copy2.end(), [&](auto & a, auto & b) { return a < b; });
+    //end = seconds();
+    //printf("rope std stable sort time: %f\n", end - start);
     
     if (r2copy.size() != rope2.size()) throw;
     
@@ -119,13 +100,6 @@ int main(void)
             throw;
         }
     }
-    
-    //start = seconds();
-    //auto rope_stl2 = rope_stl;
-    //inout_tree_insertion_sort_impl<uint32_t>([&](auto a, auto b) { return a < b; }, rope_stl, 0, rope_stl.size());
-    //end = seconds();
-    //
-    //printf("stl rope sort time: %f\n", end - start);
     
     start = seconds();
     vec2.sort([&](auto a, auto b) { return a < b; });
