@@ -30,15 +30,25 @@ void transfer_into_uninit(D dst, D src, size_t count)
     }
 }
 template<typename Comparator>
-void bsearch(size_t & a, size_t b, int round_up, int b_offs, Comparator f)
+void bsearch_up(size_t & a, size_t b, Comparator f)
 {
-    // rounding-and-offset-aware binary search
-    // (doesn't care whether a or b is higher)
-    while (a != b)
+    while (a < b)
     {
-        size_t avg = (a + b + round_up) / 2;
+        //size_t avg = a + (b - a) / 2;
+        size_t avg = (a + b) / 2;
+        if (f(avg)) a = avg + 1;
+        else        b = avg;
+    }
+}
+template<typename Comparator>
+void bsearch_down(size_t & a, size_t b, Comparator f)
+{
+    while (a > b)
+    {
+        //size_t avg = b + (a - b) / 2;
+        size_t avg = (a + b) / 2;
         if (f(avg)) a = avg;
-        else        b = avg + b_offs;
+        else        b = avg + 1;
     }
 }
 template<typename T, typename D>
@@ -653,12 +663,30 @@ private:
     void do_realloc(size_t new_capacity)
     {
         mcapacity = new_capacity;
+        
+        if constexpr (std::is_trivially_copyable<T>::value && alignof(T) <= 16)
+        {
+            mbuffer_raw = mcapacity ? (char *)realloc((void *)mbuffer_raw, mcapacity * sizeof(T) + alignof(T)) : nullptr;
+            if (mcapacity && !mbuffer_raw) throw;
+            
+            mbuffer = mbuffer_raw;
+            if constexpr (alignof(T) != 0 && alignof(T) != 1 && alignof(T) != 2
+                          && alignof(T) != 4 && alignof(T) != 8 && alignof(T) != 16)
+            {
+                while (size_t(mbuffer) % alignof(T))
+                    mbuffer += 1;
+            }
+            return;
+        }
+        
         if (mlength > mcapacity) throw;
         char * new_buf_raw = mcapacity ? (char *)malloc(mcapacity * sizeof(T) + alignof(T)) : nullptr;
         if (mcapacity && !new_buf_raw) throw;
+        
         char * new_buf = new_buf_raw;
         while (size_t(new_buf) % alignof(T))
             new_buf += 1;
+        
         for (size_t i = 0; i < mlength; i++)
             ::new((void*)(((T*)new_buf) + i)) T(std::move(((T*)mbuffer)[i]));
         for (size_t i = 0; i < mlength; i++)
@@ -1084,44 +1112,63 @@ private:
     void kill_cache()
     {
         cached_node = 0;
+        cached_node_len = 0;
+        cached_node_start = 0;
     }
     
     void fix_cache(size_t prev_leaves, size_t i, ptrdiff_t diff)
     {
+        kill_cache();
         if (prev_leaves != root->mleaves) // structure changed. a node somewhere got split or merged. kill cache.
             kill_cache();
         else if (diff > 0 && cached_node && i < cached_node_start)
             cached_node_start += diff;
         else if (cached_node && i < cached_node_start)
         {
+            kill_cache();
             // erase ran into cached node. kill cache.
-            if (i - diff > cached_node_start)
+            if (i - diff >= cached_node_start)
                 kill_cache();
             else
                 cached_node_start -= diff;
         }
     }
     
+    class RopeIterator {
+        ptrdiff_t dir = 1;
+        ptrdiff_t index = 0;
+        Rope & rope;
+        
+        //RopeIterator & operator+=(size_t )
+        
+    };
+    
 public:
     
     size_t num_rebalances = 0;
     
     Rope() = default;
-    Rope(const Rope &) = default;
     Rope(Rope &&) = default;
+    Rope(const Rope & other)
+    {
+        root = MakeShared<RopeNode>(std::move(RopeNode::from_copy(*other.root, 0, other.size())));
+    }
     
+    Rope & operator=(Rope other) = delete;
     Rope & operator=(Rope && other) = default;
     Rope & operator=(const Rope & other)
     {
         root = MakeShared<RopeNode>(std::move(RopeNode::from_copy(*other.root, 0, other.size())));
+        kill_cache();
         return *this;
-    };
+    }
     
     T & operator[](size_t pos)
     {
         if (!root) throw;
         
-        if (cached_node && (pos - cached_node_start) < cached_node_len)
+        //if (cached_node && pos >= cached_node_start && (pos - cached_node_start) < cached_node_len)
+        if (cached_node && pos >= cached_node_start && pos < cached_node_start + cached_node_len)
             return (*cached_node)[pos - cached_node_start];
         
         cached_node_start = 0;
@@ -1140,7 +1187,7 @@ public:
         }
         cached_node_len = cached_node->size();
         
-        return (*cached_node)[pos - cached_node_start];
+        return (*cached_node)[i];
     }
     
     size_t size() const
@@ -1152,7 +1199,12 @@ public:
     void insert_at(size_t i, T item)
     {
         if (!root)
+        {
             root = MakeShared<RopeNode>();
+            kill_cache();
+        }
+        
+        if (i > size()) throw;
         
         size_t prev_leaves = root->mleaves;
         root->insert_at(i, item);
@@ -1168,6 +1220,8 @@ public:
     {
         if (!root)
             throw;
+        
+        if (i >= size()) throw;
         
         size_t prev_leaves = root->mleaves;
         T ret = root->erase_at(i);
@@ -1199,7 +1253,9 @@ public:
     template<typename Comparator>
     void sort(Comparator f)
     {
-        tree_insertion_sort_impl<T>(f, *this, 0, size());
+        //tree_insertion_sort_impl<T>(f, *this, 0, size());
+        inout_tree_insertion_sort_impl<T>(f, *this, 0, size());
+        //kill_cache();
     }
 };
 

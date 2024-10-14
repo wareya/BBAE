@@ -93,7 +93,7 @@ void insertion_sort_impl(Comparator f, D data, size_t start, size_t one_past_end
             T item(std::move(data[i]));
             
             size_t insert_i = i + 1;
-            bsearch(insert_i, one_past_end - 1, 1, -1, [&](auto avg)
+            bsearch_up(insert_i, one_past_end - 1, [&](auto avg)
                 { return f(data[avg], item); });
             
             if constexpr (std::is_trivially_copyable<T>::value)
@@ -123,7 +123,7 @@ void tree_insertion_sort_impl(Comparator f, D & data, size_t start, size_t one_p
             data.erase(i, 1);
             
             size_t insert_i = i - 1;
-            bsearch(insert_i, start, 0, 1, [&](auto avg)
+            bsearch_down(insert_i, start, [&](auto avg)
             //size_t insert_i = start;
             //bsearch(insert_i, i - 1, 1, -1, [&](auto avg)
                 { return f(item, data[avg]); });
@@ -132,6 +132,83 @@ void tree_insertion_sort_impl(Comparator f, D & data, size_t start, size_t one_p
             data.insert(insert_i, item);
         }
     }
+}
+
+template<typename T, typename D, typename Comparator>
+void inout_tree_insertion_sort_impl(Comparator f, D & data, size_t start, size_t one_past_end)
+{
+    size_t size = one_past_end - start;
+    if (size <= 1)
+        return;
+    
+    size_t lower = start + size / 2;
+    size_t upper = start + size / 2;
+    while (lower > start || upper < one_past_end - 1)
+    {
+        while (lower > start && !f(data[lower], data[lower - 1]))
+            lower -= 1;
+        while (upper < one_past_end - 1 && !f(data[upper + 1], data[upper]))
+            upper += 1;
+        if (lower > start)
+        {
+            T item(std::move(data[lower - 1]));
+            data.erase(lower - 1, 1);
+            
+            size_t insert_i = lower;
+            bsearch_up(insert_i, upper, [&](auto avg)
+                { return f(data[avg], item); });
+            
+            data.insert(insert_i, item);
+        }
+        if (upper < one_past_end - 1)
+        {
+            T item(std::move(data[upper + 1]));
+            data.erase(upper + 1, 1);
+            
+            size_t insert_i = upper;
+            bsearch_down(insert_i, lower, [&](auto avg)
+                { return !f(data[avg], item); });
+            
+            data.insert(insert_i, item);
+        }
+    }
+    /*
+    for (size_t i = start + size / 2; i > start; i -= 1)
+    {
+        if (f(data[i], data[i - 1]))
+        {
+            T item(std::move(data[i - 1]));
+            data.erase(i - 1, 1);
+            
+            size_t insert_i = i;
+            //bsearch_up(insert_i, one_past_end - 1, [&](auto avg)
+            bsearch_up(insert_i, start + size / 2, [&](auto avg)
+                { return f(data[avg], item); });
+                //{ return !f(item, data[avg]); });
+            //size_t insert_i = one_past_end - 1;
+            //bsearch_down(insert_i, i - 1, [&](auto avg)
+                //{ return !f(data[avg], item); });
+                //{ return f(item, data[avg]); });
+            
+            data.insert(insert_i, item);
+        }
+    }
+    for (size_t i = start + size / 2 + 1; i < one_past_end; i += 1)
+    {
+        if (f(data[i], data[i - 1]))
+        {
+            T item(std::move(data[i]));
+            data.erase(i, 1);
+            
+            size_t insert_i = i - 1;
+            //bsearch_down(insert_i, start + size / 2, [&](auto avg)
+            bsearch_down(insert_i, start, [&](auto avg)
+                { return !f(data[avg], item); });
+            
+            data.insert(insert_i, item);
+        }
+    }
+    */
 }
 
 // ####
@@ -157,7 +234,7 @@ void merge_parts(Comparator f, D data, D temp_buffer, size_t start, size_t one_p
     if (midpoint > start && !f(read_buf[midpoint], read_buf[start]))
     {
         size_t start_lo = start + 1;
-        bsearch(start_lo, midpoint - 1, 1, -1, [&](auto avg)
+        bsearch_up(start_lo, midpoint - 1, [&](auto avg)
             { return !f(read_buf[midpoint], read_buf[avg]); });
         
         transfer_into_uninit<T>(write_buf + start, read_buf + start, start_lo - start);
@@ -171,7 +248,7 @@ void merge_parts(Comparator f, D data, D temp_buffer, size_t start, size_t one_p
     if (one_past_end > j && !f(read_buf[one_past_end - 1], read_buf[midpoint - 1]))
     {
         size_t end_lo = one_past_end - 1;
-        bsearch(end_lo, j, 0, 1, [&](auto avg)
+        bsearch_down(end_lo, j, [&](auto avg)
             { return !f(read_buf[avg], read_buf[midpoint - 1]); });
         
         transfer_into_uninit<T>(write_buf + end_lo, read_buf + end_lo, one_past_end - end_lo);

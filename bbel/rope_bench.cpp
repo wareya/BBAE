@@ -23,31 +23,40 @@ uint32_t rng(uint64_t * state)
 
 int main(void)
 {
-    Rope<uint32_t, 256, 1024> rope2;
+    Rope<uint32_t> rope2;
     __gnu_cxx::rope<uint32_t> rope_stl;
     Vec<uint32_t> vec2;
     
-    size_t count = 1000000;
+    size_t count = 3000000;
     printf("n: %zd\n", count);
     
     uint64_t state = 1234567;
     double start = seconds();
     for (size_t i = 0; i < count; i++)
-        rope2.insert_at(i, count/2 - i);
+        rope2.insert_at(i, i - 1500000);
+        //rope2.insert_at(i, i);
+        //rope2.insert_at(i, rng(&state));
+    //rope2.insert_at(0, 0xFFFFFFFF);
     double end = seconds();
     printf("rope build time: %f\n", end - start);
     
     state = 1234567;
     start = seconds();
     for (size_t i = 0; i < count; i++)
-        rope_stl.insert(i, count/2 - i);
+        rope_stl.insert(i, i - 1500000);
+        //rope_stl.insert(i, i);
+        //rope_stl.insert(i, rng(&state));
+    //rope_stl.insert(0, 0xFFFFFFFF);
     end = seconds();
     printf("rope stl build time: %f\n", end - start);
     
     state = 1234567;
     start = seconds();
     for (size_t i = 0; i < count; i++)
-        vec2.insert_at(i, count/2 - i);
+        vec2.insert_at(i, i - 1500000);
+        //vec2.insert_at(i, i);
+        //vec2.insert_at(i, rng(&state));
+    //vec2.insert_at(0, 0xFFFFFFFF);
     end = seconds();
     
     printf("vec build time: %f\n", end - start);
@@ -87,18 +96,36 @@ int main(void)
     
     printf("vec iterate time: %f (sum: %d)\n", end - start, n);
     
-    start = seconds();
-    tree_insertion_sort_impl<uint32_t>([&](auto & a, auto & b) { return a < b; }, rope2, 0, rope2.size());
-    end = seconds();
-    
-    printf("rope sort time: %f\n", end - start);
+    auto r2copy = rope2;
     
     start = seconds();
-    auto rope_stl2 = rope_stl;
-    tree_insertion_sort_impl<uint32_t>([&](auto a, auto b) { return a < b; }, rope_stl, 0, rope_stl.size());
+    rope2.sort([&](auto & a, auto & b) { return a < b; });
     end = seconds();
+    printf("rope in-out sort time: %f\n", end - start);
     
-    printf("stl rope sort time: %f\n", end - start);
+    start = seconds();
+    tree_insertion_sort_impl<uint32_t>([&](auto & a, auto & b) { return a < b; }, r2copy, 0, r2copy.size());
+    end = seconds();
+    printf("rope ltr sort time: %f\n", end - start);
+    
+    if (r2copy.size() != rope2.size()) throw;
+    
+    for (size_t i = 0; i < r2copy.size(); i++)
+    {
+        if (r2copy[i] != rope2[i])
+        {
+            puts("sort failed");
+            printf("%zd %d %d\n", i, r2copy[i], rope2[i]);
+            throw;
+        }
+    }
+    
+    //start = seconds();
+    //auto rope_stl2 = rope_stl;
+    //inout_tree_insertion_sort_impl<uint32_t>([&](auto a, auto b) { return a < b; }, rope_stl, 0, rope_stl.size());
+    //end = seconds();
+    //
+    //printf("stl rope sort time: %f\n", end - start);
     
     start = seconds();
     vec2.sort([&](auto a, auto b) { return a < b; });
