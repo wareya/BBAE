@@ -2,7 +2,7 @@
 #define _INCLUDE_BXX_TYPES
 
 #include <cmath>
-#include <cstdio> // size_t, malloc/free
+#include <cstdio>
 #include <cstdlib> // size_t, malloc/free
 #include <cstring> // memcpy, memmove
 #include <cstddef> // nullptr_t
@@ -934,6 +934,7 @@ private:
                 mheight = 0;
             }
         }
+        
         void rebalance_impl()
         {
             if (mheight == 0)
@@ -941,19 +942,11 @@ private:
                 fix_metadata();
                 return;
             }
-            //size_t start_len = size();
             if (mheight <= 2)
             {
-                //puts("null case!");
                 fix_metadata();
-                //assert(start_len == size());
                 return;
             }
-            
-            //assert(size() == left->size() + right->size());
-            //
-            //if (left || right)
-            //    assert(left && right);
             
             // main cases
             size_t height_a = 0;
@@ -972,7 +965,6 @@ private:
                 height_c = right->right->mheight + 1;
             }
             // case A: a and c same but b shorter. rebalance whichever side b came from.
-            //if (height_a == height_c && height_a >= height_b)
             if (height_a == height_c && height_a > height_b)
             {
                 //puts("case A!");
@@ -987,10 +979,6 @@ private:
             // case B: A or C is highest, A and C different. need to rotate
             if (height_a > height_b || height_c > height_b)
             {
-                //puts("case B!");
-                // don't want to use left->mheight etc here because in edge cases it can cause antibalancing rotations
-                // FIXME: should we handle the (a<b=c) and (a=b>c) cases in "case A"?
-                //  (the difference is which side gets rebalanced)
                 if (height_a >= height_c)
                 {
                     Shared<RopeNode> a(std::move(left->left));
@@ -1030,7 +1018,6 @@ private:
             // case C: B is highest or tied. need to split and prepend/append
             if (height_b >= height_a && height_b >= height_c)
             {
-                //puts("case C!");
                 auto l = MakeShared<RopeNode>();
                 auto r = MakeShared<RopeNode>();
                 
@@ -1070,7 +1057,6 @@ private:
         }
     };
     
-    //__attribute__((noinline))
     void rebalance()
     {
         if (!root)
@@ -1389,8 +1375,6 @@ struct ListMap {
     
     auto begin() noexcept { return list.begin(); }
     auto end() noexcept { return list.end(); }
-    const auto begin() const noexcept { return list.begin(); }
-    const auto end() const noexcept { return list.end(); }
 };
 
 template<typename T>
@@ -1419,8 +1403,6 @@ struct ListSet {
     
     auto begin() noexcept { return list.begin(); }
     auto end() noexcept { return list.end(); }
-    const auto begin() const noexcept { return list.begin(); }
-    const auto end() const noexcept { return list.end(); }
 };
 
 class String {

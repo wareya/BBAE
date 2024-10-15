@@ -1,8 +1,8 @@
 #ifndef BBEL_COMPILER
 #define BBEL_COMPILER
 
-#include <stdint.h>
-#include <stddef.h>
+#include <cstdint>
+#include <cstddef>
 
 #include "../src/bbae_builder.h"
 #include "../src/buffers.h"
