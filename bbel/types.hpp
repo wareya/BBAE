@@ -91,6 +91,7 @@ public:
     constexpr T * operator->() noexcept { return inner ? &inner->item : nullptr; }
     
     constexpr bool operator==(const Shared & other) const { return inner == other.inner; }
+    constexpr bool operator<(const Shared & other) const { return inner < other.inner; }
     constexpr bool operator==(std::nullptr_t) const { return !*this; }
     constexpr bool operator!=(std::nullptr_t) const { return !!*this; }
     
@@ -697,7 +698,6 @@ private:
     }
 };
 
-
 //template<typename T, int min_size = 16, int max_size = 64>
 //template<typename T, int min_size = 32, int max_size = 128>
 //template<typename T, int min_size = 64, int max_size = 256>
@@ -1289,6 +1289,10 @@ public:
     {
         insert_at(i, item);
     }
+    void push_back(T item)
+    {
+        insert_at(size(), item);
+    }
     T erase_at(size_t i)
     {
         if (!root)
@@ -1344,17 +1348,18 @@ public:
 
 template<typename TK, typename TV>
 struct ListMap {
-    Vec<Pair<TK, TV>> list;
+    Rope<Pair<TK, TV>> list;
     
     TV & operator[](const TK & key)
     {
-        for (size_t i = 0; i < list.size(); i++)
-        {
-            if (list[i]._0 == key)
-                return list[i]._1;
-        }
-        list.push_back({key, {}});
-        return list.back()._1;
+        size_t insert_i = 0;
+        bsearch_up(insert_i, list.size(), [&](auto avg) { return !(key < list[avg]._0); });
+        
+        if (list[insert_i]._0 == key)
+            return list[insert_i]._1;
+        
+        insert(key, TV{});
+        return (*this)[key];
     }
     size_t count(const TK & key)
     {
@@ -1371,41 +1376,51 @@ struct ListMap {
     template<typename U1, typename U2>
     void insert(U1 && key, U2 && val)
     {
-        list.push_back({std::forward<U1>(key), std::forward<U2>(val)});
+        size_t insert_i = 0;
+        bsearch_up(insert_i, list.size(), [&](auto avg) { return !(key < list[avg]._0); });
+        auto pv = Pair<TK, TV>{std::forward<U1>(key), std::forward<U2>(val)};
+        if (insert_i == list.size())
+            list.push_back(pv);
+        else if (list[insert_i]._0 == std::forward<U1>(key))
+            list[insert_i] = pv;
+        else
+            list.insert_at(insert_i, pv);
     }
     
-    Pair<TK, TV> * begin() noexcept { return list.begin(); }
-    Pair<TK, TV> * end() noexcept { return list.end(); }
-    const Pair<TK, TV> * begin() const noexcept { return list.begin(); }
-    const Pair<TK, TV> * end() const noexcept { return list.end(); }
+    auto begin() noexcept { return list.begin(); }
+    auto end() noexcept { return list.end(); }
+    const auto begin() const noexcept { return list.begin(); }
+    const auto end() const noexcept { return list.end(); }
 };
 
 template<typename T>
 struct ListSet {
-    Vec<T> list;
+    Rope<T> list;
     size_t count(const T & key)
     {
-        for (size_t i = 0; i < list.size(); i++)
-        {
-            if (list[i] == key)
-                return 1;
-        }
-        return 0;
+        size_t insert_i = 0;
+        bsearch_up(insert_i, list.size(), [&](auto avg) { return !(key < list[avg]); });
+        return insert_i != list.size();
     }
-    void insert(T && key)
+    template<typename U1>
+    void insert(U1 && key)
     {
-        list.push_back(key);
-    }
-    void insert(const T & key)
-    {
-        list.push_back(key);
+        size_t insert_i = 0;
+        bsearch_up(insert_i, list.size(), [&](auto avg) { return !(key < list[avg]); });
+        auto v = std::forward<U1>(key);
+        if (insert_i == list.size())
+            list.push_back(v);
+        else if (list[insert_i] == std::forward<U1>(key))
+            list[insert_i] = v;
+        else
+            list.insert_at(insert_i, v);
     }
     void clear() { list = {}; }
     
-    T * begin() noexcept { return list.begin(); }
-    T * end() noexcept { return list.end(); }
-    const T * begin() const noexcept { return list.begin(); }
-    const T * end() const noexcept { return list.end(); }
+    auto begin() noexcept { return list.begin(); }
+    auto end() noexcept { return list.end(); }
+    const auto begin() const noexcept { return list.begin(); }
+    const auto end() const noexcept { return list.end(); }
 };
 
 class String {
@@ -1437,7 +1452,9 @@ public:
     const char & front() const { return bytes.size() ? bytes.front() : shortstr[0]; }
     const char & back() const { return bytes.size() ? bytes.back() : shortstr[shortstr_len]; }
     
-    bool operator==(const String & other) const&
+    String & operator=(const String & other) = default;
+    
+    bool operator==(const String & other) const
     {
         if (other.size() != size())
             return false;
@@ -1447,6 +1464,18 @@ public:
             if (!((*this)[i] == other[i]))
                 return false;
         }
+        return true;
+    }
+    
+    bool operator<(const String & other) const
+    {
+        for (size_t i = 0; i <= size() && i <= other.size(); i++)
+        {
+            if ((*this)[i] != other[i])
+                return (*this)[i] < other[i];
+        }
+        if (size() < other.size())
+            return false;
         return true;
     }
     

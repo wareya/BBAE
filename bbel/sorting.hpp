@@ -124,10 +124,7 @@ void tree_insertion_sort_impl(Comparator f, D & data, size_t start, size_t one_p
             
             size_t insert_i = i - 1;
             bsearch_down(insert_i, start, [&](auto avg)
-            //size_t insert_i = start;
-            //bsearch(insert_i, i - 1, 1, -1, [&](auto avg)
                 { return f(item, data[avg]); });
-                //{ return !f(data[avg], item); });
             
             data.insert(insert_i, item);
         }
@@ -172,43 +169,6 @@ void inout_tree_insertion_sort_impl(Comparator f, D & data, size_t start, size_t
             data.insert(insert_i, item);
         }
     }
-    /*
-    for (size_t i = start + size / 2; i > start; i -= 1)
-    {
-        if (f(data[i], data[i - 1]))
-        {
-            T item(std::move(data[i - 1]));
-            data.erase(i - 1, 1);
-            
-            size_t insert_i = i;
-            //bsearch_up(insert_i, one_past_end - 1, [&](auto avg)
-            bsearch_up(insert_i, start + size / 2, [&](auto avg)
-                { return f(data[avg], item); });
-                //{ return !f(item, data[avg]); });
-            //size_t insert_i = one_past_end - 1;
-            //bsearch_down(insert_i, i - 1, [&](auto avg)
-                //{ return !f(data[avg], item); });
-                //{ return f(item, data[avg]); });
-            
-            data.insert(insert_i, item);
-        }
-    }
-    for (size_t i = start + size / 2 + 1; i < one_past_end; i += 1)
-    {
-        if (f(data[i], data[i - 1]))
-        {
-            T item(std::move(data[i]));
-            data.erase(i, 1);
-            
-            size_t insert_i = i - 1;
-            //bsearch_down(insert_i, start + size / 2, [&](auto avg)
-            bsearch_down(insert_i, start, [&](auto avg)
-                { return !f(data[avg], item); });
-            
-            data.insert(insert_i, item);
-        }
-    }
-    */
 }
 
 // ####

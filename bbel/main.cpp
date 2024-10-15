@@ -33,7 +33,10 @@ int main(int argc, char ** argv)
     
     auto grammar = load_grammar(text.data());
     
-    //debug_print_grammar_points(grammar);
+    puts("HW!");
+    
+    debug_print_grammar_points(grammar);
+    
     
     auto tokens = tokenize(grammar, text2.data());
     

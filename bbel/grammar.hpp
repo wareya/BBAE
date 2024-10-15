@@ -673,6 +673,14 @@ struct ParseRecord
     {
         return token_index == other.token_index && *node_name == *other.node_name;
     }
+    bool operator<(const ParseRecord & other) const
+    {
+        if (*node_name < *other.node_name)
+            return true;
+        if (*other.node_name < *node_name)
+            return false;
+        return token_index < other.token_index;
+    }
 };
 
 /*
