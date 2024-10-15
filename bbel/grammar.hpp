@@ -98,6 +98,7 @@ struct Grammar
 {
     ListMap<String, Shared<GrammarPoint>> points;
     Vec<Shared<MatchingRule>> tokens;
+    Vec<Shared<MatchingRule>> regex_tokens;
     ~Grammar()
     {
         // kill inter-point references to prevent reference cycle memory leaks
@@ -152,6 +153,7 @@ static auto load_grammar(const char * text) -> Grammar
     ListMap<String, Shared<GrammarPoint>> ret;
     ListSet<Shared<GrammarPoint>> all_points;
     Vec<Shared<MatchingRule>> tokens;
+    Vec<Shared<MatchingRule>> regex_tokens;
     
     enum Mode {
         MODE_NAME,
@@ -264,6 +266,7 @@ static auto load_grammar(const char * text) -> Grammar
                     
                     auto rule = new_rule_regex(regex_text);
                     tokens.push_back(rule);
+                    regex_tokens.push_back(rule);
                     form.rules.push_back(rule);
                     
                     //printf("regex: %s\n", regex_text.data());
@@ -467,7 +470,7 @@ static auto load_grammar(const char * text) -> Grammar
         }
     }
     
-    return {ret, tokens};
+    return {ret, tokens, regex_tokens};
 }
 
 struct Token {
@@ -562,57 +565,46 @@ static Vec<Shared<Token>> tokenize(const Grammar & grammar, const char * _text)
             break;
         }
         
-        bool found = false;
+        size_t longest_found = 0;
+        Shared<MatchingRule> found;
         for (auto _token : tokens)
         {
             auto & token = *_token;
             if (token.kind == MATCH_KIND_REGEX)
             {
                 int len = 0;
-                //printf("%s\n", token.text->data());
-                //printf("%p\n", &*token.compiled_regex);
-                
-                //printf("trying to match %s at...%s\n", token.text->data(), &text[i]);
                 int index = token.compiled_regex->match(&text[i], &len);
-                assert(index == 0 || index == -1);
-                //printf("%d %d\n", index, len);
-                if (index == 0)
+                if (index == 0 && (unsigned int)len > longest_found)
                 {
-                    assert(len > 0);
-                    auto mystr = MakeShared<String>(text.substr(i, len));
-                    puts(mystr->data());
-                    ret.push_back(MakeShared<Token>(Token{mystr, token.compiled_regex, i, line_index, row, column}));
-                    
-                    found = true;
-                    column += len;
-                    i += len;
-                    break;
+                    longest_found = len;
+                    found = _token;
                 }
             }
             else if (token.kind == MATCH_KIND_LITERAL)
             {
+                if (token.text->size() <= longest_found)
+                    continue;
+                
                 if (starts_with(&text[i], token.text->data()))
                 {
-                    auto mystr = MakeShared<String>(text.substr(i, token.text->size()));
-                    ret.push_back(MakeShared<Token>(Token{mystr, 0, i, line_index, row, column}));
-                    
-                    found = true;
-                    column += token.text->size();
-                    i += token.text->size();
-                    break;
+                    longest_found = token.text->size();
+                    found = _token;
                 }
             }
             else
                 assert(((void)"Broken internal grammar state!!!!!!", 0));
         }
+        
         if (!found)
         {
-            //printf("failed to tokenize! got to line %zd column %zd (index %zd)\n", row, column, i);
             // append dummy token to token stream to signifify failure
             ret.push_back(MakeShared<Token>(Token{0, 0, i, line_index, row, column}));
             return ret;
         }
-        assert(found);
+        
+        auto mystr = MakeShared<String>(text.substr(i, longest_found));
+        ret.push_back(MakeShared<Token>(Token{mystr, found->compiled_regex, i, line_index, row, column}));
+        i += longest_found;
     }
     
     return ret;
