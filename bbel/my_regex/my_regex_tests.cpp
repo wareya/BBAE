@@ -6,6 +6,7 @@
 
 //#define REGEX_VERBOSE
 #include "my_regex.h"
+#include "../types.hpp"
 
 #include <chrono>
 
@@ -563,6 +564,8 @@ void testify(void)
         t = std::chrono::duration_cast<std::chrono::microseconds>(clock::now() - start).count() / 1000000.0;
         printf("Match time for pcre2: %f\n", t);
     }
+    
+    Rope<char> rope = "1234";
 }
 
 int main(void)

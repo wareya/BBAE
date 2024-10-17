@@ -12,7 +12,7 @@ FUNCTIONS
 
     // Returns 0 on success, or -1 on invalid or unsupported regex, or -2 on not enough tokens given to parse regex.
     static inline int regex_parse(
-        const char * pattern,       // Regex pattern to parse.
+        const char * pattern,       // Regex pattern to parse. Must be null-terminated.
         RegexToken * tokens,        // Output buffer of token_count regex tokens.
         int16_t * token_count,      // Maximum allowed number of tokens to write
         int32_t flags               // Optional bitflags.
@@ -21,7 +21,11 @@ FUNCTIONS
     // Returns match length, or -1 on no match, or -2 on out of memory, or -3 if the regex is invalid.
     static inline int64_t regex_match(
         const RegexToken * tokens,  // Parsed regex to match against text.
+        
         const char * text,          // Text to match against tokens.
+                                    // NOTE: in C++, this is generic `const T &` instead of char *, and only requires an operator[] returning char.
+                                    // Must be null-terminated.
+        
         size_t start_i,             // index value to match at.
         uint16_t cap_slots,         // Number of allowed capture info output slots.
         int64_t * cap_pos,          // Capture position info output buffer.
@@ -822,10 +826,14 @@ typedef struct _RegexMatcherState {
 // SAFETY: The text variable must be null-terminated, and start_i must be the index of a character within the string or its null terminator.
 // SAFETY: Tokens array must be terminated by a REMIMU_KIND_END token (done by default by regex_parse).
 // SAFETY: Partial capture data may be written even if the match fails.
-static inline int64_t regex_match(const RegexToken * tokens, const char * text, size_t start_i, uint16_t cap_slots, int64_t * cap_pos, int64_t * cap_span)
+#ifdef __cplusplus
+#define REMIMU_STRING_TYPE T &
+template <typename T>
+#else
+#define REMIMU_STRING_TYPE char *
+#endif
+static inline int64_t regex_match(const RegexToken * tokens, const REMIMU_STRING_TYPE text, size_t start_i, uint16_t cap_slots, int64_t * cap_pos, int64_t * cap_span)
 {
-    (void)text;
-    
 #ifdef REGEX_VERBOSE
     const uint8_t verbose = 1;
 #else
@@ -1388,6 +1396,7 @@ static inline int64_t regex_match(const RegexToken * tokens, const char * text, 
     
     return i;
 }
+#undef REMIMU_STRING_TYPE
 
 static inline void print_regex_tokens(RegexToken * tokens)
 {

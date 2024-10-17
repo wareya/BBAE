@@ -122,8 +122,8 @@ void tree_insertion_sort_impl(Comparator f, D & data, size_t start, size_t one_p
             T item(std::move(data[i]));
             data.erase(i, 1);
             
-            size_t insert_i = i - 1;
-            bsearch_down(insert_i, start, [&](auto avg)
+            size_t insert_i = start;
+            bsearch_up(insert_i, i, [&](auto avg)
                 { return f(item, data[avg]); });
             
             data.insert(insert_i, item);
