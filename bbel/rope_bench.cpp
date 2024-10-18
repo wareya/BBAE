@@ -7,8 +7,6 @@
 #include <chrono>
 #include <ext/rope>
 
-#include "SuperString.cpp"
-
 double seconds()
 {
     auto t = std::chrono::high_resolution_clock::now().time_since_epoch();
@@ -25,10 +23,16 @@ uint32_t rng(uint64_t * state)
 
 int main(void)
 {
-    Rope<uint32_t> rope2;
+    //Rope<uint32_t, 128, 512> rope2;
+    //Rope<uint32_t, 384/4, 384> rope2;
+    //Rope<uint32_t, 32, 256> rope2;
+    Rope<uint32_t, 32, 256> rope2;
+    //Rope<uint32_t, 170/4, 170> rope2;
+    //Rope<uint32_t, 48, 192> rope2;
     __gnu_cxx::rope<uint32_t> rope_stl;
     Vec<uint32_t> vec2;
     
+    //size_t count = 1000000;
     size_t count = 1000000;
     printf("n: %zd\n", count);
     
@@ -37,7 +41,7 @@ int main(void)
     for (size_t i = 0; i < count; i++)
         //rope2.insert_at(i, i - 1500000);
         //rope2.insert_at(i, i);
-        rope2.insert_at(i, rng(&state));
+        rope2.insert_at(i, rng(&state), true);
     //rope2.insert_at(0, 0xFFFFFFFF);
     //rope2.insert_at(count, 0);
     double end = seconds();

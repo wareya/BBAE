@@ -814,7 +814,9 @@ private:
     }
 };
 
-template<typename T, int min_size = 48, int max_size = 192>
+// min_size must be less than half of max_size and ideally should significantly less, e.g. 1/4 or 1/8 of max_size seem to be good.
+// text editing seems to prefer small max_size values like 192, sorting seems to prefer large values like 512.
+template<typename T, int min_size = 32, int max_size = 256>
 class Rope {
 private:
     // minimum chunk size before merging children together
@@ -833,38 +835,42 @@ private:
         RopeNode * parent = 0;
         
         template<typename D>
-        static RopeNode from_copy(const D data, size_t start, size_t count)
+        static Shared<RopeNode> from_copy(const D data, size_t start, size_t count)
         {
-            RopeNode ret;
+            auto ret = MakeShared<RopeNode>();
             if (count <= max_size)
             {
                 for (size_t i = 0; i < count; i++)
-                    ret.items.push_back(data[start + i]);
+                    ret->items.push_back(data[start + i]);
                 
-                ret.mlength = count;
+                ret->mlength = count;
                 return ret;
             }
-            ret.left = from_copy(data, start, count / 2);
-            ret.right = from_copy(data, start + count / 2, count - count / 2);
-            ret.fix_metadata();
+            ret->left = from_copy(data, start, count / 2);
+            ret->right = from_copy(data, start + count / 2, count - count / 2);
+            ret->left->parent = ret.get();
+            ret->right->parent = ret.get();
+            ret->fix_metadata();
             return ret;
         }
         
         template<typename D>
-        static RopeNode from_move(const D data, size_t start, size_t count)
+        static Shared<RopeNode> from_move(const D data, size_t start, size_t count)
         {
-            RopeNode ret;
+            auto ret = MakeShared<RopeNode>();
             if (count <= max_size)
             {
                 for (size_t i = 0; i < count; i++)
-                    ret.items.push_back(std::move(data[start + i]));
+                    ret->items.push_back(std::move(data[start + i]));
                 
-                ret.mlength = count;
+                ret->mlength = count;
                 return ret;
             }
-            ret.left = from_move(data, start, count / 2);
-            ret.right = from_move(data, start + count / 2, count - count / 2);
-            ret.fix_metadata();
+            ret->left = from_move(data, start, count / 2);
+            ret->right = from_move(data, start + count / 2, count - count / 2);
+            ret->left->parent = ret.get();
+            ret->right->parent = ret.get();
+            ret->fix_metadata();
             return ret;
         }
         
@@ -1411,13 +1417,13 @@ public:
     Rope(Rope &&) = default;
     Rope(const Rope & other)
     {
-        root = MakeShared<RopeNode>(std::move(RopeNode::from_copy(*other.root, 0, other.size())));
+        root = RopeNode::from_copy(*other.root, 0, other.size());
     }
     
     Rope & operator=(Rope && other) = default;
     Rope & operator=(const Rope & other)
     {
-        root = MakeShared<RopeNode>(std::move(RopeNode::from_copy(*other.root, 0, other.size())));
+        root = RopeNode::from_copy(*other.root, 0, other.size());
         kill_cache();
         return *this;
     }
