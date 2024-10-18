@@ -66,12 +66,7 @@ int main(void)
         data.push_back(tx);
     }
     
-    //Rope<char, 16, 64> rope;
-    //Rope<char, 24, 96> rope;
-    //Rope<char, 32, 128> rope;
-    Rope<char, 48, 192> rope;
-    //Rope<char, 64, 256> rope;
-    //Rope<char, 128, 512> rope;
+    Rope<char> rope;
     double start = seconds();
     
     for (size_t z = 0; z < 500; z++)

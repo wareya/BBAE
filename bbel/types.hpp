@@ -814,13 +814,7 @@ private:
     }
 };
 
-//template<typename T, int min_size = 16, int max_size = 64>
-//template<typename T, int min_size = 32, int max_size = 128>
 template<typename T, int min_size = 48, int max_size = 192>
-//template<typename T, int min_size = 64, int max_size = 256>
-//template<typename T, int min_size = 128, int max_size = 512>
-//template<typename T, int min_size = 256, int max_size = 1024>
-//template<typename T, int min_size = 512, int max_size = 2048>
 class Rope {
 private:
     // minimum chunk size before merging children together
