@@ -370,9 +370,15 @@ freeze <any> // freezes any poison/undefined data in the given value as fixed bu
 
 ptralias_reinterpret iptr iptr // Evaluates to the left iptr, but with the aliasing analysis of the right iptr.
 ptralias_merge iptr iptr // Evaluates to the left iptr, but with aliasing analysis that aliases both the left and right iptr.
-ptralias_disjoint iptr iptr // Evaluates to the left iptr, starting with the aliasing analysis of the left iptr, but asserting that the output iptr and the right iptr cannot be used to derive eachother or point to each other's data. does not assert the same for the two input pointers.
 ptralias_bless iptr // Evaluates to iptr, but with universal aliasing.
 ptralias_curse iptr // Evaluates to iptr, but with no aliasing (i.e. is assumed to point to different data than any prior-existant pointer, **including the original iptr**).
+
+ptralias_disjoint_left iptr iptr // Evaliates to the left iptr, starting with the aliasing analysis of the left iptr, but asserting explicit disjointedness with the right iptr such that the following pattern and assertion hold.
+ptralias_disjoint_right iptr iptr // Evaluates to the right iptr, starting with the aliasing analysis of the right iptr, but asserting explicit disjointedness with the left iptr such that the following pattern and assertion hold.
+// // Following pattern and assertion:
+// a = ptralias_disjoint_left a_orig b_orig
+// b = ptralias_disjoint_right a_orig b_orig
+// // a and b are now disjoint and are asserted to not be possible to derive from each other and mem2reg optimizations on them may overlap. however, a still aliases a_orig, and b still aliases b_orig.
 
 ptr_to_int iptr // returns an int of the native pointer size with the same value as the given pointer.
 int_to_ptr_blessed i // returns an iptr with the same value as an integer, and universal aliasing. primarily used for int-punned pointers. int must be of the native pointer size.
