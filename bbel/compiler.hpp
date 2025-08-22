@@ -130,7 +130,8 @@ void compile(CompilerState & state, Shared<ASTNode> ast)
         state.vars.pop_back();
         state.vars.pop_back();
     }
-    else if (*ast->text == "statement")
+    else if (*ast->text == "statement"
+        || *ast->text == "block")
     {
         for (auto & child : ast->children)
             compile(state, child);
@@ -176,6 +177,29 @@ void compile(CompilerState & state, Shared<ASTNode> ast)
             state.stack.pop_back();
             build_store(state.current_block, var, val);
         }
+    }
+    else if (*ast->text == "while")
+    {
+        auto prev_block = state.current_block;
+        state.current_block = create_block(state.program, 0);
+        auto continue_block = state.current_block;
+        
+        compile(state, ast->children[1]);
+        auto mid_block = state.current_block;
+        
+        state.current_block = create_block(state.program, 0);
+        auto expr_block = state.current_block;
+        compile(state, ast->children[0]);
+        
+        state.current_block = create_block(state.program, 0);
+        
+        auto val = state.stack.back();
+        state.stack.pop_back();
+        
+        construct_goto(prev_block, state.current_block, 0, 0);
+        construct_goto(mid_block, state.current_block, 0, 0);
+        
+        construct_ifelse(expr_block, val, continue_block, 0, 0, state.current_block, 0, 0);
     }
     else if (*ast->text == "assign")
     {
@@ -240,17 +264,42 @@ void compile(CompilerState & state, Shared<ASTNode> ast)
         else if (ast->children.size() == 2)
         {
             compile(state, ast->children[1]);
-            assert(((void)"TODO", 0));
+            
+            auto a = state.stack.back();
+            state.stack.pop_back();
+            
+            Statement * operation = 0;
+            if (types_same(a->type, basic_type(TYPE_F64))
+                || types_same(a->type, basic_type(TYPE_F32)))
+                operation = build_fneg(state.current_block, a);
+            else if (types_same(a->type, basic_type(TYPE_I64))
+                    || types_same(a->type, basic_type(TYPE_I32))
+                    || types_same(a->type, basic_type(TYPE_I16))
+                    || types_same(a->type, basic_type(TYPE_I8)))
+                operation = build_neg(state.current_block, a);
+            else
+                assert(((void)"unsupported negation argument", 0));
+            
+            auto val = statement_get_output(operation);
+            assert(val);
+            state.stack.push_back(val);
         }
         else
             assert(0);
     }
     else if (*ast->text == "base_unexp")
     {
-        if (ast->children.size() == 1)
-            compile(state, ast->children[0]);
+        compile(state, ast->children[0]);
+        if (ast->children.size() > 1 && *ast->children[1]->text == "cast")
+        {
+            assert(((void)"TODO cast", 0));
+        }
+        else if (ast->children.size() > 1 && *ast->children[1]->text == "funccall")
+        {
+            assert(((void)"TODO func call", 0));
+        }
         else
-            assert(((void)"TODO", 0));
+            assert(((void)"oops, broken grammar", 0));
     }
     else if (std_starts_with(*ast->text, String("binexp_")))
     {
@@ -315,7 +364,7 @@ void compile(CompilerState & state, Shared<ASTNode> ast)
                 // TODO: convert arg2 to iptr if iptr <op> i64
                 if (*op_text == "+")
                     operation = build_add(state.current_block, a, b);
-                else if (*op_text == "+")
+                else if (*op_text == "-")
                     operation = build_sub(state.current_block, a, b);
                 else if (*op_text == "*")
                     operation = build_mul(state.current_block, a, b);

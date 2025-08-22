@@ -7,7 +7,8 @@ f64 main()
     i64 i = 1;
     while (i <= 1000000000) {
         flip = flip * -1.0;
-        sum = sum + flip / (2*i - 1);
+        f64 f = (2*i - 1) as f64;
+        sum = sum + flip / f;
         i = i + 1;
     }
     return sum;

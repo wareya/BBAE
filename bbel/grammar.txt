@@ -23,7 +23,7 @@ aggtype_inner:
 ( agg_item ",")+ agg_item
 agg_item
 
-simple_expr:
+simple_expr: @notokens
 "(" expr ")"
 int | float | name
 
@@ -31,10 +31,14 @@ funccall: @notokens
 "(" (expr ",")* expr? ")"
 
 expr_tail_0:
-funccall (expr_tail_0)?
+funccall
+cast
+
+cast:
+"as" type
 
 base_unexp:
-simple_expr (expr_tail_0)?
+simple_expr expr_tail_0*
 
 base_binexp:
 ("-")? base_unexp

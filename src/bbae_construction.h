@@ -494,6 +494,57 @@ static inline Statement * parse_statement(Program * program, const char ** curso
     return ret;
 }
 
+static inline void block_append_statement(Block * block, Statement * statement);
+static inline Statement * init_statement(const char * statement_name);
+
+static inline Statement * construct_goto(Block * block,
+    Block * target, size_t arg_count, Value ** args)
+{
+    Statement * ret = init_statement("goto");
+    array_push(ret->args, Operand, new_op_text(target->name));
+    
+    for (size_t i = 0; i < arg_count; i++)
+        array_push(ret->args, Operand, new_op_val(args[i]));
+    
+    block_append_statement(block, ret);
+    return ret;
+}
+
+static inline Statement * construct_if(Block * block, Value * val,
+    Block * target, size_t arg_count, Value ** args)
+{
+    Statement * ret = init_statement("if");
+    array_push(ret->args, Operand, new_op_val(val));
+    array_push(ret->args, Operand, new_op_text(target->name));
+    
+    for (size_t i = 0; i < arg_count; i++)
+        array_push(ret->args, Operand, new_op_val(args[i]));
+    
+    block_append_statement(block, ret);
+    return ret;
+}
+
+static inline Statement * construct_ifelse(Block * block, Value * val,
+    Block * target, size_t arg_count, Value ** args,
+    Block * else_target, size_t else_arg_count, Value ** else_args)
+{
+    Statement * ret = init_statement("if");
+    array_push(ret->args, Operand, new_op_val(val));
+    array_push(ret->args, Operand, new_op_text(target->name));
+    
+    for (size_t i = 0; i < arg_count; i++)
+        array_push(ret->args, Operand, new_op_val(args[i]));
+    
+    array_push(ret->args, Operand, new_op_separator());
+    
+    array_push(ret->args, Operand, new_op_text(else_target->name));
+    for (size_t i = 0; i < else_arg_count; i++)
+        array_push(ret->args, Operand, new_op_val(else_args[i]));
+    
+    block_append_statement(block, ret);
+    return ret;
+}
+
 static inline void legalize_last_statement_operands(Block * block)
 {
     size_t end = array_len(block->statements, Statement *);
@@ -573,20 +624,6 @@ static inline void legalize_last_statement_operands(Block * block)
         // update "end"
         end = array_len(block->statements, Statement *);
     }
-}
-
-/// @brief Add a statement to the end of a block, creating the statement's output value and linking the statement back to the block.
-/// @param block 
-/// @param statement 
-static inline void block_append_statement(Block * block, Statement * statement)
-{
-    add_statement_output(statement);
-    //add_statement(program, statement);
-    
-    statement->block = block;
-    array_push(block->statements, Statement *, statement);
-    
-    legalize_last_statement_operands(block);
 }
 
 static inline Statement * parse_and_add_statement(Program * program, const char ** cursor)
@@ -723,6 +760,20 @@ static inline void statement_add_value_op(Statement * statement, Value * val)
 static inline void statement_add_text_op(Statement * statement, const char * text)
 {
     array_push(statement->args, Operand, new_op_text(strcpy_z(text)));
+}
+
+
+/// @brief Add a statement to the end of a block, creating the statement's output value and linking the statement back to the block.
+/// @param block 
+/// @param statement 
+static inline void block_append_statement(Block * block, Statement * statement)
+{
+    add_statement_output(statement);
+    
+    statement->block = block;
+    array_push(block->statements, Statement *, statement);
+    
+    legalize_last_statement_operands(block);
 }
 
 /// @brief Creates a program with no functions, globals, or statics in it.

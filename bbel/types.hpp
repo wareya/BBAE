@@ -76,117 +76,18 @@ void rotate_subsection(D data, size_t start, size_t length, size_t left_rotation
 template<typename T>
 class Shared {
     class SharedInner;
-    class WeakRef {
-    public:
-        SharedInner * shared = 0;
-        size_t count = 0;
-        ~WeakRef()
-        {
-            if (shared)
-                shared->weak = 0;
-        }
-    };
     
     class SharedInner {
     public:
         T item;
         size_t refcount = 0;
-        WeakRef * weak = 0;
-        ~SharedInner()
-        {
-            if (weak)
-                weak->shared = 0;
-        }
     };
     SharedInner * inner = nullptr;
     
 public:
-    class Weak {
-        WeakRef * ref = 0;
-    public:
-        constexpr explicit operator bool() const noexcept { return ref && ref->shared; }
-        
-        Shared to_shared()
-        {
-            if (!ref || !ref->shared)
-                throw;
-            Shared ret;
-            ret.inner = ref->shared;
-            ret.inner->refcount += 1;
-            return ret;
-        }
-        
-        Weak & operator=(Weak && other)
-        {
-            if (other.ref == ref)
-                return *this;
-            
-            if (ref)
-            {
-                ref->count -= 1;
-                if (ref->count == 0)
-                    delete ref;
-            }
-            
-            ref = other.ref;
-            other.ref = nullptr;
-            
-            return *this;
-        };
-        Weak & operator=(const Weak & other)
-        {
-            if (other.ref == ref)
-                return *this;
-            
-            if (ref)
-            {
-                ref->count -= 1;
-                if (ref->count == 0)
-                    delete ref;
-            }
-            
-            ref = other.ref;
-            if (ref)
-                ref->count += 1;
-            
-            return *this;
-        };
-        
-        constexpr Weak() noexcept { }
-        constexpr Weak(std::nullptr_t) noexcept { }
-        explicit constexpr Weak(WeakRef * ref) noexcept : ref(ref)
-        {
-            if (ref)
-                ref->count += 1;
-        }
-        constexpr Weak(Weak && other) noexcept
-        {
-            ref = other.ref;
-            other.ref = nullptr;
-        }
-        constexpr Weak(const Weak & other) noexcept
-        {
-            ref = other.ref;
-            if (ref)
-                ref->refcount += 1;
-        }
-        ~Weak()
-        {
-            if (!ref) return;
-            ref->count -= 1;
-            if (ref->count == 0)
-                delete ref;
-        }
-        
-        T * get() const
-        {
-            if (ref) return &(ref->shared->item);
-            return 0;
-        }
-    };
     
     constexpr explicit operator bool() const noexcept { return !!inner; }
-    constexpr const T & operator*() const { if (!inner) assert(0); return inner->item; }
+    constexpr const T & operator*() const { if (!inner) throw; return inner->item; }
     constexpr T & operator*() { return inner->item; }
     constexpr const T * operator->() const noexcept { return inner ? &inner->item : nullptr; }
     constexpr T * operator->() noexcept { return inner ? &inner->item : nullptr; }
@@ -196,17 +97,6 @@ public:
     constexpr bool operator<(const Shared & other) const { return inner < other.inner; }
     constexpr bool operator==(std::nullptr_t) const { return !*this; }
     constexpr bool operator!=(std::nullptr_t) const { return !!*this; }
-    
-    Weak get_weak()
-    {
-        if (!inner)
-            return Weak();
-        
-        if (!inner->weak)
-            inner->weak = new WeakRef { inner, 0 };
-        
-        return Weak { inner->weak };
-    }
     
     Shared & operator=(Shared && other)
     {
@@ -831,7 +721,6 @@ private:
         Vec<T> items = {};
         Shared<RopeNode> left = 0;
         Shared<RopeNode> right = 0;
-        //typename Shared<RopeNode>::Weak parent = 0;
         RopeNode * parent = 0;
         
         template<typename D>

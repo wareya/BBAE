@@ -819,6 +819,9 @@ static inline void add_statement_output(Statement * statement)
             strcmp(statement->statement_name, "fdiv") == 0 ||
             strcmp(statement->statement_name, "fxor") == 0 ||
             
+            strcmp(statement->statement_name, "neg") == 0 ||
+            strcmp(statement->statement_name, "fneg") == 0 ||
+            
             strcmp(statement->statement_name, "and") == 0 ||
             strcmp(statement->statement_name, "or") == 0 ||
             strcmp(statement->statement_name, "xor") == 0 ||

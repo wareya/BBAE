@@ -802,7 +802,8 @@ static auto parse_with(const Vec<Shared<Token>> & tokens, size_t starting_token_
             else if (rule.kind == MATCH_KIND_POINT)
             {
                 assert(rule.rule);
-                if (auto parse = parse_with(tokens, token_index, rule.rule, depth + 1))
+                auto parse = parse_with(tokens, token_index, rule.rule, depth + 1);
+                if (parse && *parse)
                 {
                     if (PARSER_DO_DEBUG_PRINT)
                     {

@@ -77,11 +77,11 @@
 static inline Statement * init_statement_auto_output(const char * statement_name);
 
 /// Null if the statement is an instruction instead of an operation.
-Value * statement_get_output(Statement * statement)
+static inline Value * statement_get_output(Statement * statement)
 {
     return statement->output;
 }
-Block * function_get_entry_block(Function * func)
+static inline Block * function_get_entry_block(Function * func)
 {
     return func->entry_block;
 }
@@ -96,7 +96,7 @@ static inline uint8_t block_is_terminated(Block * block)
     return statement_is_terminator(block_get_last_statement(block));
 }
 
-Statement * build_statement_3val(Block * block, const char * statement_name, Value * a, Value * b, Value * c)
+static inline Statement * build_statement_3val(Block * block, const char * statement_name, Value * a, Value * b, Value * c)
 {
     Statement * ret = init_statement_auto_output(statement_name);
     statement_add_value_op(ret, a);
@@ -106,7 +106,7 @@ Statement * build_statement_3val(Block * block, const char * statement_name, Val
     return ret;
 }
 
-Statement * build_statement_2val(Block * block, const char * statement_name, Value * a, Value * b)
+static inline Statement * build_statement_2val(Block * block, const char * statement_name, Value * a, Value * b)
 {
     Statement * ret = init_statement_auto_output(statement_name);
     statement_add_value_op(ret, a);
@@ -115,7 +115,7 @@ Statement * build_statement_2val(Block * block, const char * statement_name, Val
     return ret;
 }
 
-Statement * build_statement_1val(Block * block, const char * statement_name, Value * a)
+static inline Statement * build_statement_1val(Block * block, const char * statement_name, Value * a)
 {
     Statement * ret = init_statement_auto_output(statement_name);
     statement_add_value_op(ret, a);
@@ -123,7 +123,7 @@ Statement * build_statement_1val(Block * block, const char * statement_name, Val
     return ret;
 }
 
-Statement * build_statement_0val(Block * block, const char * statement_name)
+static inline Statement * build_statement_0val(Block * block, const char * statement_name)
 {
     Statement * ret = init_statement_auto_output(statement_name);
     block_append_statement(block, ret);
@@ -156,8 +156,6 @@ static inline Statement * build_return_1val(Block * block, Value * a)
     return build_statement_1val(block, "return", a);
 }
 
-
-
 static inline Statement * build_add(Block * block, Value * a, Value * b)
 {
     return build_statement_2val(block, "add", a, b);
@@ -175,7 +173,7 @@ static inline Statement * build_imul(Block * block, Value * a, Value * b)
     return build_statement_2val(block, "imul", a, b);
 }
 
-/// @brief Unsafe variants of arithmetic functions avoid generating unspecified or undefined or trap values. See BBAE docs for more info.
+/// @brief Non-unsafe arithmetic functions avoid generating unspecified or undefined or trap values. See BBAE docs for more info.
 static inline Statement * build_div(Block * block, Value * a, Value * b, uint8_t is_unsafe)
 {
     return build_statement_2val(block, !is_unsafe ? "div" : "div_unsafe", a, b);
@@ -370,6 +368,9 @@ static inline Statement * init_statement_auto_output(const char * statement_name
         strcmp(statement_name, "qext") == 0 ||
         strcmp(statement_name, "sext") == 0 ||
         strcmp(statement_name, "zext") == 0 ||
+        
+        strcmp(statement_name, "neg") == 0 ||
+        strcmp(statement_name, "fneg") == 0 ||
         
         strcmp(statement_name, "float_to_uint") == 0 ||
         strcmp(statement_name, "float_to_uint_unsafe") == 0 ||
