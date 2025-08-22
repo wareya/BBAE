@@ -186,7 +186,7 @@ public:
     };
     
     constexpr explicit operator bool() const noexcept { return !!inner; }
-    constexpr const T & operator*() const { return inner->item; }
+    constexpr const T & operator*() const { if (!inner) assert(0); return inner->item; }
     constexpr T & operator*() { return inner->item; }
     constexpr const T * operator->() const noexcept { return inner ? &inner->item : nullptr; }
     constexpr T * operator->() noexcept { return inner ? &inner->item : nullptr; }
@@ -1417,13 +1417,15 @@ public:
     Rope(Rope &&) = default;
     Rope(const Rope & other)
     {
-        root = RopeNode::from_copy(*other.root, 0, other.size());
+        if (other.root)
+            root = RopeNode::from_copy(*other.root, 0, other.size());
     }
     
     Rope & operator=(Rope && other) = default;
     Rope & operator=(const Rope & other)
     {
-        root = RopeNode::from_copy(*other.root, 0, other.size());
+        if (other.root)
+            root = RopeNode::from_copy(*other.root, 0, other.size());
         kill_cache();
         return *this;
     }

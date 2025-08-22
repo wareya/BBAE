@@ -19,6 +19,7 @@ int main(int argc, char ** argv)
     (void)argv;
     
     auto f = fopen("grammar.txt", "rb");
+    assert(f);
     Vec<char> text;
     int c;
     while ((c = fgetc(f)) >= 0)
@@ -26,6 +27,7 @@ int main(int argc, char ** argv)
     text.push_back(0);
     
     auto f2 = fopen("test.bbel", "rb");
+    assert(f2);
     Vec<char> text2;
     while ((c = fgetc(f2)) >= 0)
         text2.push_back(c);

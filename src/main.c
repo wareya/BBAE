@@ -32,6 +32,8 @@ void print_asm(uint8_t * code, size_t len)
 }
 */
 
+#include <time.h>
+
 void print_double(double f)
 {
     printf("%.9f\n", f);
@@ -102,14 +104,21 @@ int main(int argc, char ** argv)
     assert(jitinfo.raw_code);
     
     assert(jit_main);
-#ifndef SKIP_INT
-    uint64_t jit_output = jit_main(0);
-    printf("%zd\n", jit_output);
-#endif
+    
+    double start = clock();
+    puts("starting....");
+    
+//#ifndef SKIP_INT
+//    uint64_t jit_output = jit_main(0);
+//    printf("%zd\n", jit_output);
+//#endif
 #ifndef SKIP_DOUBLE
     double jit_output_double = jit_main_double(0);
-    printf("%.24f\n", jit_output_double);
+    printf("%.13f\n", jit_output_double);
 #endif
+    
+    double end = clock();
+    printf("time: %.9f\n", (end - start) / CLOCKS_PER_SEC);
     
     assert(jitinfo.raw_code);
     
