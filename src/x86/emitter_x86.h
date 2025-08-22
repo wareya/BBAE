@@ -328,23 +328,50 @@ static inline uint64_t name_to_inst(int name, EncOperand * ops, int n)
         assert(0); \
     }
     
-    #define _BBAE_DECLIKE_BIT(NAME) FE_ISMEM(ops[0]) ? NAME##m : NAME##r
+    #define _BBAE_MR(N, NAME) FE_ISMEM(ops[0]) ? NAME##m : NAME##r
+    #define _BBAE_MRS(N, NAME, S) FE_ISMEM(ops[0]) ? NAME##m##S : NAME##r##S
     
     #define _BBAE_DECLIKE(NAME) { \
         assert(n == 1); \
         assert(!ops[0].is_imm); \
-        if (ops[0].size == 1) return _BBAE_DECLIKE_BIT(FE_##NAME##8); \
-        if (ops[0].size == 2) return _BBAE_DECLIKE_BIT(FE_##NAME##16); \
-        if (ops[0].size == 4) return _BBAE_DECLIKE_BIT(FE_##NAME##32); \
-        if (ops[0].size == 8) return _BBAE_DECLIKE_BIT(FE_##NAME##64); \
+        if (ops[0].size == 1) return _BBAE_MR(0, FE_##NAME##8); \
+        if (ops[0].size == 2) return _BBAE_MR(0, FE_##NAME##16); \
+        if (ops[0].size == 4) return _BBAE_MR(0, FE_##NAME##32); \
+        if (ops[0].size == 8) return _BBAE_MR(0, FE_##NAME##64); \
         assert(0); \
+    }
+    
+    #define _BBAE_IMULLIKE(NAME) { \
+        assert(!ops[0].is_imm); \
+        if (n == 1) { \
+            if (ops[0].size == 1) return _BBAE_MR(0, FE_##NAME##8); \
+            if (ops[0].size == 2) return _BBAE_MR(0, FE_##NAME##16); \
+            if (ops[0].size == 4) return _BBAE_MR(0, FE_##NAME##32); \
+            if (ops[0].size == 8) return _BBAE_MR(0, FE_##NAME##64); \
+            assert(0); \
+        } else if (n == 2) { \
+            assert(!ops[1].is_imm); \
+            if (ops[1].size == 1) return _BBAE_MR(1, FE_##NAME##16r); \
+            if (ops[1].size == 2) return _BBAE_MR(1, FE_##NAME##16r); \
+            if (ops[1].size == 4) return _BBAE_MR(1, FE_##NAME##32r); \
+            if (ops[1].size == 8) return _BBAE_MR(1, FE_##NAME##64r); \
+            assert(0); \
+        } else if (n == 3) { \
+            assert(!ops[1].is_imm); \
+            assert(ops[2].is_imm); \
+            if (ops[1].size == 1) return _BBAE_MRS(1, FE_##NAME##16r, i); \
+            if (ops[1].size == 2) return _BBAE_MRS(1, FE_##NAME##16r, i); \
+            if (ops[1].size == 4) return _BBAE_MRS(1, FE_##NAME##32r, i); \
+            if (ops[1].size == 8) return _BBAE_MRS(1, FE_##NAME##64r, i); \
+            assert(0); \
+        } else { assert(0); } \
     }
     
     #define _BBAE_SETLIKE(NAME) { \
         assert(n == 1); \
         assert(ops[0].size == 1); \
         assert(!ops[0].is_imm); \
-        return _BBAE_DECLIKE_BIT(FE_##NAME##8); \
+        return _BBAE_MR(0, FE_##NAME##8); \
     }
     
     #define _BBAE_CMOVLIKE_BIT(NAME) FE_ISMEM(ops[1]) ? NAME##rm : NAME##rr
@@ -471,7 +498,7 @@ static inline uint64_t name_to_inst(int name, EncOperand * ops, int n)
         _BBAE_SSEx2(DIV, S)
         
         case INST_IDIV      : _BBAE_DECLIKE(IDIV)
-        case INST_IMUL      : _BBAE_DECLIKE(IMUL)
+        case INST_IMUL      : _BBAE_IMULLIKE(IMUL)
         case INST_INC       : _BBAE_DECLIKE(INC)
         case INST_INT       : assert(ops[0].is_imm); return FE_INTi;
         case INST_INT1      : return FE_INT1;
@@ -618,7 +645,7 @@ static inline uint64_t name_to_inst(int name, EncOperand * ops, int n)
     #undef _BBAE_ADDLIKE
     #undef _BBAE_BTLIKE_BIT
     #undef _BBAE_BTLIKE
-    #undef _BBAE_DECLIKE_BIT
+    #undef _BBAE_MR
     #undef _BBAE_DECLIKE
     #undef _BBAE_SETLIKE
     #undef _BBAE_CMOVLIKE_BIT

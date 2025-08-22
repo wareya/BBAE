@@ -194,10 +194,12 @@ void compile(CompilerState & state, Shared<ASTNode> ast)
         state.current_block = create_block(state.program, 0);
         
         auto val = state.stack.back();
+        assert(val);
+        
         state.stack.pop_back();
         
-        construct_goto(prev_block, state.current_block, 0, 0);
-        construct_goto(mid_block, state.current_block, 0, 0);
+        construct_goto(prev_block, expr_block, 0, 0);
+        construct_goto(mid_block, expr_block, 0, 0);
         
         construct_ifelse(expr_block, val, continue_block, 0, 0, state.current_block, 0, 0);
     }
@@ -290,15 +292,73 @@ void compile(CompilerState & state, Shared<ASTNode> ast)
     else if (*ast->text == "base_unexp")
     {
         compile(state, ast->children[0]);
-        if (ast->children.size() > 1 && *ast->children[1]->text == "cast")
+        if (ast->children.size() > 1 && *ast->children[1]->children[0]->text == "cast")
         {
-            assert(((void)"TODO cast", 0));
+            auto a = state.stack.back();
+            state.stack.pop_back();
+            auto t = parse_type(ast->children[1]->children[0]->children[1]);
+            if (types_same(a->type, basic_type(TYPE_F64)) ||
+                types_same(a->type, basic_type(TYPE_F32)))
+            {
+                assert(*ast->children[1]->children[0]->children[0]->text == "as");
+                
+                if (types_same(t, a->type))
+                    state.stack.push_back(a);
+                else if (types_same(t, basic_type(TYPE_F64)))
+                {
+                    auto s = build_f32_to_f64(state.current_block, a);
+                    auto val = statement_get_output(s);
+                    state.stack.push_back(val);
+                }
+                else if (types_same(t, basic_type(TYPE_F32)))
+                {
+                    auto s = build_f64_to_f32(state.current_block, a);
+                    auto val = statement_get_output(s);
+                    state.stack.push_back(val);
+                }
+                else if (types_same(t, basic_type(TYPE_I64))
+                        || types_same(t, basic_type(TYPE_I32))
+                        || types_same(t, basic_type(TYPE_I16))
+                        || types_same(t, basic_type(TYPE_I8)))
+                {
+                    auto s = build_float_to_uint(state.current_block, t, a);
+                    auto val = statement_get_output(s);
+                    state.stack.push_back(val);
+                }
+                else
+                    assert(((void)"Broken cast", 0));
+            }
+            else if (types_same(a->type, basic_type(TYPE_I64))
+                || types_same(a->type, basic_type(TYPE_I32))
+                || types_same(a->type, basic_type(TYPE_I16))
+                || types_same(a->type, basic_type(TYPE_I8)))
+            {
+                if (types_same(t, a->type))
+                    state.stack.push_back(a);
+                else if (types_same(t, basic_type(TYPE_F64))
+                        || types_same(t, basic_type(TYPE_F32)))
+                {
+                    assert(*ast->children[1]->children[0]->children[0]->text == "as");
+                    auto s = build_uint_to_float(state.current_block, t, a);
+                    auto val = statement_get_output(s);
+                    state.stack.push_back(val);
+                }
+                else if (types_same(a->type, basic_type(TYPE_I64))
+                         || types_same(a->type, basic_type(TYPE_I32))
+                         || types_same(a->type, basic_type(TYPE_I16))
+                         || types_same(a->type, basic_type(TYPE_I8)))
+                    assert(((void)"TODO: size-changing casts", 0));
+                else
+                    assert(((void)"Broken cast", 0));
+            }
+            else
+                assert(((void)"TODO cast", 0));
         }
-        else if (ast->children.size() > 1 && *ast->children[1]->text == "funccall")
+        else if (ast->children.size() > 1 && *ast->children[1]->children[0]->text == "funccall")
         {
             assert(((void)"TODO func call", 0));
         }
-        else
+        else if (ast->children.size() > 1)
             assert(((void)"oops, broken grammar", 0));
     }
     else if (std_starts_with(*ast->text, String("binexp_")))
@@ -384,6 +444,26 @@ void compile(CompilerState & state, Shared<ASTNode> ast)
                     operation = build_shr(state.current_block, a, b, 1);
                 else if (*op_text == "+>>")
                     operation = build_sar(state.current_block, a, b, 1);
+                else if (*op_text == "+<")
+                    operation = build_icmp(state.current_block, a, b, CMP_L);
+                else if (*op_text == "+<=")
+                    operation = build_icmp(state.current_block, a, b, CMP_LE);
+                else if (*op_text == "+>")
+                    operation = build_icmp(state.current_block, a, b, CMP_G);
+                else if (*op_text == "+>=")
+                    operation = build_icmp(state.current_block, a, b, CMP_GE);
+                else if (*op_text == "<")
+                    operation = build_ucmp(state.current_block, a, b, CMP_L);
+                else if (*op_text == "<=")
+                    operation = build_ucmp(state.current_block, a, b, CMP_LE);
+                else if (*op_text == ">")
+                    operation = build_ucmp(state.current_block, a, b, CMP_G);
+                else if (*op_text == ">=")
+                    operation = build_ucmp(state.current_block, a, b, CMP_GE);
+                else if (*op_text == "==")
+                    operation = build_ucmp(state.current_block, a, b, CMP_EQ);
+                else if (*op_text == "!=")
+                    operation = build_ucmp(state.current_block, a, b, CMP_EQ);
                 else
                 {
                     printf("culprit: %s\n", op_text->data());
@@ -392,6 +472,7 @@ void compile(CompilerState & state, Shared<ASTNode> ast)
             }
             
             auto val = statement_get_output(operation);
+            assert(val);
             state.stack.push_back(val);
         }
     }

@@ -30,15 +30,17 @@ int | float | name
 funccall: @notokens
 "(" (expr ",")* expr? ")"
 
-expr_tail_0:
+expr_tail:
 funccall
 cast
 
 cast:
 "as" type
+"zext" type
+"sext" type
 
 base_unexp:
-simple_expr expr_tail_0*
+simple_expr expr_tail*
 
 base_binexp:
 ("-")? base_unexp
@@ -48,15 +50,15 @@ binexp_1 ("&&"|"||") binexp_0
 binexp_1
 
 binexp_1: @left_recursive
-binexp_2 ("=="|"!="|">="|"<="|">"|"<") binexp_0
+binexp_2 ("=="|"!="|">="|"<="|">"|"<"|"+>"|"+<"|"+>="|"+<=") binexp_1
 binexp_2
 
 binexp_2: @left_recursive
-binexp_3 ("+"|"-"|"&"|"|"|"^") binexp_0
+binexp_3 ("+"|"-"|"&"|"|"|"^") binexp_2
 binexp_3
 
 binexp_3: @left_recursive
-base_binexp ("*"|"+*"|"/"|"+/"|"%"|"+%"|"<<"|">>"|"+>>") binexp_0
+base_binexp ("*"|"+*"|"/"|"+/"|"%"|"+%"|"<<"|">>"|"+>>") binexp_3
 base_binexp
 
 expr:

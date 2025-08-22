@@ -109,19 +109,24 @@ int main(int argc, char ** argv)
 #pragma GCC diagnostic ignored "-Wpedantic"
 #endif
     int64_t (*jit_main) (int, int) = (int64_t(*)(int, int))(void *)(&jit_code[loc]);
+    double (*jit_main_f) (int, int) = (double(*)(int, int))(void *)(&jit_code[loc]);
 #ifndef _MSC_VER
 #pragma GCC diagnostic pop
 #endif
     
+    puts("calling");
+    
     assert(jit_main);
     int64_t main_output = jit_main(0, 0);
     printf("%zd\n", main_output);
-    main_output = jit_main(17, 0);
-    printf("%zd\n", main_output);
+    double main_outputf = jit_main_f(0, 0);
+    printf("%f\n", main_outputf);
     
     jit_free(jitinfo);
     
     free_all_compiler_allocs();
+    
+    puts("end");
     
     return 0;
 }

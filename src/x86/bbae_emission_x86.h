@@ -2,8 +2,7 @@
 #define BBAE_EMISSION
 
 // Root file for the X86 backend, exposed to bbae_api.h.
-// NOTE: Despite the name, this is a AMD64/x86_64 (64-bit only) backend. x86 is an architecture family, not a specific architecture.
-// Other _x86 files
+// NOTE: Despite the name, this is the AMD64/x86_64 (64-bit only) backend. x86 is treated as an architecture family, not a specific architecture.
 
 #include "regalloc_x86.h"
 #include "emitter_x86.h"
@@ -239,6 +238,9 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
     byte_buffer * code = (byte_buffer *)zero_alloc(sizeof(byte_buffer));
     
     memset(code, 0, sizeof(byte_buffer));
+    
+    EncOperand reg_scratch_int = enc_reg(REG_R11, 8);
+    EncOperand reg_scratch_float = enc_reg(REG_XMM5, 8);
     
     for (size_t f = 0; f < array_len(program->functions, Function *); f++)
     {
@@ -507,6 +509,48 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
                     else
                         assert(((void)"TODO", 0));
                 }
+                else if (strcmp(statement->statement_name, "fneg") == 0)
+                {
+                    Operand op1_op = statement->args[0];
+                    assert(op1_op.variant == OP_KIND_VALUE);
+                    assert(statement->output);
+                    assert(statement->output->regalloced);
+                    
+                    EncOperand op0 = get_basic_encoperand(statement->output);
+                    EncOperand op1 = get_basic_encoperand(op1_op.value);
+                    
+                    if (!encops_equal(op0, op1))
+                    {
+                        if (!op1.is_imm)
+                            enc_emit_2(code, INST_MOVAPS, op0, op1);
+                        else
+                        {
+                            enc_emit_2(code, INST_MOV, reg_scratch_int, op1);
+                            enc_emit_2(code, INST_MOVQ, op0, reg_scratch_int);
+                        }
+                    }
+                    
+                    if (statement->output->type.variant == TYPE_F64)
+                    {
+                        Value * a = make_const_value(TYPE_I8, 0x3f);
+                        EncOperand aop = get_basic_encoperand(a);
+                        enc_emit_2(code, INST_XOR, reg_scratch_int, reg_scratch_int);
+                        enc_emit_2(code, INST_BTS, reg_scratch_int, aop);
+                        enc_emit_2(code, INST_MOVQ, reg_scratch_float, reg_scratch_int);
+                        enc_emit_2(code, INST_XORPS, op0, reg_scratch_float);
+                    }
+                    else if (statement->output->type.variant == TYPE_F32)
+                    {
+                        Value * a = make_const_value(TYPE_I8, 0x1f);
+                        EncOperand aop = get_basic_encoperand(a);
+                        enc_emit_2(code, INST_XOR, reg_scratch_int, reg_scratch_int);
+                        enc_emit_2(code, INST_BTS, reg_scratch_int, aop);
+                        enc_emit_2(code, INST_MOVQ, reg_scratch_float, reg_scratch_int);
+                        enc_emit_2(code, INST_XORPS, op0, reg_scratch_float);
+                    }
+                    else
+                        assert(((void)"Invalid type for fneg", 0));
+                }
                 else if (strcmp(statement->statement_name, "mov") == 0)
                 {
                     Operand op1_op = statement->args[0];
@@ -660,6 +704,21 @@ static byte_buffer * compile_file(Program * program, SymbolEntry ** symbollist)
                         {
                             jcc_yin = INST_JBE;
                             jcc_yang = INST_JNBE;
+                        }
+                        else if (strcmp(prev_statement->statement_name, "cmp_ge") == 0)
+                        {
+                            jcc_yin = INST_JB;
+                            jcc_yang = INST_JNB;
+                        }
+                        else if (strcmp(prev_statement->statement_name, "cmp_l") == 0)
+                        {
+                            jcc_yin = INST_JNB;
+                            jcc_yang = INST_JB;
+                        }
+                        else if (strcmp(prev_statement->statement_name, "cmp_le") == 0)
+                        {
+                            jcc_yin = INST_JNBE;
+                            jcc_yang = INST_JBE;
                         }
                         else
                         {

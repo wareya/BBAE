@@ -115,6 +115,15 @@ static inline Statement * build_statement_2val(Block * block, const char * state
     return ret;
 }
 
+static inline Statement * build_statement_typeval(Block * block, const char * statement_name, Type t, Value * a)
+{
+    Statement * ret = init_statement_auto_output(statement_name);
+    statement_add_type_op(ret, t);
+    statement_add_value_op(ret, a);
+    block_append_statement(block, ret);
+    return ret;
+}
+
 static inline Statement * build_statement_1val(Block * block, const char * statement_name, Value * a)
 {
     Statement * ret = init_statement_auto_output(statement_name);
@@ -275,7 +284,6 @@ static inline Statement * build_fsqrt(Block * block, Value * a)
 }
 */
 
-
 static inline Statement * build_fneg(Block * block, Value * a)
 {
     return build_statement_1val(block, "fneg", a);
@@ -287,6 +295,46 @@ static inline Statement * build_fbool(Block * block, Value * a)
 static inline Statement * build_fisnan(Block * block, Value * a)
 {
     return build_statement_1val(block, "fisnan", a);
+}
+
+static inline Statement * build_f32_to_f64(Block * block, Value * a)
+{
+    return build_statement_1val(block, "f32_to_f64", a);
+}
+static inline Statement * build_f64_to_f32(Block * block, Value * a)
+{
+    return build_statement_1val(block, "f64_to_f32", a);
+}
+
+static inline Statement * build_uint_to_float(Block * block, Type t, Value * a)
+{
+    return build_statement_typeval(block, "uint_to_float", t, a);
+}
+static inline Statement * build_float_to_uint(Block * block, Type t, Value * a)
+{
+    return build_statement_typeval(block, "float_to_uint", t, a);
+}
+static inline Statement * build_float_to_uint_unsafe(Block * block, Type t, Value * a)
+{
+    return build_statement_typeval(block, "float_to_uint_unsafe", t, a);
+}
+
+static inline Statement * build_sint_to_float(Block * block, Type t, Value * a)
+{
+    return build_statement_typeval(block, "sint_to_float", t, a);
+}
+static inline Statement * build_float_to_sint(Block * block, Type t, Value * a)
+{
+    return build_statement_typeval(block, "float_to_sint", t, a);
+}
+static inline Statement * build_float_to_sint_unsafe(Block * block, Type t, Value * a)
+{
+    return build_statement_typeval(block, "float_to_sint_unsafe", t, a);
+}
+
+static inline Statement * build_bitcast(Block * block, Type t, Value * a)
+{
+    return build_statement_typeval(block, "bitcast", t, a);
 }
 
 enum CmpComparison {
@@ -385,6 +433,18 @@ static inline Statement * init_statement_auto_output(const char * statement_name
         
         strcmp(statement_name, "cmp_g") == 0 ||
         strcmp(statement_name, "cmp_ge") == 0 ||
+        strcmp(statement_name, "cmp_l") == 0 ||
+        strcmp(statement_name, "cmp_le") == 0 ||
+        strcmp(statement_name, "cmp_eq") == 0 ||
+        strcmp(statement_name, "cmp_ne") == 0 ||
+        strcmp(statement_name, "icmp_g") == 0 ||
+        strcmp(statement_name, "icmp_ge") == 0 ||
+        strcmp(statement_name, "icmp_l") == 0 ||
+        strcmp(statement_name, "icmp_le") == 0 ||
+        strcmp(statement_name, "fcmp_g") == 0 ||
+        strcmp(statement_name, "fcmp_ge") == 0 ||
+        strcmp(statement_name, "fcmp_l") == 0 ||
+        strcmp(statement_name, "fcmp_le") == 0 ||
     
         strcmp(statement_name, "symbol_lookup_unsized") == 0 ||
         strcmp(statement_name, "symbol_lookup") == 0 ||

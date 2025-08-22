@@ -860,10 +860,12 @@ static inline void add_statement_output(Statement * statement)
                  strcmp(statement->statement_name, "cmp_le") == 0 ||
                  strcmp(statement->statement_name, "cmp_eq") == 0 ||
                  strcmp(statement->statement_name, "cmp_ne") == 0 ||
+                 
                  strcmp(statement->statement_name, "icmp_g" ) == 0 ||
                  strcmp(statement->statement_name, "icmp_ge") == 0 ||
                  strcmp(statement->statement_name, "icmp_l" ) == 0 ||
                  strcmp(statement->statement_name, "icmp_le") == 0 ||
+                 
                  strcmp(statement->statement_name, "fcmp_g" ) == 0 ||
                  strcmp(statement->statement_name, "fcmp_ge") == 0 ||
                  strcmp(statement->statement_name, "fcmp_l" ) == 0 ||
@@ -877,6 +879,14 @@ static inline void add_statement_output(Statement * statement)
                  strcmp(statement->statement_name, "symbol_lookup") == 0)
         {
             statement->output = make_value(basic_type(TYPE_IPTR));
+        }
+        else if (strcmp(statement->statement_name, "f64_to_f32"))
+        {
+            statement->output = make_value(basic_type(TYPE_F32));
+        }
+        else if (strcmp(statement->statement_name, "f32_to_f64"))
+        {
+            statement->output = make_value(basic_type(TYPE_F64));
         }
         else if (strcmp(statement->statement_name, "call_eval") == 0 ||
                  strcmp(statement->statement_name, "call") == 0)
